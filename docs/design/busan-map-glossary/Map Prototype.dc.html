@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>body{margin:0;background:#E9E8E3;font-family:'Pretendard Variable',Pretendard,system-ui,sans-serif;color:#111110;-webkit-font-smoothing:antialiased}a{color:#111110}a:hover{color:#3E64A0}@keyframes spin{to{transform:rotate(360deg)}}input::placeholder{color:#8A8A82}input:focus{outline:none}</style>
+</helmet>
+<div style="min-height:100vh;display:flex;flex-wrap:wrap;gap:40px;justify-content:center;align-items:flex-start;padding:40px 24px 60px;box-sizing:border-box">
+
+<div data-screen-label="지도 프로토타입" style="width:360px;height:780px;flex:none;position:relative;overflow:hidden;border-radius:28px;box-shadow:0 0 0 7px #1C1C1B,0 24px 48px rgba(0,0,0,.22);background:#FAFAF7;display:flex;flex-direction:column;font-family:'Pretendard Variable',Pretendard,system-ui,sans-serif;color:#111110">
+<div style="height:28px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:13px;font-weight:600"><span>9:41</span><span style="letter-spacing:2px;font-size:11px">●●● ▮</span></div>
+
+<sc-if value="{{ isMap }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<div style="flex:none;padding:6px 12px">
+<div onClick="{{ onSearch }}" style="height:50px;border-radius:12px;background:#FFFFFF;border:1px solid #DCDCD5;display:flex;align-items:center;gap:10px;padding:0 14px;font-size:16px;color:#8A8A82;cursor:pointer;box-sizing:border-box"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111110" style="stroke-width:1.8;stroke-linecap:round;flex:none"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>단지·주소·동네 검색</div>
+</div>
+<div style="flex:none;padding:2px 12px 6px">
+<div style="display:flex;height:48px;border-radius:12px;background:#F2F2EE;padding:3px;gap:3px;box-sizing:border-box">
+<sc-for list="{{ typeTabs }}" as="tt" hint-placeholder-count="4">
+<div onClick="{{ tt.onClick }}" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:9px;font-size:16px;cursor:pointer;background:{{ tt.bg }};color:{{ tt.color }};font-weight:{{ tt.weight }};box-shadow:{{ tt.shadow }}"><span style="width:8px;height:8px;border-radius:50%;background:{{ tt.dot }};display:{{ tt.dotDisplay }}"></span>{{ tt.label }}</div>
+</sc-for>
+</div>
+</div>
+<div style="flex:none;padding:2px 12px 8px;display:flex;gap:6px;align-items:center;border-bottom:1px solid #DCDCD5">
+<sc-for list="{{ dealChips }}" as="dc" hint-placeholder-count="3">
+<div onClick="{{ dc.onClick }}" style="flex:none;height:44px;padding:0 14px;border-radius:22px;display:flex;align-items:center;font-size:16px;cursor:pointer;box-sizing:border-box;background:{{ dc.bg }};color:{{ dc.color }};border:{{ dc.border }};font-weight:{{ dc.weight }}">{{ dc.label }}</div>
+</sc-for>
+<div style="flex:1"></div>
+<div onClick="{{ onPeriodChip }}" style="flex:none;height:44px;padding:0 12px;border-radius:22px;display:flex;align-items:center;gap:5px;font-size:16px;font-weight:500;cursor:pointer;background:#FFFFFF;border:1px solid #DCDCD5;color:#2A2A28;box-sizing:border-box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5A5A55" style="stroke-width:1.8;stroke-linecap:round;flex:none"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>{{ periodLabel }}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5A5A55" style="stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none"><path d="m6 9 6 6 6-6"></path></svg></div>
+</div>
+
+<div ref="{{ mapRef }}" onPointerDown="{{ onMapDown }}" style="flex:1;min-height:0;position:relative;isolation:isolate;z-index:0;overflow:hidden;background:#C9DCE6;touch-action:none;user-select:none;cursor:{{ mapCursor }}">
+<div ref="{{ svgRef }}" style="position:absolute;inset:0;filter:{{ mapFilter }}"></div>
+<sc-if value="{{ hl }}"><div style="position:absolute;left:{{ hl.left }}px;top:{{ hl.top }}px;width:{{ hl.w }}px;height:{{ hl.h }}px;border:3px solid #4F7A3A;background:rgba(79,122,58,.24);box-sizing:border-box;pointer-events:none"></div></sc-if>
+<div style="position:absolute;inset:0;opacity:{{ markerOpacity }};transition:opacity .2s">
+<sc-for list="{{ mk }}" as="m" hint-placeholder-count="0">
+<div onPointerDown="{{ stop }}" onClick="{{ m.onClick }}" style="position:absolute;left:{{ m.x }}px;top:{{ m.y }}px;transform:{{ m.tf }};z-index:{{ m.z }};cursor:pointer">
+<sc-if value="{{ m.isDot }}"><div style="padding:9px"><div style="width:14px;height:14px;border-radius:50%;background:{{ m.c }};border:2px solid #fff;box-shadow:0 1px 3px rgba(17,17,16,.3);box-sizing:border-box"></div></div></sc-if>
+<sc-if value="{{ m.isRegion }}"><div style="background:{{ m.c }};color:#fff;border-radius:12px;padding:5px 11px 6px;text-align:center;line-height:1.28;border:2px solid #fff;box-shadow:0 1px 2px rgba(17,17,16,.12),0 3px 10px rgba(17,17,16,.14);white-space:nowrap"><div style="font-size:13px;font-weight:600">{{ m.a }}</div><div style="font-size:16px;font-weight:700">{{ m.b }}</div><div style="font-size:13px;font-weight:500">{{ m.cc }}</div></div></sc-if>
+<sc-if value="{{ m.isPoint }}"><div style="display:flex;flex-direction:column;align-items:center"><div style="border-radius:{{ m.r }}px;overflow:hidden;border:1.5px solid {{ m.c }};box-shadow:0 1px 2px rgba(17,17,16,.12),0 3px 10px rgba(17,17,16,.14);background:#fff;text-align:center;white-space:nowrap"><div style="background:{{ m.c }};color:#fff;padding:3px 10px;font-size:16px;font-weight:700;line-height:1.3">{{ m.b }}</div><div style="padding:2px 9px 3px;font-size:13px;font-weight:600;color:#2A2A28;line-height:1.3">{{ m.cc }}</div></div><div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid {{ m.c }};margin-top:-1px"></div></div></sc-if>
+</div>
+</sc-for>
+</div>
+<sc-if value="{{ me }}"><div style="position:absolute;left:{{ me.x }}px;top:{{ me.y }}px;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#3E64A0;border:4px solid #fff;box-shadow:0 0 0 8px rgba(62,100,160,.2);box-sizing:border-box;pointer-events:none"></div></sc-if>
+
+<div style="position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:8px">
+<div onPointerDown="{{ stop }}" onClick="{{ onLayerBtn }}" style="width:48px;height:48px;border-radius:12px;background:{{ layerBtnBg }};border:1px solid #DCDCD5;box-shadow:0 1px 2px rgba(17,17,16,.12),0 3px 10px rgba(17,17,16,.14);display:flex;align-items:center;justify-content:center;cursor:pointer;box-sizing:border-box"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111110" style="stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="m12 3 9 5-9 5-9-5 9-5Z"></path><path d="m3 13 9 5 9-5"></path></svg></div>
+<div style="width:48px;border-radius:12px;background:#FFFFFF;border:1px solid #DCDCD5;box-shadow:0 1px 2px rgba(17,17,16,.12),0 3px 10px rgba(17,17,16,.14);display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden">
+<div onPointerDown="{{ stop }}" onClick="{{ onZoomIn }}" style="height:48px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #DCDCD5;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111110" style="stroke-width:1.8;stroke-linecap:round"><path d="M12 5v14M5 12h14"></path></svg></div>
+<div onPointerDown="{{ stop }}" onClick="{{ onZoomOut }}" style="height:48px;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111110" style="stroke-width:1.8;stroke-linecap:round"><path d="M5 12h14"></path></svg></div>
+</div>
+</div>
+<div onPointerDown="{{ stop }}" onClick="{{ onLocate }}" style="position:absolute;right:12px;bottom:12px;width:48px;height:48px;border-radius:12px;background:#FFFFFF;border:1px solid #DCDCD5;box-shadow:0 1px 2px rgba(17,17,16,.12),0 3px 10px rgba(17,17,16,.14);display:flex;align-items:center;justify-content:center;cursor:pointer;box-sizing:border-box"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111110" style="stroke-width:1.8;stroke-linecap:round"><circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="7.5"></circle><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22"></path></svg></div>
+
+<sc-if value="{{ layerOpen }}">
+<div onPointerDown="{{ stop }}" style="position:absolute;right:68px;top:12px;width:236px;background:#FFFFFF;border-radius:14px;box-shadow:0 1px 2px rgba(17,17,16,.12),0 6px 18px rgba(17,17,16,.18);padding:16px;display:flex;flex-direction:column;gap:14px;box-sizing:border-box">
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:17px;font-weight:700">지도 레이어</span><span onClick="{{ onLayerBtn }}" style="cursor:pointer;color:#5A5A55;display:flex"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width:1.8;stroke-linecap:round"><path d="M18 6 6 18M6 6l12 12"></path></svg></span></div>
+<div style="display:flex;height:44px;border-radius:10px;background:#F2F2EE;padding:3px;gap:3px;box-sizing:border-box">
+<div onClick="{{ onBaseNormal }}" style="flex:1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;background:{{ baseNormalBg }};font-weight:{{ baseNormalW }};box-shadow:{{ baseNormalSh }}">일반지도</div>
+<div onClick="{{ onBaseSat }}" style="flex:1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;background:{{ baseSatBg }};font-weight:{{ baseSatW }};box-shadow:{{ baseSatSh }}">위성지도</div>
+</div>
+<div onClick="{{ onCadToggle }}" style="display:flex;align-items:center;gap:8px;cursor:pointer;min-height:44px"><div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:16px;font-weight:700;color:#4F7A3A">지적도</span><span style="font-size:13px;color:#5A5A55;line-height:1.4">{{ cadNote }}</span></div><span style="flex:none;width:52px;height:30px;border-radius:15px;background:{{ cadTrack }};position:relative;display:inline-block"><span style="position:absolute;top:3px;left:{{ cadKnob }}px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:left .15s"></span></span></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showLoading }}"><div style="position:absolute;left:50%;top:14px;transform:translateX(-50%);height:40px;padding:0 16px;border-radius:20px;background:#FFFFFF;box-shadow:0 1px 2px rgba(17,17,16,.12),0 3px 10px rgba(17,17,16,.14);display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:#2A2A28;white-space:nowrap;pointer-events:none">{{ spinner }}실거래가 불러오는 중…</div></sc-if>
+<sc-if value="{{ outBusan }}"><div onPointerDown="{{ stop }}" style="position:absolute;left:12px;right:72px;top:12px;background:#FFFFFF;border-radius:14px;box-shadow:0 1px 2px rgba(17,17,16,.12),0 3px 10px rgba(17,17,16,.14);padding:14px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;gap:8px;align-items:center;font-size:17px;font-weight:700"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#111110" style="stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12Z"></path><circle cx="12" cy="9" r="2.5"></circle></svg>부산 지역만 지원해요</div><div onClick="{{ onBackToBusan }}" style="height:48px;border-radius:12px;background:#1F1E1B;color:#FAFAF7;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;cursor:pointer">부산으로 돌아가기</div></div></sc-if>
+<sc-if value="{{ showEmpty }}"><div onPointerDown="{{ stop }}" style="position:absolute;left:24px;right:24px;top:50%;transform:translateY(-50%);background:#FFFFFF;border-radius:16px;box-shadow:0 1px 2px rgba(17,17,16,.12),0 3px 10px rgba(17,17,16,.14);padding:22px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center"><div style="font-size:19px;font-weight:700">이 조건의 거래가 없어요</div><div style="font-size:15px;color:#5A5A55;line-height:1.5">{{ emptySub }}<br>기간을 늘리면 더 많은 거래를 볼 수 있어요</div><div onClick="{{ onExtendPeriod }}" style="width:100%;height:52px;margin-top:6px;border-radius:12px;background:#1F1E1B;color:#FAFAF7;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;cursor:pointer">기간 늘리기 ({{ extendLabel }})</div></div></sc-if>
+<sc-if value="{{ showError }}"><div onPointerDown="{{ stop }}" style="position:absolute;left:24px;right:24px;top:50%;transform:translateY(-50%);background:#FFFFFF;border-radius:16px;box-shadow:0 1px 2px rgba(17,17,16,.12),0 3px 10px rgba(17,17,16,.14);padding:22px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#5A5A55" style="stroke-width:1.8;stroke-linecap:round"><path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"></path><path d="M12 19h.01"></path><path d="M3 3l18 18"></path></svg><div style="font-size:19px;font-weight:700">네트워크에 연결할 수 없어요</div><div style="font-size:15px;color:#5A5A55;line-height:1.5">와이파이나 데이터 연결을 확인해 주세요</div><div onClick="{{ onRetry }}" style="width:100%;height:52px;margin-top:6px;border-radius:12px;background:#1F1E1B;color:#FAFAF7;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;cursor:pointer">다시 시도</div></div></sc-if>
+</div>
+
+<div onClick="{{ onDateTap }}" style="flex:none;padding:7px 14px;display:flex;gap:8px;align-items:flex-start;border-top:1px solid #DCDCD5;font-size:14px;line-height:1.45;color:#5A5A55;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8A8A82" style="stroke-width:1.8;stroke-linecap:round;flex:none;margin-top:1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path></svg><span>2026.10.05 기준 · 최근 30일 거래는 아직 신고되지 않았을 수 있어요</span></div>
+<div style="flex:none;height:50px;margin:0 20px 6px;border:1.5px dashed #B8B8B0;border-radius:4px;background:#F2F2EE;display:flex;align-items:center;justify-content:center;font-size:13px;color:#8A8A82">광고 · 320×50 (외부 SDK)</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isGlossary }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<sc-if value="{{ gIsList }}">
+<div style="flex:none;padding:12px 18px 6px;font-size:26px;font-weight:700">용어사전</div>
+<div style="flex:none;padding:6px 16px 10px"><div style="height:52px;border-radius:12px;background:#FFFFFF;border:{{ gSearchBorder }};display:flex;align-items:center;gap:10px;padding:0 14px;box-sizing:border-box"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111110" style="stroke-width:1.8;stroke-linecap:round;flex:none"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input value="{{ gq }}" onChange="{{ onGq }}" onFocus="{{ onGFocus }}" onBlur="{{ onGBlur }}" placeholder="궁금한 용어를 검색하세요" style="flex:1;min-width:0;border:0;background:transparent;font-size:17px;font-family:inherit;color:#111110;padding:0;height:100%"><sc-if value="{{ gq }}"><span onClick="{{ onGClear }}" style="width:28px;height:28px;border-radius:50%;background:#B8B8B0;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" style="stroke-width:2.6;stroke-linecap:round"><path d="M18 6 6 18M6 6l12 12"></path></svg></span></sc-if></div></div>
+<div style="flex:none;padding:0 16px 10px;display:flex;gap:6px">
+<sc-for list="{{ gCats }}" as="gc" hint-placeholder-count="5"><div onClick="{{ gc.onClick }}" style="flex:none;height:42px;padding:0 15px;border-radius:21px;display:flex;align-items:center;font-size:16px;cursor:pointer;box-sizing:border-box;background:{{ gc.bg }};color:{{ gc.color }};border:{{ gc.border }};font-weight:{{ gc.weight }}">{{ gc.label }}</div></sc-for>
+</div>
+<div style="flex:1;min-height:0;overflow-y:auto">
+<sc-if value="{{ gShowPopular }}">
+<div style="padding:16px 18px 8px;font-size:16px;font-weight:700;color:#5A5A55">자주 찾는 용어</div>
+<div style="padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:8px"><sc-for list="{{ gPopular }}" as="gp" hint-placeholder-count="6"><div onClick="{{ gp.onClick }}" style="height:44px;padding:0 16px;border-radius:12px;background:#FFFFFF;border:1px solid #DCDCD5;display:flex;align-items:center;font-size:16px;font-weight:600;cursor:pointer">{{ gp.term }}</div></sc-for></div>
+<div style="height:8px;background:#F2F2EE"></div>
+</sc-if>
+<sc-if value="{{ gHasResults }}">
+<div style="padding:16px 18px 8px;font-size:16px;font-weight:700;color:#5A5A55">{{ gListTitle }}</div>
+<sc-for list="{{ gList }}" as="g" hint-placeholder-count="6"><div onClick="{{ g.onClick }}" style="padding:13px 18px;border-bottom:1px solid #DCDCD5;display:flex;align-items:center;gap:12px;background:#FFFFFF;cursor:pointer"><div style="flex:1;display:flex;flex-direction:column;gap:3px;min-width:0"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px;font-weight:700">{{ g.term }}</span><span style="font-size:13px;font-weight:600;color:{{ g.catColor }}">{{ g.cat }}</span></div><span style="font-size:15px;color:#5A5A55;line-height:1.45">{{ g.short_definition }}</span></div><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B8B8B0" style="stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none"><path d="m9 6 6 6-6 6"></path></svg></div></sc-for>
+</sc-if>
+<sc-if value="{{ gNoResults }}">
+<div style="padding:40px 24px 20px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center"><div style="font-size:19px;font-weight:700">‘{{ gq }}’에 맞는 용어가 없어요</div><div style="font-size:16px;color:#5A5A55;line-height:1.5">띄어쓰기를 바꾸거나 다른 말로 검색해 보세요</div></div>
+<div style="padding:16px 18px 8px;font-size:16px;font-weight:700;color:#5A5A55">이런 용어는 어떠세요</div>
+<div style="padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:8px"><sc-for list="{{ gPopular }}" as="gp" hint-placeholder-count="6"><div onClick="{{ gp.onClick }}" style="height:44px;padding:0 16px;border-radius:12px;background:#FFFFFF;border:1px solid #DCDCD5;display:flex;align-items:center;font-size:16px;font-weight:600;cursor:pointer">{{ gp.term }}</div></sc-for></div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ gIsDetail }}">
+<div style="flex:none;height:56px;display:flex;align-items:center;padding:0 8px"><div onClick="{{ onGBack }}" style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#111110" style="stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg></div><span style="font-size:15px;color:#5A5A55">{{ gBackLabel }}</span></div>
+<div style="flex:1;min-height:0;overflow-y:auto;padding:0 20px 24px;display:flex;flex-direction:column;gap:16px">
+<span style="align-self:flex-start;height:28px;padding:0 10px;border-radius:6px;display:inline-flex;align-items:center;font-size:14px;font-weight:700;background:{{ gd.catBg }};color:{{ gd.catColor }}">{{ gd.cat }}</span>
+<div style="font-size:30px;font-weight:700;margin-top:-4px">{{ gd.term }}</div>
+<div style="background:#FFFFFF;border:1px solid #DCDCD5;border-radius:12px;padding:14px 16px;font-size:18px;font-weight:600;line-height:1.55">{{ gd.short_definition }}</div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:16px;font-weight:700;color:#5A5A55">쉽게 풀면</div><div style="font-size:17px;line-height:1.7;color:#2A2A28">{{ gd.long_definition }}</div></div>
+<div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:16px;font-weight:700;color:#5A5A55">예시</div>
+<sc-if value="{{ gd.isFar }}"><div style="display:flex;gap:16px;align-items:flex-end;padding:16px;background:#FFFFFF;border-radius:12px;border:1px solid #DCDCD5"><div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:120px;display:flex;flex-direction:column;align-items:center;border-bottom:4px solid #4F7A3A"><div style="width:60px;height:18px;margin-top:3px;border-radius:2px;background:#3E64A0;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">5층</div><div style="width:60px;height:18px;margin-top:3px;border-radius:2px;background:#3E64A0;opacity:.9;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">4층</div><div style="width:60px;height:18px;margin-top:3px;border-radius:2px;background:#3E64A0;opacity:.8;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">3층</div><div style="width:60px;height:18px;margin-top:3px;border-radius:2px;background:#3E64A0;opacity:.7;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">2층</div><div style="width:60px;height:18px;margin-top:3px;border-radius:2px;background:#3E64A0;opacity:.6;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">1층</div></div><span style="font-size:13px;color:#4F7A3A;font-weight:700">땅 100평</span></div><div style="display:flex;flex-direction:column;gap:6px;font-size:16px;line-height:1.5;color:#2A2A28"><div>1층 50평 × 5층</div><div style="font-weight:700;color:#111110">= 연면적 250평</div><div style="font-size:14px;color:#5A5A55">250평 ÷ 땅 100평 = 250%</div></div></div></sc-if>
+<sc-if value="{{ gd.isBcr }}"><div style="display:flex;gap:16px;align-items:center;padding:16px;background:#FFFFFF;border-radius:12px;border:1px solid #DCDCD5"><div style="width:120px;height:100px;flex:none;border:3px solid #4F7A3A;border-radius:4px;position:relative;box-sizing:border-box;background:#EEF3E9"><div style="position:absolute;left:8px;top:8px;width:66px;height:78px;background:#3E64A0;border-radius:2px;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.3">건물<br>60평</div><span style="position:absolute;right:6px;bottom:4px;font-size:11px;color:#4F7A3A;font-weight:700">마당<br>40평</span></div><div style="display:flex;flex-direction:column;gap:6px;font-size:16px;line-height:1.5;color:#2A2A28"><div>땅 100평 중</div><div style="font-weight:700;color:#111110">건물 바닥 60평까지</div><div style="font-size:14px;color:#5A5A55">60평 ÷ 100평 = 60%</div></div></div></sc-if>
+<div style="font-size:16px;line-height:1.6;color:#2A2A28;background:#F2F2EE;border-radius:10px;padding:12px 14px">{{ gd.example }}</div>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isMore }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;overflow-y:auto">
+<div style="flex:none;padding:12px 18px 10px;font-size:26px;font-weight:700">더보기</div>
+<div style="padding:12px 18px 4px;font-size:15px;font-weight:700;color:#5A5A55;border-top:8px solid #F2F2EE">데이터</div>
+<div onClick="{{ onDateTap }}" style="height:54px;padding:0 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #DCDCD5;font-size:17px;cursor:pointer;background:#fff"><span>실거래가 기준일</span><b>2026.10.05</b></div>
+<div style="padding:12px 18px 4px;font-size:15px;font-weight:700;color:#5A5A55;border-top:8px solid #F2F2EE">문의 · 약관</div>
+<sc-for list="{{ moreRows }}" as="mr" hint-placeholder-count="4"><div onClick="{{ mr.onClick }}" style="height:54px;padding:0 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #DCDCD5;font-size:17px;cursor:pointer;background:#fff"><span>{{ mr.label }}</span><span style="color:#B8B8B0;font-size:18px">›</span></div></sc-for>
+<div style="padding:16px 18px;font-size:14px;color:#8A8A82;line-height:1.6">앱 버전 1.0.0 (프로토타입)<br>데이터는 모두 가짜예요.</div>
+</div>
+</sc-if>
+
+<div style="height:66px;flex:none;border-top:1px solid #DCDCD5;display:flex;background:#FFFFFF;position:relative;z-index:2">
+<sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="3"><div onClick="{{ tb.onClick }}" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:{{ tb.color }};font-weight:{{ tb.weight }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width:{{ tb.sw }};stroke-linecap:round;stroke-linejoin:round"><path d="{{ tb.d }}"></path></svg><span style="font-size:14px">{{ tb.label }}</span></div></sc-for>
+</div>
+
+<sc-if value="{{ sheetOpen }}">
+<div style="position:absolute;left:0;right:0;bottom:66px;height:{{ sheetH }}px;background:#FFFFFF;border-radius:18px 18px 0 0;box-shadow:0 -6px 20px rgba(17,17,16,.14);display:flex;flex-direction:column;overflow:hidden;z-index:3;transition:{{ sheetTr }}">
+<div onPointerDown="{{ onSheetDown }}" style="flex:none;height:26px;display:flex;align-items:center;justify-content:center;cursor:grab;touch-action:none"><div style="width:40px;height:5px;border-radius:3px;background:#DCDCD5"></div></div>
+<div style="flex:1;min-height:0;padding:0 18px 16px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+
+<sc-if value="{{ sh.isRegion }}">
+<div onPointerDown="{{ onSheetDown }}" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;touch-action:none"><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:22px;font-weight:700">{{ sh.name }}</span><span style="font-size:14px;color:#5A5A55">{{ sh.ctx }}</span></div><span onPointerDown="{{ stop }}" onClick="{{ onCloseSheet }}" style="cursor:pointer;color:#5A5A55;display:flex;width:44px;height:44px;align-items:center;justify-content:center;margin:-10px -10px 0 0"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width:1.8;stroke-linecap:round"><path d="M18 6 6 18M6 6l12 12"></path></svg></span></div>
+<div style="display:flex;gap:8px">
+<div style="flex:1;border:1px solid #DCDCD5;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;background:#FAFAF7"><span onClick="{{ sh.onQ }}" style="font-size:14px;color:#5A5A55;display:flex;align-items:center;gap:4px;cursor:pointer">{{ sh.statLabel }}<span style="width:22px;height:22px;border-radius:50%;border:1.5px solid #5A5A55;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;box-sizing:border-box">?</span></span><span style="font-size:20px;font-weight:700;line-height:1.3">{{ sh.statValue }}</span><span style="font-size:13px;color:#8A8A82">{{ sh.statSub }}</span></div>
+<div style="flex:none;width:112px;border:1px solid #DCDCD5;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;background:#FAFAF7;box-sizing:border-box"><span style="font-size:14px;color:#5A5A55">거래 건수</span><span style="font-size:20px;font-weight:700;line-height:1.3">{{ sh.count }}</span><span style="font-size:13px;color:#8A8A82">{{ sh.periodText }}</span></div>
+</div>
+<div style="font-size:17px;font-weight:700;padding-top:2px">월별 추이</div>
+<div style="height:70px;flex:none;display:flex;align-items:flex-end;gap:5px;border-bottom:1px solid #DCDCD5"><sc-for list="{{ sh.bars }}" as="br" hint-placeholder-count="12"><div style="flex:1;height:{{ br.h }}%;background:{{ br.c }};border-radius:3px 3px 0 0"></div></sc-for></div>
+<div style="display:flex;justify-content:space-between;font-size:13px;color:#8A8A82;margin-top:-6px"><span>'25.11</span><span>'26.10</span></div>
+<div style="font-size:14px;color:#8A8A82">2026.10.05 기준 · 가짜 데이터</div>
+</sc-if>
+
+<sc-if value="{{ sh.isComplex }}">
+<div onPointerDown="{{ onSheetDown }}" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;touch-action:none"><div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span style="font-size:21px;font-weight:700">{{ sh.name }}</span><span style="font-size:14px;color:#5A5A55;line-height:1.45">{{ sh.ctx }}</span></div><div onPointerDown="{{ stop }}" onClick="{{ onStar }}" style="flex:none;width:48px;height:48px;border-radius:12px;border:1.5px dashed #B8B8B0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8A8A82;gap:1px;cursor:pointer;box-sizing:border-box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width:1.8;stroke-linejoin:round"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9L12 3Z"></path></svg><span style="font-size:10px;font-weight:700">2차</span></div></div>
+<div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:15px;color:#5A5A55">최근 거래</span><span style="font-size:28px;font-weight:700">{{ sh.price }}</span></div>
+<div style="font-size:16px;color:#2A2A28;margin-top:-6px">{{ sh.detail }}</div>
+<sc-if value="{{ sh.isPeek }}"><div style="text-align:center;font-size:14px;color:#8A8A82">위로 올리면 최근 거래 3건을 볼 수 있어요</div></sc-if>
+<sc-if value="{{ sh.isHalf }}">
+<div style="font-size:17px;font-weight:700;padding-top:4px">최근 거래 3건</div>
+<div><sc-for list="{{ sh.tx }}" as="x" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #DCDCD5"><div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:18px;font-weight:700">{{ x.price }}</span><span style="font-size:15px;color:#5A5A55">{{ x.sub }}</span></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span style="font-size:14px;color:#5A5A55">{{ x.date }}</span><span style="height:26px;padding:0 9px;border-radius:6px;display:inline-flex;align-items:center;font-size:13px;font-weight:700;background:#F2F2EE;color:#5A5A55">{{ x.kind }}</span></div></div></sc-for></div>
+<div onClick="{{ onDetail }}" style="height:52px;flex:none;border-radius:12px;background:#1F1E1B;color:#FAFAF7;display:flex;align-items:center;justify-content:center;gap:6px;font-size:17px;font-weight:700;cursor:pointer">자세히 보기 ›</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{ sh.isParcel }}">
+<div onPointerDown="{{ onSheetDown }}" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;touch-action:none"><div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span style="align-self:flex-start;height:26px;padding:0 9px;border-radius:6px;display:inline-flex;align-items:center;font-size:13px;font-weight:700;background:#4F7A3A;color:#fff">토지</span><span style="font-size:21px;font-weight:700">{{ sh.name }}</span></div><div onPointerDown="{{ stop }}" onClick="{{ onStar }}" style="flex:none;width:48px;height:48px;border-radius:12px;border:1.5px dashed #B8B8B0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8A8A82;gap:1px;cursor:pointer;box-sizing:border-box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width:1.8;stroke-linejoin:round"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9L12 3Z"></path></svg><span style="font-size:10px;font-weight:700">2차</span></div></div>
+<sc-if value="{{ sh.trade }}"><div style="font-size:15px;color:#2A2A28;background:#EEF3E9;border-radius:8px;padding:8px 12px">최근 거래 <b>{{ sh.trade }}</b></div></sc-if>
+<div style="display:flex;border:1px solid #DCDCD5;border-radius:12px;background:#FAFAF7">
+<div onClick="{{ sh.qCat }}" style="flex:1;padding:10px 12px;display:flex;flex-direction:column;gap:3px;min-width:0;cursor:pointer"><span style="font-size:14px;color:#5A5A55;display:flex;align-items:center;gap:4px">지목<span style="width:20px;height:20px;border-radius:50%;border:1.5px solid #5A5A55;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;box-sizing:border-box">?</span></span><span style="font-size:18px;font-weight:700">{{ sh.cat }}</span></div>
+<div style="width:1px;background:#DCDCD5"></div>
+<div style="flex:1;padding:10px 12px;display:flex;flex-direction:column;gap:3px;min-width:0"><span style="font-size:14px;color:#5A5A55">면적</span><span style="font-size:17px;font-weight:700;white-space:nowrap">{{ sh.area }}</span><span style="font-size:13px;color:#8A8A82">{{ sh.areaM2 }}</span></div>
+<div style="width:1px;background:#DCDCD5"></div>
+<div onClick="{{ sh.qPrice }}" style="flex:1.3;padding:10px 12px;display:flex;flex-direction:column;gap:3px;min-width:0;cursor:pointer"><span style="font-size:14px;color:#5A5A55;display:flex;align-items:center;gap:4px">공시지가<span style="width:20px;height:20px;border-radius:50%;border:1.5px solid #5A5A55;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;box-sizing:border-box">?</span></span><span style="font-size:16px;font-weight:700;white-space:nowrap">{{ sh.offPrice }}</span><span style="font-size:13px;color:#8A8A82">{{ sh.offYear }}</span></div>
+</div>
+<div onClick="{{ sh.qZone }}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer"><span style="font-size:14px;color:#5A5A55">용도지역</span><span style="width:22px;height:22px;border-radius:50%;border:1.5px solid #5A5A55;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#5A5A55;box-sizing:border-box">?</span><span style="font-size:17px;font-weight:700">{{ sh.zone }}</span><sc-if value="{{ sh.zoneMore }}"><span style="height:26px;padding:0 9px;border-radius:6px;display:inline-flex;align-items:center;font-size:13px;font-weight:700;background:#F6EFE6;color:#8B6440">{{ sh.zoneMore }}</span></sc-if></div>
+<sc-if value="{{ sh.isPeek }}"><div onClick="{{ onDetail }}" style="height:52px;flex:none;border-radius:12px;background:#1F1E1B;color:#FAFAF7;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;cursor:pointer">자세히 보기 ›</div></sc-if>
+<sc-if value="{{ sh.isHalf }}">
+<div style="border:1.5px solid #4F7A3A;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;background:#EEF3E9"><div style="font-size:17px;font-weight:700;color:#4F7A3A">이 땅에 뭘 지을 수 있나요</div><div style="font-size:16px;line-height:1.55;color:#2A2A28">{{ sh.easy }}</div><div style="display:flex;gap:8px"><div onClick="{{ sh.qBcr }}" style="flex:1;background:#FFFFFF;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;cursor:pointer"><span style="font-size:14px;color:#5A5A55;display:flex;gap:4px;align-items:center">건폐율 한도<span style="width:20px;height:20px;border-radius:50%;border:1.5px solid #5A5A55;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;box-sizing:border-box">?</span></span><span style="font-size:22px;font-weight:700">{{ sh.bcr }}</span></div><div onClick="{{ sh.qFar }}" style="flex:1;background:#FFFFFF;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;cursor:pointer"><span style="font-size:14px;color:#5A5A55;display:flex;gap:4px;align-items:center">용적률 한도<span style="width:20px;height:20px;border-radius:50%;border:1.5px solid #5A5A55;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;box-sizing:border-box">?</span></span><span style="font-size:22px;font-weight:700">{{ sh.far }}</span></div></div><div style="font-size:13px;color:#5A5A55">출처 · 부산광역시 도시계획 조례</div></div>
+<div style="font-size:14px;color:#5A5A55;line-height:1.5">참고용 정보이며 실제 건축 가능 여부는 관할 구청 확인이 필요합니다.</div>
+<div onClick="{{ onDetail }}" style="height:52px;flex:none;border-radius:12px;background:#1F1E1B;color:#FAFAF7;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;cursor:pointer">자세히 보기 ›</div>
+</sc-if>
+</sc-if>
+
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ periodOpen }}">
+<div onClick="{{ onPeriodChip }}" style="position:absolute;inset:0;background:rgba(17,17,16,.4);z-index:4"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;background:#FFFFFF;border-radius:18px 18px 0 0;padding:8px 18px 22px;display:flex;flex-direction:column;gap:12px;z-index:5">
+<div style="width:40px;height:5px;border-radius:3px;background:#DCDCD5;margin:0 auto 4px"></div>
+<div style="font-size:20px;font-weight:700">기간</div>
+<div style="font-size:15px;color:#5A5A55;margin-top:-6px">계약일 기준으로 최근 몇 개월 거래를 볼까요</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><sc-for list="{{ periodOpts }}" as="po" hint-placeholder-count="6"><div onClick="{{ po.onClick }}" style="height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;box-sizing:border-box;background:{{ po.bg }};color:{{ po.color }};border:{{ po.border }};font-weight:{{ po.weight }}">{{ po.label }}</div></sc-for></div>
+<div style="font-size:14px;color:#8A8A82">가격 · 면적 · 직거래 제외는 전체 필터에서 고를 수 있어요 (이번 범위 밖)</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ popup }}">
+<div onClick="{{ onPopupClose }}" style="position:absolute;inset:0;background:rgba(17,17,16,.45);z-index:6"></div>
+<div style="position:absolute;left:20px;right:20px;top:230px;background:#FFFFFF;border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 8px 28px rgba(17,17,16,.25);z-index:7">
+<div style="display:flex;justify-content:space-between;align-items:center"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:22px;font-weight:700">{{ popup.term }}</span><span style="height:26px;padding:0 9px;border-radius:6px;display:inline-flex;align-items:center;font-size:13px;font-weight:700;background:{{ popup.catBg }};color:{{ popup.catColor }}">{{ popup.cat }}</span></div><span onClick="{{ onPopupClose }}" style="cursor:pointer;color:#5A5A55;display:flex;width:44px;height:44px;align-items:center;justify-content:center;margin:-10px -10px -10px 0"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width:1.8;stroke-linecap:round"><path d="M18 6 6 18M6 6l12 12"></path></svg></span></div>
+<div style="font-size:18px;line-height:1.6;color:#2A2A28">{{ popup.short_definition }}</div>
+<div style="display:flex;gap:8px;padding-top:4px"><div onClick="{{ onPopupClose }}" style="flex:1;height:52px;border-radius:12px;border:1px solid #DCDCD5;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;cursor:pointer;box-sizing:border-box">닫기</div><div onClick="{{ onPopupGo }}" style="flex:1.7;height:52px;border-radius:12px;background:#1F1E1B;color:#FAFAF7;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;cursor:pointer">용어사전에서 보기</div></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ permAsk }}">
+<div style="position:absolute;inset:0;background:rgba(17,17,16,.45);z-index:8"></div>
+<div style="position:absolute;left:20px;right:20px;top:190px;background:#FFFFFF;border-radius:18px;padding:24px 20px 18px;display:flex;flex-direction:column;gap:12px;z-index:9">
+<div style="width:52px;height:52px;border-radius:50%;background:#F2F2EE;display:flex;align-items:center;justify-content:center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#111110" style="stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12Z"></path><circle cx="12" cy="9" r="2.5"></circle></svg></div>
+<div style="font-size:21px;font-weight:700;line-height:1.35">지금 있는 곳 주변 실거래가부터 보여드릴게요</div>
+<div style="font-size:16px;color:#5A5A55;line-height:1.55">위치 권한을 허용하면 내 위치에서 지도를 시작해요. 허용하지 않으면 부산 중심에서 시작해요.</div>
+<div style="display:flex;flex-direction:column;gap:8px;padding-top:6px"><div onClick="{{ onPermAllow }}" style="height:52px;border-radius:12px;background:#1F1E1B;color:#FAFAF7;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;cursor:pointer">위치 권한 허용하기</div><div onClick="{{ onPermDeny }}" style="height:52px;border-radius:12px;border:1px solid #DCDCD5;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;cursor:pointer;box-sizing:border-box">허용하지 않고 시작</div></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ toast }}"><div style="position:absolute;left:12px;right:12px;top:{{ toastTop }}px;background:#1F1E1B;color:#fff;border-radius:12px;padding:12px 14px;font-size:16px;line-height:1.45;box-shadow:0 4px 14px rgba(17,17,16,.25);display:flex;gap:10px;align-items:flex-start;z-index:10;pointer-events:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" style="stroke-width:1.8;stroke-linecap:round;flex:none;margin-top:1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path></svg><span>{{ toast }}</span></div></sc-if>
+</div>
+
+<div style="width:340px;flex:none;display:flex;flex-direction:column;gap:18px;padding-top:4px">
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:14px;font-weight:700;color:#8A8A82;letter-spacing:.04em">부산 실거래가 지도 · B안</div><div style="font-size:28px;font-weight:700;letter-spacing:-.02em">지도 동작 프로토타입</div><div style="font-size:15px;color:#5A5A55;line-height:1.6">마커 값은 <code>mock-api.js</code>의 가짜 데이터예요. 응답 형태는 API 명세서 v0.4를 따라서, 함수 안쪽만 실제 API로 바꾸면 돼요. <a href="Map%20Glossary%20Board.dc.html">와이어프레임 · 시안 보드</a></div></div>
+<div style="background:#FFFFFF;border:1px solid #DCDCD5;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px"><div style="font-size:16px;font-weight:700">해 보기</div><ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:15px;line-height:1.5;color:#2A2A28"><li>끌어서 지도 이동, 스크롤·핀치·＋－로 확대</li><li>확대하면 구 → 동 → 단지로 마커가 바뀌어요</li><li>유형 탭·거래 칩을 바꾸면 마커 표기가 바뀌어요</li><li>마커를 누르면 요약 시트. 손잡이를 끌어 올리거나 내려서 닫기</li><li>토지 탭 → 확대 → 빈 땅 누르기</li><li>시트 안 (?) → 용어 팝업 → 용어사전</li></ol></div>
+<div style="background:#FFFFFF;border:1px solid #DCDCD5;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><div style="font-size:16px;font-weight:700">지금 상태</div><div style="font-size:15px;color:#2A2A28;line-height:1.6">줌 <b>{{ zText }}</b> · {{ levelText }}<br>{{ filterText }}<br>마커 {{ shownCount }}개 · 겹쳐서 점 {{ dotCount }}개</div></div>
+<div style="background:#FFFFFF;border:1px solid #DCDCD5;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px"><div style="font-size:16px;font-weight:700">상태 보기 (미팅용)</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><sc-for list="{{ demoBtns }}" as="db" hint-placeholder-count="6"><div onClick="{{ db.onClick }}" style="height:44px;border-radius:10px;border:1px solid #DCDCD5;background:#FAFAF7;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">{{ db.label }}</div></sc-for></div></div>
+<div style="background:#1F1E1B;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px;color:#FAFAF7"><div style="font-size:15px;font-weight:700">마지막 API 요청</div><div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.6;word-break:break-all;color:#E7E7E1">{{ logReq }}</div><div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.6;color:#B8B8B0">{{ logRes }}</div></div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showPermission&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const TYPEC = { apartment: '#3E64A0', officetel: '#7B5A9E', villa: '#B0506B', land: '#4F7A3A' };
+const TYPEN = { apartment: '아파트', officetel: '오피스텔', villa: '빌라', land: '토지' };
+const DEALN = { sale: '매매', jeonse: '전세', monthly: '월세' };
+const ME = { x: 1508, y: 812 };
+const START = { cx: 1150, cy: 820, z: 11.4 };
+const SHEET = { region: [250, 390], complex: [250, 480], parcel: [312, 520] };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const TAB_ICON = { map: 'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z M9 4v14 M15 6v14', glossary: 'M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2Zm0 0a2 2 0 0 0 2 2h13', more: 'M5 12h.01 M12 12h.01 M19 12h.01' };
+
+class Component extends DCLogic {
+  state = { tab: 'map', ...START, ptype: 'apartment', deal: 'sale', period: 12, sat: false, cadUser: false, layerOpen: false, periodOpen: false, markers: [], level: 'sigungu', loading: false, error: false, fetched: false, sel: null, sheet: null, sheetState: 'peek', sheetDy: 0, dragging: false, hl: null, toast: null, perm: 'ask', me: null, gq: '', gcat: '', gview: 'list', gterm: null, gFocus: false, returnTo: null, popup: null, log: null, W: 360, H: 400, ready: false, forceLoading: false };
+  seq = 0;
+
+  componentDidMount() {
+    if (this.props.showPermission === false) this.setState({ perm: 'done' });
+    const url = new URL('mock-api.js', document.baseURI).href;
+    import(url).then(m => { this.api = m; this.setState({ ready: true }); this.fetchMarkers(); });
+    fetch(new URL('busan-map-mock.svg', document.baseURI).href).then(r => r.text()).then(txt => { this.svgText = txt; this.mountSvg(); });
+    this.onResize = () => this.measure(); window.addEventListener('resize', this.onResize);
+  }
+  componentWillUnmount() { window.removeEventListener('resize', this.onResize); if (this.mapEl) this.mapEl.removeEventListener('wheel', this.onWheel); clearTimeout(this.fetchT); clearTimeout(this.toastT); }
+  componentDidUpdate() { this.syncSvg(); }
+
+  mapRef = el => { if (this.mapEl && this.mapEl !== el) this.mapEl.removeEventListener('wheel', this.onWheel); this.mapEl = el; if (el) { el.addEventListener('wheel', this.onWheel, { passive: false }); this.measure(); } };
+  svgRef = el => { this.svgHost = el; if (el) this.mountSvg(); };
+  mountSvg() { if (!this.svgHost || !this.svgText) return; if (!this.svgHost.firstChild) this.svgHost.innerHTML = this.svgText; this.svg = this.svgHost.querySelector('svg'); if (this.svg) { this.svg.setAttribute('width', '100%'); this.svg.setAttribute('height', '100%'); this.svg.setAttribute('preserveAspectRatio', 'none'); this.svg.style.display = 'block'; this.cad = this.svg.querySelector('#cadastral'); this.syncSvg(); } }
+  measure() { if (!this.mapEl) return; const W = this.mapEl.clientWidth, H = this.mapEl.clientHeight; if (W && H && (W !== this.state.W || H !== this.state.H)) this.setState({ W, H }); }
+  s(z = this.state.z) { return 0.18 * Math.pow(2, z - 10); }
+  syncSvg() {
+    if (!this.svg) return;
+    const { cx, cy, W, H, ptype, cadUser, z } = this.state; const s = this.s();
+    this.svg.setAttribute('viewBox', `${cx - W / 2 / s} ${cy - H / 2 / s} ${W / s} ${H / s}`);
+    if (this.cad) this.cad.style.display = (ptype === 'land' || cadUser) && z >= 13.4 ? 'inline' : 'none';
+  }
+
+  // ---------- 지도 조작 ----------
+  stop = e => e.stopPropagation();
+  onMapDown = e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (this.state.layerOpen) { this.setState({ layerOpen: false }); }
+    this.pts = this.pts || new Map(); this.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.pts.size === 1) this.drag = { x: e.clientX, y: e.clientY, cx: this.state.cx, cy: this.state.cy, moved: false };
+    if (this.pts.size === 2) { const [a, b] = [...this.pts.values()]; this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, z: this.state.z }; if (this.drag) this.drag.moved = true; }
+    if (!this.bound) { window.addEventListener('pointermove', this.onMove); window.addEventListener('pointerup', this.onUp); window.addEventListener('pointercancel', this.onUp); this.bound = true; }
+  };
+  onMove = e => {
+    if (!this.pts || !this.pts.has(e.pointerId)) return;
+    this.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.pinch && this.pts.size >= 2) { const [a, b] = [...this.pts.values()]; this.zoomAt(this.pinch.z + Math.log2(Math.hypot(a.x - b.x, a.y - b.y) / this.pinch.d)); return; }
+    const d = this.drag; if (!d) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (!d.moved && Math.hypot(dx, dy) > 6) d.moved = true;
+    if (d.moved) { const s = this.s(); this.setState({ cx: clamp(d.cx - dx / s, -200, 2200), cy: clamp(d.cy - dy / s, -200, 1800) }); }
+  };
+  onUp = e => {
+    if (!this.pts) return; const had = this.pts.delete(e.pointerId);
+    if (this.pts.size < 2) this.pinch = null;
+    if (this.pts.size === 1) { const [p] = [...this.pts.values()]; this.drag = { x: p.x, y: p.y, cx: this.state.cx, cy: this.state.cy, moved: true }; return; }
+    if (this.pts.size === 0) {
+      window.removeEventListener('pointermove', this.onMove); window.removeEventListener('pointerup', this.onUp); window.removeEventListener('pointercancel', this.onUp); this.bound = false;
+      const d = this.drag; this.drag = null;
+      if (had && d && !d.moved) this.onMapTap(e); else this.scheduleFetch();
+    }
+  };
+  onWheel = e => { e.preventDefault(); const r = this.mapEl.getBoundingClientRect(); this.zoomAt(this.state.z - e.deltaY * 0.0022, e.clientX - r.left, e.clientY - r.top); this.scheduleFetch(); };
+  zoomAt(z, px, py) {
+    z = clamp(z, 10, 16.4); const { cx, cy, W, H } = this.state;
+    if (px == null) { this.setState({ z }); return; }
+    const s0 = this.s(), s1 = this.s(z); const wx = cx + (px - W / 2) / s0, wy = cy + (py - H / 2) / s0;
+    this.setState({ z, cx: wx - (px - W / 2) / s1, cy: wy - (py - H / 2) / s1 });
+  }
+  animate(to, ms = 360) {
+    cancelAnimationFrame(this.raf);
+    const from = { cx: this.state.cx, cy: this.state.cy, z: this.state.z }; const t0 = performance.now();
+    const T = { cx: to.cx ?? from.cx, cy: to.cy ?? from.cy, z: clamp(to.z ?? from.z, 10, 16.4) };
+    const step = now => { const k = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - k, 3); this.setState({ cx: from.cx + (T.cx - from.cx) * e, cy: from.cy + (T.cy - from.cy) * e, z: from.z + (T.z - from.z) * e }); if (k < 1) this.raf = requestAnimationFrame(step); else this.scheduleFetch(0); };
+    this.raf = requestAnimationFrame(step);
+  }
+  onZoomIn = () => this.animate({ z: Math.floor(this.state.z + 1) }, 260);
+  onZoomOut = () => this.animate({ z: Math.ceil(this.state.z - 1) }, 260);
+
+  scheduleFetch(ms = 220) { clearTimeout(this.fetchT); this.fetchT = setTimeout(() => this.fetchMarkers(), ms); }
+  async fetchMarkers() {
+    const api = this.api; if (!api) return;
+    const { cx, cy, z, W, H, ptype, deal, period } = this.state;
+    if (!api.inBusan(cx, cy)) { this.seq++; this.setState({ out: true, markers: [], loading: false, error: false }); return; }
+    const s = this.s(); const a = api.toLatLng(cx - W / 2 / s, cy + H / 2 / s), b = api.toLatLng(cx + W / 2 / s, cy - H / 2 / s);
+    const params = { bbox: [a.lng, a.lat, b.lng, b.lat].map(v => +v.toFixed(5)), zoom: +z.toFixed(2), property_type: ptype, deal_type: ptype === 'land' ? 'sale' : deal, period_months: period };
+    const seq = ++this.seq; const lt = setTimeout(() => { if (seq === this.seq) this.setState({ loading: true }); }, 250);
+    try {
+      const res = await api.getMapMarkers(params); if (seq !== this.seq) return;
+      this.setState({ markers: res.data.markers, level: res.data.level, loading: false, out: false, error: false, fetched: true, log: { kind: 'map', params, res: `level: ${res.data.level} · markers: ${res.data.markers.length} · data_as_of: ${res.meta.data_as_of.slice(0, 10)}` } });
+    } catch (err) { if (seq !== this.seq) return; this.setState({ loading: false, error: true, markers: [], log: { kind: 'map', params, res: `error: ${err.code || err}` } }); }
+    finally { clearTimeout(lt); }
+  }
+
+  // ---------- 탭·마커 ----------
+  toast(text, ms = 2600) { clearTimeout(this.toastT); this.setState({ toast: text }); this.toastT = setTimeout(() => this.setState({ toast: null }), ms); }
+  closeSheet = () => this.setState({ sheet: null, sel: null, hl: null, sheetDy: 0 });
+  onCloseSheet = () => this.closeSheet();
+  setType(k) {
+    if (k === this.state.ptype) return;
+    this.setState({ ptype: k, deal: k === 'land' ? 'sale' : this.state.deal, markers: [], sheet: null, sel: null, hl: null, layerOpen: false });
+    if (k === 'land') this.toast('땅을 눌러 토지 정보를 확인하세요', 4000);
+    this.scheduleFetch(0);
+  }
+  setDeal(k) {
+    if (this.state.ptype === 'land' && k !== 'sale') { this.toast('토지는 매매 거래만 볼 수 있어요'); return; }
+    if (k === this.state.deal) return;
+    this.setState({ deal: k, markers: [], sheet: null, sel: null }); this.scheduleFetch(0);
+  }
+  onMarker(i) {
+    const api = this.api, m = i.m; const w = api.toWorld(m.lat, m.lng);
+    if (i.dot) { this.animate({ cx: w.x, cy: w.y, z: Math.min(16.4, Math.floor(this.state.z) + 1) }); return; }
+    if (m.kind === 'region') {
+      const nz = m.level === 'sigungu' ? 12.6 : 14.4; const z = Math.max(this.state.z, nz);
+      this.setState({ sel: null, hl: null, sheet: { type: 'region', m, ptype: this.state.ptype, deal: this.state.ptype === 'land' ? 'sale' : this.state.deal, period: this.state.period }, sheetState: 'peek', sheetDy: 0 });
+      this.animate({ cx: w.x, cy: w.y + 70 / this.s(z), z }); return;
+    }
+    if (m.kind === 'complex') {
+      this.setState({ sel: m.complex_id, hl: null, sheet: { type: 'complex', m, data: null }, sheetState: 'peek', sheetDy: 0 });
+      api.getComplex(m.complex_id, m.latest.deal_type).then(d => this.setState(st => st.sheet && st.sheet.m === m ? { sheet: { ...st.sheet, data: d }, log: { kind: 'complex', params: `GET /complexes/${m.complex_id}`, res: `recent_transactions: ${d.recent_transactions.length}` } } : null));
+      return;
+    }
+    if (m.kind === 'parcel') this.openParcel(w.x, w.y, m);
+  }
+  openParcel(wx, wy, m) {
+    const api = this.api; const ll = api.toLatLng(wx, wy);
+    api.lookupParcel(ll).then(r => {
+      this.setState({ log: { kind: 'parcel', params: `GET /parcels/lookup?lat=${ll.lat}&lng=${ll.lng}`, res: r.status === 'ok' ? `pnu: ${r.parcel.pnu} · zonings: ${r.parcel.zonings.length}` : `status: ${r.status}` } });
+      if (r.status !== 'ok') { this.closeSheet(); this.toast(r.message); return; }
+      const cell = api.parcelCell(Math.round(wx * 100) / 100, Math.round(wy * 100) / 100);
+      this.setState({ hl: cell, sel: m ? m.pnu : null, sheet: { type: 'parcel', p: r.parcel, trade: m ? m.latest : null }, sheetState: 'peek', sheetDy: 0 });
+    });
+  }
+  onMapTap(e) {
+    if (!this.mapEl || !this.api) return;
+    if (this.state.periodOpen) { this.setState({ periodOpen: false }); return; }
+    const r = this.mapEl.getBoundingClientRect(); const px = e.clientX - r.left, py = e.clientY - r.top;
+    const { cx, cy, W, H, ptype, z } = this.state; const s = this.s();
+    const wx = cx + (px - W / 2) / s, wy = cy + (py - H / 2) / s;
+    if (ptype === 'land') { if (z < 14) { this.toast('조금 더 확대하면 땅을 하나씩 골라 볼 수 있어요'); return; } this.openParcel(wx, wy, null); return; }
+    if (this.state.sheet) this.closeSheet();
+  }
+
+  // ---------- 시트 끌기 ----------
+  onSheetDown = e => { e.stopPropagation(); this.sd = { y: e.clientY, dy: 0 }; window.addEventListener('pointermove', this.onSheetMove); window.addEventListener('pointerup', this.onSheetUp); window.addEventListener('pointercancel', this.onSheetUp); this.setState({ dragging: true }); };
+  onSheetMove = e => { if (!this.sd) return; this.sd.dy = e.clientY - this.sd.y; this.setState({ sheetDy: this.sd.dy }); };
+  onSheetUp = () => {
+    window.removeEventListener('pointermove', this.onSheetMove); window.removeEventListener('pointerup', this.onSheetUp); window.removeEventListener('pointercancel', this.onSheetUp);
+    const dy = this.sd ? this.sd.dy : 0; this.sd = null; const st = this.state.sheetState;
+    if (Math.abs(dy) < 6) { this.setState({ dragging: false, sheetDy: 0, sheetState: st === 'peek' ? 'half' : 'peek' }); return; }
+    if (dy < -40) this.setState({ dragging: false, sheetDy: 0, sheetState: 'half' });
+    else if (dy > 50) { if (st === 'half' && dy < 220) this.setState({ dragging: false, sheetDy: 0, sheetState: 'peek' }); else { this.setState({ dragging: false }); this.closeSheet(); } }
+    else this.setState({ dragging: false, sheetDy: 0 });
+  };
+
+  openTerm(id) { this.setState({ popup: id }); }
+  goGlossaryTerm(id, from) { this.setState({ tab: 'glossary', gview: 'detail', gterm: id, popup: null, returnTo: from || null }); }
+
+  renderVals() {
+    const st = this.state, api = this.api;
+    const { W, H, z, cx, cy, ptype, deal, period } = st;
+    const land = ptype === 'land';
+    const items = api && st.tab === 'map' ? api.placeMarkers(st.markers, { cx, cy, z }, W, H, st.sel) : [];
+    const mk = items.map(i => { const sel = i.id === st.sel; const k = i.m.kind; return { x: i.sx.toFixed(1), y: i.sy.toFixed(1), tf: i.dot ? 'translate(-50%,-50%)' : k === 'region' ? 'translate(-50%,-50%)' : `translate(-50%,-100%)${sel ? ' scale(1.08)' : ''}`, z: sel ? 30 : i.dot ? 1 : k === 'region' ? 5 : 10, c: sel ? '#111110' : k === 'parcel' ? TYPEC.land : TYPEC[ptype], r: k === 'parcel' ? 4 : 10, isDot: !!i.dot, isRegion: !i.dot && k === 'region', isPoint: !i.dot && k !== 'region', a: i.lab.a || '', b: i.lab.b, cc: i.lab.c, onClick: e => { e.stopPropagation(); this.onMarker(i); } }; });
+    const s = this.s();
+    const toScr = (x, y) => ({ x: ((x - cx) * s + W / 2).toFixed(1), y: ((y - cy) * s + H / 2).toFixed(1) });
+    const hl = st.hl ? { left: ((st.hl.x0 - cx) * s + W / 2).toFixed(1), top: ((st.hl.y0 - cy) * s + H / 2).toFixed(1), w: (st.hl.w * s).toFixed(1), h: (st.hl.h * s).toFixed(1) } : null;
+    const level = api ? api.levelForZoom(z) : 'sigungu';
+    const out = st.out && api && !api.inBusan(cx, cy);
+    const showError = st.error && !out;
+    const showEmpty = !!api && st.fetched && !st.loading && !st.error && !out && st.markers.length === 0 && st.tab === 'map';
+    const periodLabel = `최근 ${period}개월`;
+    const nextPeriod = period < 12 ? 12 : Math.min(60, period * 2);
+
+    // 시트
+    let sh = null, sheetH = 0;
+    if (st.sheet && api) {
+      const S = st.sheet, half = st.sheetState === 'half';
+      const base = SHEET[S.type][half ? 1 : 0]; sheetH = clamp(base - st.sheetDy, 120, 600);
+      if (S.type === 'region') {
+        const m = S.m, sm = m.summary;
+        const stat = sm.median_price_per_pyeong != null ? ['평당가 중위값', api.fmtMan(sm.median_price_per_pyeong), S.ptype === 'land' ? '토지면적 기준' : '전용면적 기준'] : sm.median_deposit_per_pyeong != null ? ['평당 보증금 중위값', api.fmtMan(sm.median_deposit_per_pyeong), '전용면적 기준'] : ['보증금 · 월세 중위값', `${api.fmtManNum(sm.median_deposit)} / ${api.fmtManNum(sm.median_monthly_rent)}`, '만 원'];
+        const c = TYPEC[S.ptype];
+        sh = { isRegion: true, name: m.level === 'sigungu' ? `부산 ${m.name}` : m.name, ctx: `${TYPEN[S.ptype]} · ${DEALN[S.deal]} · 최근 ${S.period}개월`, statLabel: stat[0], statValue: stat[1], statSub: stat[2], count: `${m.transaction_count.toLocaleString('ko-KR')}건`, periodText: `최근 ${S.period}개월`, onQ: () => this.openTerm('median'), bars: [52, 56, 50, 60, 58, 64, 62, 66, 70, 68, 74, 72].map((h, i) => ({ h: Math.round(h * (0.9 + 0.2 * ((m.transaction_count * (i + 3)) % 7) / 7)), c: i === 11 ? c : c + '59' })) };
+      } else if (S.type === 'complex') {
+        const m = S.m, l = m.latest, d = S.data;
+        const priceOf = r => r.deal_type === 'sale' ? api.fmtEok(r.price) : r.deal_type === 'jeonse' ? `전세 ${api.fmtEok(r.deposit)}` : `${api.fmtManNum(r.deposit)}/${api.fmtManNum(r.monthly_rent)}`;
+        sh = { isComplex: true, isPeek: !half, isHalf: half, name: m.name, ctx: d ? `${TYPEN[m.property_type]} · ${d.address.replace('부산광역시 ', '')} · ${d.build_year}년 · ${d.household_count.toLocaleString()}세대` : `${TYPEN[m.property_type]} · 불러오는 중…`, price: priceOf(l), detail: `${api.areaLabel(l)} · ${l.floor}층 · ${api.fmtDate(l.contract_date)} 계약`, tx: d ? d.recent_transactions.map(r => ({ price: priceOf(r), sub: `${api.areaLabel(r)} · ${r.floor}층`, date: api.fmtDate(r.contract_date), kind: r.trade_type === 'direct' ? '직거래' : '중개' })) : [] };
+      } else {
+        const p = S.p, zz = p.zonings;
+        sh = { isParcel: true, isPeek: !half, isHalf: half, name: p.short_address, trade: S.trade ? `${api.fmtEok(S.trade.price)} · ${S.trade.land_area_pyeong}평 · ${api.fmtDate(S.trade.contract_date)}` : '', cat: p.land_category, area: `${p.land_area_pyeong}평`, areaM2: `${p.land_area_m2.toLocaleString('ko-KR')}㎡`, offPrice: `평당 ${Math.round(p.official_land_price_per_m2 * 3.3058 / 1e4).toLocaleString('ko-KR')}만`, offYear: `${p.official_land_price_year}년`, zone: zz[0].zone_type, zoneMore: zz.length > 1 ? `${zz[1].zone_type.replace('지역', '')} ${Math.round(zz[1].area_ratio * 100)}% ${zz[1].inclusion}` : '', easy: zz[0].easy, bcr: `${zz[0].max_building_coverage_ratio}%`, far: `${zz[0].max_floor_area_ratio}%`, qCat: () => this.openTerm('land-category'), qPrice: () => this.openTerm('official-price'), qZone: () => this.openTerm('zoning'), qBcr: () => this.openTerm('bcr'), qFar: () => this.openTerm('far') };
+      }
+    }
+
+    // 용어사전
+    const CL = api ? api.CATEGORY_LABEL : {};
+    const gres = api ? api.getGlossarySync({ q: st.gq, category: st.gcat }).data : [];
+    const all = api ? api.GLOSSARY : [];
+    const catColor = c => c === 'land' ? '#4F7A3A' : '#5A5A55';
+    const gt = st.gterm && all.find(t => t.term_id === st.gterm);
+    const pp = st.popup && all.find(t => t.term_id === st.popup);
+    const searching = st.gq.trim().length > 0;
+
+    const typeTabs = ['apartment', 'officetel', 'villa', 'land'].map(k => { const on = k === ptype; return { label: TYPEN[k], bg: on ? TYPEC[k] : 'transparent', color: on ? '#FFFFFF' : '#2A2A28', weight: on ? 700 : 500, shadow: on ? '0 1px 2px rgba(17,17,16,.12),0 3px 10px rgba(17,17,16,.14)' : 'none', dot: TYPEC[k], dotDisplay: on ? 'none' : 'inline-block', onClick: () => this.setType(k) }; });
+    const dealChips = ['sale', 'jeonse', 'monthly'].map(k => { const off = land && k !== 'sale', on = k === (land ? 'sale' : deal); return { label: DEALN[k], bg: off ? '#F2F2EE' : on ? '#1F1E1B' : '#FFFFFF', color: off ? '#B8B8B0' : on ? '#FAFAF7' : '#2A2A28', border: off ? '1px dashed #DCDCD5' : on ? '1px solid #1F1E1B' : '1px solid #DCDCD5', weight: on ? 700 : 500, onClick: () => this.setDeal(k) }; });
+    const tabs = [['map', '지도'], ['glossary', '용어사전'], ['more', '더보기']].map(([k, n]) => ({ label: n, d: TAB_ICON[k], color: st.tab === k ? '#111110' : '#8A8A82', weight: st.tab === k ? 700 : 500, sw: st.tab === k ? 2.2 : 1.8, onClick: () => { this.setState({ tab: k, popup: null, periodOpen: false, layerOpen: false, ...(k === 'glossary' && st.tab !== 'glossary' ? { gview: 'list', returnTo: null } : {}) }); if (k === 'map') setTimeout(() => { this.measure(); this.scheduleFetch(0); }, 0); } }));
+    const demo = (label, fn) => ({ label, onClick: fn });
+    const demoBtns = [
+      demo('불러오는 중', () => { this.setState({ tab: 'map', forceLoading: true }); clearTimeout(this.flT); this.flT = setTimeout(() => this.setState({ forceLoading: false }), 2500); }),
+      demo('거래 없음', () => { this.setState({ tab: 'map' }); api && api.setMockMode('empty'); this.fetchMarkers(); }),
+      demo('네트워크 오류', () => { this.setState({ tab: 'map' }); api && api.setMockMode('error'); this.fetchMarkers(); }),
+      demo('부산 밖으로', () => { this.setState({ tab: 'map', sheet: null, sel: null, hl: null }); this.animate({ cx: 140, cy: 560, z: 12.4 }, 500); }),
+      demo('위치 권한 안내', () => this.setState({ tab: 'map', perm: 'ask' })),
+      demo('처음으로', () => { api && api.setMockMode(null); this.setState({ tab: 'map', sheet: null, sel: null, hl: null, ptype: 'apartment', deal: 'sale', period: 12, cadUser: false, sat: false, markers: [] }); this.animate(START, 500); })
+    ];
+    const lg = st.log;
+
+    return {
+      isMap: st.tab === 'map', isGlossary: st.tab === 'glossary', isMore: st.tab === 'more',
+      onSearch: () => this.toast('검색 화면은 다음 작업에서 연결해요'),
+      typeTabs, dealChips, periodLabel,
+      onPeriodChip: () => this.setState({ periodOpen: !st.periodOpen, layerOpen: false }),
+      periodOpts: [3, 6, 12, 24, 36, 60].map(n => { const on = n === period; return { label: `${n}개월`, bg: on ? '#1F1E1B' : '#FFFFFF', color: on ? '#FAFAF7' : '#2A2A28', border: on ? '1px solid #1F1E1B' : '1px solid #DCDCD5', weight: on ? 700 : 500, onClick: () => { this.setState({ period: n, periodOpen: false, markers: [], sheet: null, sel: null }); this.scheduleFetch(0); } }; }),
+      mapRef: this.mapRef, svgRef: this.svgRef, onMapDown: this.onMapDown, stop: this.stop,
+      mapCursor: this.drag && this.drag.moved ? 'grabbing' : land && z >= 14 ? 'crosshair' : 'grab',
+      mapFilter: st.sat ? 'saturate(.5) brightness(.62) contrast(1.15) sepia(.35)' : 'none',
+      hl, mk, markerOpacity: st.loading || st.forceLoading ? 0.35 : 1,
+      me: st.me ? toScr(st.me.x, st.me.y) : null,
+      layerBtnBg: st.layerOpen ? '#F2F2EE' : '#FFFFFF',
+      onLayerBtn: () => this.setState({ layerOpen: !st.layerOpen, periodOpen: false }),
+      onZoomIn: this.onZoomIn, onZoomOut: this.onZoomOut,
+      onLocate: () => { if (st.perm === 'denied') { this.toast('위치 권한이 꺼져 있어요. 휴대폰 설정에서 켤 수 있어요'); return; } this.setState({ me: ME }); this.animate({ cx: ME.x, cy: ME.y, z: 14.6 }, 500); },
+      layerOpen: st.layerOpen,
+      onBaseNormal: () => this.setState({ sat: false }), onBaseSat: () => this.setState({ sat: true }),
+      baseNormalBg: st.sat ? 'transparent' : '#FFFFFF', baseNormalW: st.sat ? 500 : 700, baseNormalSh: st.sat ? 'none' : '0 1px 3px rgba(17,17,16,.15)',
+      baseSatBg: st.sat ? '#FFFFFF' : 'transparent', baseSatW: st.sat ? 700 : 500, baseSatSh: st.sat ? '0 1px 3px rgba(17,17,16,.15)' : 'none',
+      onCadToggle: () => { if (land) { this.toast('토지 모드에서는 지적도가 항상 켜져요'); return; } this.setState({ cadUser: !st.cadUser }); },
+      cadNote: land ? '토지 모드에서는 자동으로 켜져요' : z < 13.4 ? '조금 더 확대하면 보여요' : '땅 경계선을 그려요',
+      cadTrack: land || st.cadUser ? '#4F7A3A' : '#DCDCD5', cadKnob: land || st.cadUser ? 25 : 3,
+      showLoading: (st.loading || st.forceLoading) && !out, spinner: React.createElement('span', { style: { width: 16, height: 16, borderRadius: '50%', border: '2.5px solid #DCDCD5', borderTopColor: '#111110', boxSizing: 'border-box', display: 'inline-block', animation: 'spin .8s linear infinite' } }),
+      outBusan: !!out, onBackToBusan: () => this.animate(START, 600),
+      showEmpty, emptySub: `${TYPEN[ptype]} · ${DEALN[land ? 'sale' : deal]} · ${periodLabel}`, extendLabel: `최근 ${nextPeriod}개월`,
+      onExtendPeriod: () => { api && api.setMockMode(null); this.setState({ period: nextPeriod }); this.scheduleFetch(0); },
+      showError, onRetry: () => { api && api.setMockMode(null); this.setState({ error: false, loading: true }); this.fetchMarkers(); },
+      onDateTap: () => this.openTerm('actual-price'),
+      sheetOpen: !!sh && st.tab === 'map', sh: sh || {}, sheetH, sheetTr: st.dragging ? 'none' : 'height .22s cubic-bezier(0.2,0.7,0.2,1)',
+      onSheetDown: this.onSheetDown, onCloseSheet: this.onCloseSheet,
+      onStar: () => this.toast('관심 등록은 로그인과 함께 2차에서 열려요'),
+      onDetail: () => this.toast('상세 화면은 다음 작업에서 연결해요'),
+      periodOpen: st.periodOpen && st.tab === 'map',
+      popup: pp ? { term: pp.term, short_definition: pp.short_definition, cat: CL[pp.category], catBg: pp.category === 'land' ? '#EEF3E9' : '#F2F2EE', catColor: catColor(pp.category) } : null,
+      onPopupClose: () => this.setState({ popup: null }),
+      onPopupGo: () => this.goGlossaryTerm(st.popup, st.tab),
+      permAsk: st.perm === 'ask' && st.tab === 'map',
+      onPermAllow: () => { this.setState({ perm: 'granted', me: ME }); this.animate({ cx: ME.x, cy: ME.y, z: 14.6 }, 700); },
+      onPermDeny: () => { this.setState({ perm: 'denied', me: null }); this.animate(START, 300); },
+      toast: st.toast, toastTop: st.tab === 'map' ? 214 : 120,
+      // 용어사전
+      gIsList: st.gview === 'list', gIsDetail: st.gview === 'detail' && !!gt,
+      gq: st.gq, onGq: e => this.setState({ gq: e.target.value }), onGClear: () => this.setState({ gq: '' }),
+      onGFocus: () => this.setState({ gFocus: true }), onGBlur: () => this.setState({ gFocus: false }),
+      gSearchBorder: st.gFocus || searching ? '2px solid #111110' : '1px solid #DCDCD5',
+      gCats: [['', '전체'], ['trade', '거래'], ['land', '토지'], ['building', '건물'], ['tax', '세금']].map(([k, n]) => { const on = k === st.gcat, isL = k === 'land'; return { label: n, bg: on ? (isL ? '#4F7A3A' : '#1F1E1B') : '#FFFFFF', color: on ? '#FFFFFF' : isL ? '#4F7A3A' : '#2A2A28', border: on ? '1px solid transparent' : `1px solid ${isL ? '#4F7A3A' : '#DCDCD5'}`, weight: on ? 700 : 500, onClick: () => this.setState({ gcat: k }) }; }),
+      gShowPopular: !searching && !st.gcat,
+      gPopular: all.filter(t => t.is_popular).map(t => ({ term: t.term, onClick: () => this.goGlossaryTerm(t.term_id, null) })),
+      gHasResults: gres.length > 0, gNoResults: searching && gres.length === 0,
+      gListTitle: searching ? `검색 결과 ${gres.length}개` : st.gcat ? `${CL[st.gcat]} 용어 ${gres.length}개` : '전체 용어',
+      gList: gres.map(t => ({ term: t.term, cat: CL[t.category], catColor: catColor(t.category), short_definition: t.short_definition, onClick: () => this.goGlossaryTerm(t.term_id, null) })),
+      gd: gt ? { term: gt.term, cat: CL[gt.category], catBg: gt.category === 'land' ? '#EEF3E9' : '#F2F2EE', catColor: catColor(gt.category), short_definition: gt.short_definition, long_definition: gt.long_definition, example: gt.example, isFar: gt.term_id === 'far', isBcr: gt.term_id === 'bcr' } : {},
+      gBackLabel: st.returnTo === 'map' ? '지도로 돌아가기' : '용어 목록',
+      onGBack: () => { if (st.returnTo === 'map') { this.setState({ tab: 'map', gview: 'list', returnTo: null }); setTimeout(() => this.measure(), 0); } else this.setState({ gview: 'list' }); },
+      moreRows: ['문의하기', '서비스 이용약관', '위치기반서비스 이용약관', '개인정보 처리방침'].map(l => ({ label: l, onClick: () => this.toast('이번 프로토타입 범위 밖이에요') })),
+      tabs,
+      // 사이드 패널
+      zText: z.toFixed(1), levelText: { sigungu: '구 단위', dong: '동 단위', complex: land ? '동 + 필지 단위' : '단지 단위' }[level],
+      filterText: `${TYPEN[ptype]} · ${DEALN[land ? 'sale' : deal]} · ${periodLabel}`,
+      shownCount: items.filter(i => !i.dot).length, dotCount: items.filter(i => i.dot).length,
+      demoBtns,
+      logReq: lg ? (lg.kind === 'map' ? `GET /map/markers?bbox=${lg.params.bbox.join(',')}&zoom=${lg.params.zoom}&property_type=${lg.params.property_type}&deal_type=${lg.params.deal_type}&period_months=${lg.params.period_months}` : lg.params) : '아직 요청 없음',
+      logRes: lg ? lg.res : ''
+    };
+  }
+}
+</script>
+</body>
+</html>
