@@ -1,6 +1,7 @@
-// D1(#4) 지도 시험 구현 — VWorld 타일 + MapLibre React Native
+// D1(#4) 지도 시험 구현 — MapLibre React Native
+// 배경 지도: VWorld 키가 없으면 OpenFreeMap(키 불필요), 있으면 VWorld 일반·위성·지적도까지
 // 확인 항목: ① 마커 500개 성능(심볼 레이어 vs RN 뷰 마커) ② 지적도 켜기/끄기
-//           ③ 탭 좌표 ④ 필지 폴리곤 하이라이트 ⑤ 줌 체계(웹 메르카토르) ⑥ 일반/위성 전환
+//           ③ 탭 좌표 ④ 필지 폴리곤 하이라이트 ⑤ 줌 체계(웹 메르카토르) ⑥ 배경 지도 전환
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -23,13 +24,13 @@ const VWORLD_DOMAIN = process.env.EXPO_PUBLIC_VWORLD_DOMAIN ?? '';
 const BUSAN: [number, number] = [129.075, 35.1798];
 const COUNTS = [0, 50, 200, 500] as const;
 type MarkerMode = 'symbol' | 'view';
-type Base = 'Base' | 'Satellite';
+type Base = 'OpenFreeMap' | 'Base' | 'Satellite';
 
 // 디자인 토큰 일부 (docs/design/busan-map-glossary/README.md)
 const C = { apartment: '#3E64A0', land: '#4F7A3A', ink: '#111110', ink2: '#2A2A28', rule: '#DCDCD5', primary: '#1F1E1B', bg: '#FAFAF7' };
 
 // VWorld WMTS: 배경(png) · 위성(jpeg). 줌 6~19
-const wmts = (layer: Base) =>
+const wmts = (layer: Exclude<Base, 'OpenFreeMap'>) =>
   `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/${layer}/{z}/{y}/{x}.${layer === 'Satellite' ? 'jpeg' : 'png'}`;
 
 // VWorld WMS: 연속지적도(본번·부번 경계선)
@@ -39,14 +40,29 @@ const CADASTRAL_WMS =
   '&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true' +
   `&KEY=${VWORLD_KEY}&DOMAIN=${encodeURIComponent(VWORLD_DOMAIN)}`;
 
-// 배경색만 있는 빈 스타일. 타일·마커는 아래 컴포넌트로 얹는다.
-// 숫자·영문 글리프는 MapLibre 데모 폰트, 한글은 기기 폰트로 로컬 렌더링된다.
-const STYLE: StyleSpecification = {
+// OpenFreeMap: 키 없이 쓰는 무료 벡터 지도 (OpenStreetMap 데이터). 개발·시연용
+const OPENFREEMAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+const GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
+
+// VWorld 타일을 얹을 때 쓰는 빈 스타일 (배경색 + 글리프만)
+// 숫자·영문 글리프는 글리프 서버, 한글은 기기 폰트로 로컬 렌더링된다.
+const EMPTY_STYLE: StyleSpecification = {
   version: 8,
-  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+  glyphs: GLYPHS,
   sources: {},
   layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#EDEDE8' } }],
 };
+
+// OpenFreeMap 지명을 한글 우선으로 바꾼다 ("Busan\n부산" → "부산")
+function koreanLabels(style: StyleSpecification): StyleSpecification {
+  const name = ['coalesce', ['get', 'name:ko'], ['get', 'name:nonlatin'], ['get', 'name']];
+  return {
+    ...style,
+    layers: style.layers.map((l) =>
+      l.type === 'symbol' && l.layout?.['text-field'] ? { ...l, layout: { ...l.layout, 'text-field': name } } : l,
+    ) as StyleSpecification['layers'],
+  };
+}
 
 type Spot = { id: string; lng: number; lat: number; price: string; area: string };
 
@@ -89,7 +105,8 @@ function ComplexMarkerView({ price, area }: { price: string; area: string }) {
 export default function App() {
   const [count, setCount] = useState<(typeof COUNTS)[number]>(50);
   const [mode, setMode] = useState<MarkerMode>('symbol');
-  const [base, setBase] = useState<Base>('Base');
+  const [base, setBase] = useState<Base>(VWORLD_KEY ? 'Base' : 'OpenFreeMap');
+  const [freeStyle, setFreeStyle] = useState<StyleSpecification | null>(null);
   const [cadastral, setCadastral] = useState(false);
   const [zoom, setZoom] = useState(11.4);
   const [tap, setTap] = useState<[number, number] | null>(null);
@@ -106,6 +123,15 @@ export default function App() {
     const id = TransformRequestManager.addHeader({ match: 'api.vworld.kr', name: 'Referer', value: VWORLD_DOMAIN });
     return () => TransformRequestManager.removeHeader(id);
   }, []);
+
+  // OpenFreeMap 스타일을 받아 지명만 한글로 바꿔 쓴다
+  useEffect(() => {
+    fetch(OPENFREEMAP_STYLE)
+      .then((r) => r.json())
+      .then((st: StyleSpecification) => setFreeStyle(koreanLabels(st)))
+      .catch(() => setFreeStyle(null));
+  }, []);
+  const mapStyle = base === 'OpenFreeMap' && freeStyle ? freeStyle : EMPTY_STYLE;
 
   const spots = useMemo(() => makeSpots(count), [count]);
   const spotsGeoJSON = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point>>(
@@ -145,7 +171,7 @@ export default function App() {
     <View style={styles.root}>
       <Map
         style={StyleSheet.absoluteFill}
-        mapStyle={STYLE}
+        mapStyle={mapStyle}
         touchRotate={false}
         touchPitch={false}
         attribution={false}
@@ -155,9 +181,11 @@ export default function App() {
       >
         <Camera ref={cameraRef} initialViewState={{ center: BUSAN, zoom: 11.4 }} />
 
-        <RasterSource key={base} id={`vworld-${base}`} tiles={[wmts(base)]} tileSize={256} minzoom={6} maxzoom={19}>
-          <Layer type="raster" id={`vworld-${base}-layer`} />
-        </RasterSource>
+        {base !== 'OpenFreeMap' && (
+          <RasterSource key={base} id={`vworld-${base}`} tiles={[wmts(base)]} tileSize={256} minzoom={6} maxzoom={19}>
+            <Layer type="raster" id={`vworld-${base}-layer`} />
+          </RasterSource>
+        )}
 
         {cadastral && (
           <RasterSource id="cadastral" tiles={[CADASTRAL_WMS]} tileSize={256} minzoom={14} maxzoom={19}>
@@ -199,7 +227,7 @@ export default function App() {
       </Map>
 
       <View style={styles.panel} pointerEvents="box-none">
-        {!VWORLD_KEY && <Text style={styles.warn}>EXPO_PUBLIC_VWORLD_KEY 없음 → 배경 타일이 안 보여요 (.env.local)</Text>}
+        {!VWORLD_KEY && <Text style={styles.warn}>VWorld 키 없음 → OpenFreeMap 지도 사용 (위성·지적도는 키 필요)</Text>}
         <Row label="마커 수">
           {COUNTS.map((n) => (
             <Chip key={n} on={count === n} onPress={() => change(() => setCount(n))} text={String(n)} />
@@ -210,9 +238,14 @@ export default function App() {
           <Chip on={mode === 'view'} onPress={() => change(() => setMode('view'))} text="RN 뷰" />
         </Row>
         <Row label="지도">
-          <Chip on={base === 'Base'} onPress={() => setBase('Base')} text="일반" />
-          <Chip on={base === 'Satellite'} onPress={() => setBase('Satellite')} text="위성" />
-          <Chip on={cadastral} onPress={() => setCadastral((v) => !v)} text={`지적도 ${cadastral ? '켜짐' : '꺼짐'}`} />
+          <Chip on={base === 'OpenFreeMap'} onPress={() => setBase('OpenFreeMap')} text="OSM" />
+          {VWORLD_KEY ? (
+            <>
+              <Chip on={base === 'Base'} onPress={() => setBase('Base')} text="VWorld" />
+              <Chip on={base === 'Satellite'} onPress={() => setBase('Satellite')} text="위성" />
+              <Chip on={cadastral} onPress={() => setCadastral((v) => !v)} text={`지적도 ${cadastral ? '켜짐' : '꺼짐'}`} />
+            </>
+          ) : null}
         </Row>
         <Row label="줌">
           <Chip on={false} onPress={() => stepZoom(-1)} text="−" />
