@@ -23,7 +23,7 @@ import {
   DEFAULT_FILTERS,
   DEAL,
   HOME,
-  inBusan,
+  busanQueryBBox,
   markerId,
   PROPERTY,
 } from "../state/market";
@@ -101,7 +101,8 @@ export function MapHome({
   const [locating, setLocating] = useState(false);
   const ref = useRef(0);
   const lastFilters = useRef(filters);
-  const outside = !inBusan(camera.lat, camera.lng);
+  const queryBBox = busanQueryBBox(camera.bbox);
+  const outside = !queryBBox;
   const isLand = filters.property_type === "land";
   const move = (c: MapCommand) => setCommand({ ...c, nonce: ++ref.current });
   const close = () => setSelected(null);
@@ -126,7 +127,7 @@ export function MapHome({
         repo
           .markers(
             filters,
-            camera.bbox,
+            queryBBox!,
             Math.floor(camera.zoom),
             controller.signal,
           )
@@ -222,10 +223,6 @@ export function MapHome({
       const loc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
-      if (!inBusan(loc.coords.latitude, loc.coords.longitude)) {
-        notify("현재 위치는 부산 밖이에요. 부산 지도에서 계속 볼 수 있어요");
-        return;
-      }
       move({
         type: "move",
         lat: loc.coords.latitude,
@@ -241,13 +238,11 @@ export function MapHome({
   return (
     <View style={s.screen}>
       <View style={{ paddingHorizontal: 12, paddingTop: 6, paddingBottom: 6 }}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onSearch}
+        <View
           style={[
             s.row,
             {
-              height: 50,
+              height: 42,
               paddingHorizontal: 14,
               borderWidth: 1,
               borderColor: C.rule,
@@ -256,10 +251,14 @@ export function MapHome({
             },
           ]}
         >
-          <Icon name="search" color={C.light} />
-          <T color={C.light} style={{ flex: 1 }}>
-            단지·주소·동네 검색
-          </T>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onSearch}
+            style={[s.row, { flex: 1, height: 40 }]}
+          >
+            <Icon name="search" color={C.light} />
+            <T color={C.light}>단지·주소·동네 검색</T>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="채팅"
@@ -271,7 +270,7 @@ export function MapHome({
           >
             <Icon name="chat" color={C.light} />
           </Pressable>
-        </Pressable>
+        </View>
       </View>
       <View
         style={{
@@ -295,7 +294,7 @@ export function MapHome({
             }}
             style={{
               flex: 1,
-              height: 44,
+              height: 34,
               borderRadius: 9,
               alignItems: "center",
               justifyContent: "center",
@@ -396,7 +395,7 @@ export function MapHome({
         </View>
         <View style={{ position: "absolute", right: 12, bottom: 16, ...float }}>
           {locating ? (
-            <ActivityIndicator style={{ width: 48, height: 48 }} />
+            <ActivityIndicator style={{ width: 38, height: 38 }} />
           ) : (
             <IconBtn
               name="locate"
@@ -415,23 +414,7 @@ export function MapHome({
             목록 보기
           </Btn>
         </View>
-        {outside ? (
-          <View
-            style={{
-              position: "absolute",
-              left: 12,
-              right: 12,
-              top: 12,
-              ...s.card,
-              gap: 12,
-            }}
-          >
-            <T bold>부산 지역만 지원해요</T>
-            <Btn small onPress={() => move({ type: "move", ...HOME })}>
-              부산으로 돌아가기
-            </Btn>
-          </View>
-        ) : loading ? (
+        {loading ? (
           <View
             style={{
               position: "absolute",
@@ -467,7 +450,7 @@ export function MapHome({
               }}
             />
           </View>
-        ) : markers.length === 0 ? (
+        ) : !outside && camera.zoom >= 11 && markers.length === 0 ? (
           <View
             style={{
               position: "absolute",

@@ -283,7 +283,7 @@ export default function App() {
         style={{
           flex: 1,
           width: "100%",
-          maxWidth: 480,
+          maxWidth: 420,
           alignSelf: "center",
           backgroundColor: C.bg,
           position: "relative",
@@ -365,7 +365,7 @@ export default function App() {
         </View>
         <View
           style={{
-            height: 66,
+            height: 54,
             flexDirection: "row",
             borderTopWidth: 1,
             borderColor: C.rule,

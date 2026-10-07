@@ -125,7 +125,9 @@ export function FilterScreen({
               accessibilityLabel="직거래 제외"
               value={d.exclude}
               onValueChange={(v) => update("exclude", v)}
-              trackColor={{ true: C.primary }}
+              trackColor={{ false: "#7E8B99", true: C.apartment }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor="#7E8B99"
             />
           </View>
         </Section>
