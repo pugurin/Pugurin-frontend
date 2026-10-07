@@ -38,3 +38,13 @@ npx expo export --platform ios --platform android
 UI 검증에는 로컬 8081 미리보기와 8001 개발 중계가 필요하다. Playwright Chromium이 설치되어 있어야 하고 필요시 PUGURIN_CHROMIUM_PATH를 지정한다. 현재 검증은 브라우저의 모바일 크기와 네이티브 JS 번들 기준이며 iOS/Android 실기기 설치 및 카카오 실지도 검증은 별도다.
 
 상세 API 연결 상태와 실제 응답 검증 결과는 [API 연결 문서](docs/API_INTEGRATION.md)를 참고한다.
+
+## UI·지도 조작 수정
+
+초기 지도는 대한민국 전역으로 시작한다. 지도는 부산 밖으로 이동할 수 있으며, 거래 조회는 화면 안에 들어온 부산 영역만 요청한다. 부산 데이터 지원 안내가 지도를 가리는 팝업으로 계속 남지 않는다.
+
+본문과 아이콘을 축소하고 검색·탭·버튼·필터를 작게 조정했다. 키 없는 미리보기는 줌 버튼 한 번에 0.25, 휠 한 번에 0.12씩 240ms 동안 전환한다. 카카오 SDK는 정수 레벨 단위로 320ms 애니메이션을 적용하고 연속 클릭을 제한한다. 지도 이동 명령이 카메라 변경 이벤트를 덮어쓰는 문제와 줌 중 검색 위치 이동이 충돌하는 문제도 수정했다.
+
+전국 미리보기의 해안선은 [Natural Earth 1:50m 공개 데이터](https://github.com/nvkelso/natural-earth-vector/blob/master/geojson/ne_50m_admin_0_countries.geojson)에서 생성했다(public domain). 샘플 배경은 도로·주소 검색을 제공하는 실제 지도 SDK가 아니다. 실서비스 지도는 카카오 JavaScript 키가 필요하다. SDK 전환 옵션은 [카카오 공식 문서](https://apis.map.kakao.com/web/documentation/#Map_setLevel)를 따른다.
+
+`npm run verify:map`은 360×780 화면에서 전국 범위, 실제 SVG 로드, 줌 이동 폭, 부산 밖 탐색, 직거래 스위치와 API 적용을 확인한다. 실행 조건은 기존 UI 검증과 같다.
