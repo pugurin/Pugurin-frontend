@@ -41,6 +41,17 @@ Expo Go로는 실행되지 않는다(네이티브 모듈). development build가 
 | OpenFreeMap 배경 (키 없음) | ✅ iOS·Android 부산 지도 + 한글 지명 표시 |
 | VWorld 배경 타일 · 지적도 | ⏳ 인증키 발급 후 확인 (D2, #5) |
 
+## 백엔드 연결 (`api.ts`)
+
+`데이터: 서버`를 고르면 지도가 멈출 때마다 화면 범위로 `GET /api/v1/map/markers`를 호출한다.
+서버는 Pugurin-backend `feat/real-data-mode` 브랜치를 띄운다(`PUGURIN_DATA_MODE=auto uv run uvicorn --factory app.main:create_app --host 0.0.0.0`).
+
+- `X-Device-Id`: 처음 실행할 때 UUID를 만들어 AsyncStorage에 저장하고 모든 요청에 붙인다
+- 줌: MapLibre 줌은 표준 줌보다 1 작아서 `Math.floor(zoom + 1)`로 바꿔 보낸다. 시작 줌은 디자인 11.4 → MapLibre 10.4
+- bbox: `onRegionDidChange`의 `bounds`(`[west, south, east, north]`)를 그대로 쓴다
+- 마커 단위는 응답의 `data.level`을 따른다(구 → 동 → 단지). 패널에 `level · 마커 수 · X-Data-Mode`를 표시한다
+- 서버 주소는 `EXPO_PUBLIC_API_BASE`로 바꾼다(실제 폰은 PC IP)
+
 ## 결론과 다음 단계
 
 - **MapLibre로 간다.** 배경은 VWorld(키 발급 후), 그 전까지 개발·시연은 OpenFreeMap으로 한다. 배경만 바꾸면 되도록 마커·필지 레이어는 배경과 분리해 둔다. 실거래가 마커는 반드시 심볼 레이어로 그린다.

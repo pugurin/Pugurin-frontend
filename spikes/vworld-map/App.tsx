@@ -2,6 +2,7 @@
 // 배경 지도: VWorld 키가 없으면 OpenFreeMap(키 불필요), 있으면 VWorld 일반·위성·지적도까지
 // 확인 항목: ① 마커 500개 성능(심볼 레이어 vs RN 뷰 마커) ② 지적도 켜기/끄기
 //           ③ 탭 좌표 ④ 필지 폴리곤 하이라이트 ⑤ 줌 체계(웹 메르카토르) ⑥ 배경 지도 전환
+//           ⑦ 백엔드 /map/markers 연결 (api.ts)
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -14,15 +15,24 @@ import {
   RasterSource,
   TransformRequestManager,
   type CameraRef,
+  type MapRef,
+  type ViewState,
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
+import { API_BASE, fetchMarkers, markerId, markerLabel, toServerZoom, type Level, type MapMarker, type PropertyType } from './api';
 
 const VWORLD_KEY = process.env.EXPO_PUBLIC_VWORLD_KEY ?? '';
 const VWORLD_DOMAIN = process.env.EXPO_PUBLIC_VWORLD_DOMAIN ?? '';
 
 // 부산시청 주변 (디자인: 위치 권한 거부 시 시작 지점)
 const BUSAN: [number, number] = [129.075, 35.1798];
+// 디자인 문서의 줌(11.4 등)은 표준 줌 기준 → MapLibre에서는 1을 뺀다
+const START_ZOOM = 10.4;
 const COUNTS = [0, 50, 200, 500] as const;
+type DataSource = 'fake' | 'server';
+const PROPERTY_TYPES: { v: PropertyType; t: string }[] = [
+  { v: 'apartment', t: '아파트' }, { v: 'officetel', t: '오피스텔' }, { v: 'villa', t: '빌라' }, { v: 'land', t: '토지' },
+];
 type MarkerMode = 'symbol' | 'view';
 type Base = 'OpenFreeMap' | 'Base' | 'Satellite';
 
@@ -103,12 +113,18 @@ function ComplexMarkerView({ price, area }: { price: string; area: string }) {
 }
 
 export default function App() {
+  const [source, setSource] = useState<DataSource>('server');
+  const [propertyType, setPropertyType] = useState<PropertyType>('apartment');
+  const [view, setView] = useState<Pick<ViewState, 'bounds' | 'zoom'> | null>(null);
+  const [api, setApi] = useState<{ level: Level; markers: MapMarker[]; dataMode: string | null } | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const mapRef = useRef<MapRef>(null);
   const [count, setCount] = useState<(typeof COUNTS)[number]>(50);
   const [mode, setMode] = useState<MarkerMode>('symbol');
   const [base, setBase] = useState<Base>(VWORLD_KEY ? 'Base' : 'OpenFreeMap');
   const [freeStyle, setFreeStyle] = useState<StyleSpecification | null>(null);
   const [cadastral, setCadastral] = useState(false);
-  const [zoom, setZoom] = useState(11.4);
+  const [zoom, setZoom] = useState(START_ZOOM);
   const [tap, setTap] = useState<[number, number] | null>(null);
   const [renderMs, setRenderMs] = useState<number | null>(null);
   const [jsFps, setJsFps] = useState(0);
@@ -133,18 +149,37 @@ export default function App() {
   }, []);
   const mapStyle = base === 'OpenFreeMap' && freeStyle ? freeStyle : EMPTY_STYLE;
 
+  // 지도가 멈출 때마다 화면 범위로 마커를 다시 받는다. 이전 요청은 취소
+  useEffect(() => {
+    if (source !== 'server' || !view) return;
+    const ctrl = new AbortController();
+    fetchMarkers({ bbox: view.bounds, mapLibreZoom: view.zoom, propertyType }, ctrl.signal)
+      .then((r) => { setApi(r); setApiError(null); })
+      .catch((e) => { if (!ctrl.signal.aborted) setApiError(`${e.message} (${API_BASE})`); });
+    return () => ctrl.abort();
+  }, [source, view, propertyType]);
+
   const spots = useMemo(() => makeSpots(count), [count]);
   const spotsGeoJSON = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point>>(
     () => ({
       type: 'FeatureCollection',
-      features: spots.map((p) => ({
-        type: 'Feature',
-        id: p.id,
-        properties: { label: `${p.price}\n${p.area}` },
-        geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-      })),
+      features:
+        source === 'server'
+          ? (api?.markers ?? []).map((m) => ({
+              type: 'Feature',
+              id: markerId(m),
+              // 지역 집계는 검정, 단지는 유형 색, 토지·필지는 초록
+              properties: { label: markerLabel(m), color: m.kind === 'region' ? C.ink2 : propertyType === 'land' || m.kind === 'parcel' ? C.land : C.apartment },
+              geometry: { type: 'Point', coordinates: [m.lng, m.lat] },
+            }))
+          : spots.map((p) => ({
+              type: 'Feature',
+              id: p.id,
+              properties: { label: `${p.price}\n${p.area}`, color: C.apartment },
+              geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+            })),
     }),
-    [spots],
+    [source, api, spots, propertyType],
   );
 
   // 마커 개수·방식 변경 → 다음 프레임까지 걸린 시간(JS 기준, 대략치)
@@ -170,16 +205,18 @@ export default function App() {
   return (
     <View style={styles.root}>
       <Map
+        ref={mapRef}
         style={StyleSheet.absoluteFill}
         mapStyle={mapStyle}
         touchRotate={false}
         touchPitch={false}
         attribution={false}
         logo={false}
-        onRegionDidChange={(e) => setZoom(e.nativeEvent.zoom)}
+        onDidFinishLoadingMap={() => mapRef.current?.getViewState().then((v) => { setZoom(v.zoom); setView(v); })}
+        onRegionDidChange={(e) => { setZoom(e.nativeEvent.zoom); setView(e.nativeEvent); }}
         onPress={(e) => setTap(e.nativeEvent.lngLat as [number, number])}
       >
-        <Camera ref={cameraRef} initialViewState={{ center: BUSAN, zoom: 11.4 }} />
+        <Camera ref={cameraRef} initialViewState={{ center: BUSAN, zoom: START_ZOOM }} />
 
         {base !== 'OpenFreeMap' && (
           <RasterSource key={base} id={`vworld-${base}`} tiles={[wmts(base)]} tileSize={256} minzoom={6} maxzoom={19}>
@@ -200,7 +237,7 @@ export default function App() {
           </GeoJSONSource>
         )}
 
-        {mode === 'symbol' && (
+        {(mode === 'symbol' || source === 'server') && (
           <GeoJSONSource id="spots" data={spotsGeoJSON}>
             <Layer
               type="symbol"
@@ -213,12 +250,12 @@ export default function App() {
                 'text-anchor': 'bottom',
                 'text-allow-overlap': false,
               }}
-              paint={{ 'text-color': '#FFFFFF', 'text-halo-color': C.apartment, 'text-halo-width': 4 }}
+              paint={{ 'text-color': '#FFFFFF', 'text-halo-color': ['get', 'color'], 'text-halo-width': 4 }}
             />
           </GeoJSONSource>
         )}
 
-        {mode === 'view' &&
+        {mode === 'view' && source === 'fake' &&
           spots.map((p) => (
             <Marker key={p.id} id={p.id} lngLat={[p.lng, p.lat]} anchor="bottom">
               <ComplexMarkerView price={p.price} area={p.area} />
@@ -228,15 +265,29 @@ export default function App() {
 
       <View style={styles.panel} pointerEvents="box-none">
         {!VWORLD_KEY && <Text style={styles.warn}>VWorld 키 없음 → OpenFreeMap 지도 사용 (위성·지적도는 키 필요)</Text>}
-        <Row label="마커 수">
-          {COUNTS.map((n) => (
-            <Chip key={n} on={count === n} onPress={() => change(() => setCount(n))} text={String(n)} />
-          ))}
+        <Row label="데이터">
+          <Chip on={source === 'server'} onPress={() => setSource('server')} text="서버" />
+          <Chip on={source === 'fake'} onPress={() => setSource('fake')} text="가짜" />
         </Row>
-        <Row label="방식">
-          <Chip on={mode === 'symbol'} onPress={() => change(() => setMode('symbol'))} text="심볼 레이어" />
-          <Chip on={mode === 'view'} onPress={() => change(() => setMode('view'))} text="RN 뷰" />
-        </Row>
+        {source === 'server' ? (
+          <Row label="유형">
+            {PROPERTY_TYPES.map((p) => (
+              <Chip key={p.v} on={propertyType === p.v} onPress={() => setPropertyType(p.v)} text={p.t} />
+            ))}
+          </Row>
+        ) : (
+          <>
+            <Row label="마커 수">
+              {COUNTS.map((n) => (
+                <Chip key={n} on={count === n} onPress={() => change(() => setCount(n))} text={String(n)} />
+              ))}
+            </Row>
+            <Row label="방식">
+              <Chip on={mode === 'symbol'} onPress={() => change(() => setMode('symbol'))} text="심볼 레이어" />
+              <Chip on={mode === 'view'} onPress={() => change(() => setMode('view'))} text="RN 뷰" />
+            </Row>
+          </>
+        )}
         <Row label="지도">
           <Chip on={base === 'OpenFreeMap'} onPress={() => setBase('OpenFreeMap')} text="OSM" />
           {VWORLD_KEY ? (
@@ -251,9 +302,17 @@ export default function App() {
           <Chip on={false} onPress={() => stepZoom(-1)} text="−" />
           <Chip on={false} onPress={() => stepZoom(1)} text="+" />
           <Chip on={false} onPress={() => cameraRef.current?.zoomTo(16, { duration: 260 })} text="16" />
-          <Chip on={false} onPress={() => cameraRef.current?.zoomTo(11.4, { duration: 260 })} text="11.4" />
+          <Chip on={false} onPress={() => cameraRef.current?.zoomTo(START_ZOOM, { duration: 260 })} text="시작" />
         </Row>
-        <Text style={styles.info}>줌 {zoom.toFixed(2)} · 렌더 {renderMs ?? '-'}ms · JS {jsFps}fps</Text>
+        <Text style={styles.info}>줌 {zoom.toFixed(2)} (서버 {toServerZoom(zoom)}) · 렌더 {renderMs ?? '-'}ms · JS {jsFps}fps</Text>
+        {source === 'server' &&
+          (apiError ? (
+            <Text style={styles.warn}>서버 오류: {apiError}</Text>
+          ) : (
+            <Text style={styles.info}>
+              {api ? `${api.level} · 마커 ${api.markers.length}개 · ${api.dataMode ?? '?'}` : '불러오는 중…'}
+            </Text>
+          ))}
         <Text style={styles.info}>탭 {tap ? `${tap[1].toFixed(5)}, ${tap[0].toFixed(5)}` : '지도를 눌러보세요'}</Text>
       </View>
       <StatusBar style="dark" />
