@@ -25,12 +25,12 @@ it("샘플 지역 시트를 API로 전환하면 이전 샘플 차트를 지운�
     onHelp: () => {},
     unit: "평" as const,
   };
-  const client = new ApiClient("http://api", "d");
+  const client = new ApiClient("http://api", "d", async () => { throw new Error("통계 요청 실패"); });
   const { rerender } = render(
     <RegionContent {...props} repo={new Repository("sample", client)} />,
   );
   await screen.findByText("샘플 차트");
   rerender(<RegionContent {...props} repo={new Repository("api", client)} />);
-  await screen.findByText("지역 통계·거래 목록 API가 준비 중이에요");
+  await screen.findByText("지역·지도 영역의 거래 목록 API가 준비 중이에요");
   await waitFor(() => expect(screen.queryByText("샘플 차트")).toBeNull());
 });

@@ -26,6 +26,7 @@ export type Meta = {
   total?: number;
   total_pages?: number;
   data_mode?: string;
+  method?: string;
 };
 export type Envelope<T> = { data: T; meta?: Meta };
 export type Latest = {
@@ -47,10 +48,10 @@ export type RegionMarker = {
   lng: number;
   transaction_count: number;
   summary: {
-    median_price_per_pyeong?: number;
-    median_deposit_per_pyeong?: number;
-    median_deposit?: number;
-    median_monthly_rent?: number;
+    median_price_per_pyeong?: number | null;
+    median_deposit_per_pyeong?: number | null;
+    median_deposit?: number | null;
+    median_monthly_rent?: number | null;
   };
 };
 export type ComplexMarker = {
@@ -129,15 +130,18 @@ export type SearchResult = {
   lng: number;
   bbox?: BBox;
 };
-export type Trend = {
-  month: string;
-  median_price_per_pyeong: number | null;
-  count: number;
+export type Metrics = {
+  median_price_per_pyeong?: number | null;
+  median_deposit_per_pyeong?: number | null;
+  median_deposit?: number | null;
+  median_monthly_rent?: number | null;
 };
-export type Stats = {
-  median_price_per_pyeong: number | null;
+export type Trend = Metrics & { month: string; count: number };
+export type Stats = Metrics & {
   transaction_count: number;
   trend: Trend[];
+  area_types?: (Area &
+    Metrics & { transaction_count: number; trend: Trend[] })[];
 };
 export type Analysis = {
   zoning_summary: {

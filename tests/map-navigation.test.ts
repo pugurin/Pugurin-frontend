@@ -62,3 +62,35 @@ it("줌 전환 중 다른 위치로 이동하면 이전 줌이 새 위치의 확
   await vi.advanceTimersByTimeAsync(400);
   expect(m.camera().zoom).toBe(15);
 });
+
+it("개발 지도 마커를 눌러도 클릭 전에 재그리기로 사라지지 않는다", () => {
+  map();
+  (window as any).pugurinReceive({
+    type: "state",
+    markers: [
+      {
+        kind: "region",
+        region_code: "26350",
+        name: "해운대구",
+        lat: 36,
+        lng: 128,
+        transaction_count: 10,
+        summary: { median_price_per_pyeong: 20000000 },
+      },
+    ],
+    property: "apartment",
+    unit: "평",
+  });
+  const button = document.querySelector(".marker.region")!;
+  button.dispatchEvent(
+    new MouseEvent("pointerdown", {
+      bubbles: true,
+      clientX: 100,
+      clientY: 100,
+    }),
+  );
+  button.dispatchEvent(
+    new MouseEvent("pointerup", { bubbles: true, clientX: 100, clientY: 100 }),
+  );
+  expect(button.isConnected).toBe(true);
+});
