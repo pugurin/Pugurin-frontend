@@ -13,8 +13,6 @@ describe("메인 API 계약", () => {
       }),
     );
     for (const promise of [
-      repo.stats(DEFAULT_FILTERS, "id", "complex"),
-      repo.stats(DEFAULT_FILTERS, "code", "region"),
       repo.analysis("id"),
       repo.transactions(DEFAULT_FILTERS, { bbox: HOME.bbox }),
     ])
@@ -42,4 +40,47 @@ describe("메인 API 계약", () => {
     expect(urls[1]).toContain("include_cancelled=true");
     expect(urls[1]).not.toContain("period_months");
   });
+});
+
+it("지역·단지 통계는 머지된 경로와 필터를 사용하고 응답 평형을 보존한다", async () => {
+  const urls: string[] = [];
+  const data = {
+    transaction_count: 6,
+    trend: [],
+    area_types: [
+      {
+        exclusive_area_m2: 84.9,
+        exclusive_area_pyeong: 25.7,
+        supply_area_pyeong: 34,
+        transaction_count: 3,
+        trend: [],
+      },
+    ],
+  };
+  const repo = new Repository(
+    "api",
+    new ApiClient("http://api", "d", async (url) => {
+      urls.push(String(url));
+      return new Response(
+        JSON.stringify({ data, meta: { method: "중위값, 해제거래 제외" } }),
+      );
+    }),
+  );
+  const result = await repo.stats(
+    { ...DEFAULT_FILTERS, deal_type: "monthly", exclude_direct: true },
+    "id",
+    "complex",
+  );
+  await repo.stats(
+    { ...DEFAULT_FILTERS, period_months: 12 },
+    "2635010500",
+    "region",
+  );
+  expect(urls[0]).toContain("/complexes/id/stats?");
+  expect(urls[0]).toContain("deal_type=monthly");
+  expect(urls[0]).toContain("exclude_direct=true");
+  expect(urls[0]).toContain("period_months=36");
+  expect(urls[1]).toContain("/stats/regions/2635010500?");
+  expect(urls[1]).toContain("period_months=12");
+  expect(result.data).toEqual(data);
 });

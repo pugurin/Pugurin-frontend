@@ -22,9 +22,28 @@ await page.getByText("우동롯데캐슬", { exact: true }).click();
 await page.getByText("위로 올리면 단지 정보를 더 볼 수 있어요 ⌃").waitFor();
 await page.screenshot({ path: "/private/tmp/pugurin-peek.png" });
 await page.getByText("위로 올리면 단지 정보를 더 볼 수 있어요 ⌃").click();
+await page.getByText("━ 이 단지　┅ 해당 지역 전체", { exact: true }).waitFor();
 await page.getByRole("button", { name: "자세히 보기" }).click();
 await page.getByText("거래 이력", { exact: true }).waitFor();
 await page.screenshot({ path: "/private/tmp/pugurin-full.png" });
+await page.getByRole("button", { name: "시트 닫기" }).click();
+const frame = page.frames().find((f) => f.url() === "about:srcdoc");
+await frame.evaluate(() =>
+  window.pugurinReceive({ type: "move", lat: 35.17, lng: 129.13, zoom: 11 }),
+);
+await page.waitForTimeout(1000);
+await frame.locator(".marker.region").first().waitFor();
+await frame.locator(".marker.region").first().click();
+await page.waitForTimeout(500);
+await page.screenshot({ path: "/private/tmp/pugurin-region-entry.png" });
+await page
+  .getByText("월별 평당가 (중위값)", { exact: true })
+  .waitFor({ state: "attached" });
+await page
+  .getByText("월별 평당가 (중위값)", { exact: true })
+  .scrollIntoViewIfNeeded();
+await page.getByLabel("월별 평당가 중위값 추이").waitFor();
+await page.screenshot({ path: "/private/tmp/pugurin-region.png" });
 await page.getByRole("button", { name: "시트 닫기" }).click();
 await page.getByRole("button", { name: "목록 보기" }).click();
 await page
@@ -41,9 +60,13 @@ await page.getByRole("tab", { name: "더보기" }).click();
 await page.getByRole("button", { name: "샘플 화면 보기" }).click();
 await page.getByRole("tab", { name: "지도", exact: true }).click();
 await page.waitForTimeout(700);
-assert.equal(await page.getByRole("button", {name:"시트 닫기"}).count(),0);
+assert.equal(await page.getByRole("button", { name: "시트 닫기" }).count(), 0);
 await page.screenshot({ path: "/private/tmp/pugurin-sample-home.png" });
 assert.equal(errors.length, 0, errors.join("\n"));
+assert.ok(responses.some((r) => r.url.includes("/stats?") && r.status === 200));
+assert.ok(
+  responses.some((r) => r.url.includes("/stats/regions/") && r.status === 200),
+);
 assert.ok(
   responses.some((r) => r.url.includes("/search?") && r.status === 200),
 );

@@ -54,6 +54,7 @@ export function RegionContent({
   unit: "평" | "㎡";
 }) {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [statsMessage, setStatsMessage] = useState<string | null>(null);
   const [items, setItems] = useState<Transaction[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,6 +65,7 @@ export function RegionContent({
     setStats(null);
     setItems([]);
     setError(null);
+    setStatsMessage(null);
     Promise.allSettled([
       repo.stats(filters, marker.region_code, "region", a.signal),
       repo.transactions(filters, { region: marker.region_code }, a.signal),
@@ -71,8 +73,8 @@ export function RegionContent({
       if (a.signal.aborted) return;
       if (st.status === "fulfilled") setStats(st.value.data);
       if (tx.status === "fulfilled") setItems(tx.value.data.slice(0, 4));
-      if (st.status === "rejected" || tx.status === "rejected")
-        setError("지역 통계·거래 목록 API가 준비 중이에요");
+      if (st.status === "rejected") setStatsMessage(st.reason.message);
+      if (tx.status === "rejected") setError(tx.reason.message);
       setLoading(false);
     });
     return () => a.abort();
@@ -97,7 +99,9 @@ export function RegionContent({
             <Help onPress={() => onHelp("중위값")} />
           </View>
           <T bold size={21}>
-            {markerLabel(marker).replace("평당 ", "")}
+            {markerLabel(
+              stats ? { ...marker, summary: stats } : marker,
+            ).replace("평당 ", "")}
           </T>
           <T size={12} color={C.light}>
             {filters.property_type === "land"
@@ -110,18 +114,37 @@ export function RegionContent({
             거래 건수
           </T>
           <T size={24} bold>
-            {marker.transaction_count.toLocaleString()}건
+            {(
+              stats?.transaction_count ?? marker.transaction_count
+            ).toLocaleString()}
+            건
           </T>
         </View>
       </View>
-      <Section title="월별 평당가 (중위값)">
+      <Section
+        title={
+          filters.deal_type === "monthly"
+            ? "월별 월세 (중위값)"
+            : "월별 평당가 (중위값)"
+        }
+      >
         {stats ? (
-          <Chart trend={stats.trend} bar />
+          <Chart
+            trend={stats.trend}
+            bar
+            metric={
+              filters.deal_type === "sale"
+                ? "median_price_per_pyeong"
+                : filters.deal_type === "jeonse"
+                  ? "median_deposit_per_pyeong"
+                  : "median_monthly_rent"
+            }
+          />
         ) : loading ? (
           <StateCard loading />
         ) : (
           <T size={14} color={C.light}>
-            지역 통계 API가 준비 중이에요
+            {statsMessage ?? "표시할 지역 통계가 없어요"}
           </T>
         )}
       </Section>
@@ -175,6 +198,7 @@ export function ComplexContent({
   const [complex, setComplex] = useState<Complex | null>(null);
   const [items, setItems] = useState<Transaction[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [comparison, setComparison] = useState<Stats | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [meta, setMeta] = useState<Meta>();
   const [loading, setLoading] = useState(true);
@@ -210,20 +234,26 @@ export function ComplexContent({
         if (!a.signal.aborted) setLoading(false);
       });
     return () => a.abort();
-  }, [id, repo, filters, sort, cancelled, page, area, retry]);
+  }, [id, repo, filters, sort, cancelled, page, retry]);
   useEffect(() => {
     const a = new AbortController();
     setStats(null);
     setAnalysis(null);
     setStatsError(false);
-    repo
-      .stats(filters, id, "complex", a.signal)
-      .then((r) => {
-        if (!a.signal.aborted) setStats(r.data);
-      })
-      .catch(() => {
-        if (!a.signal.aborted) setStatsError(true);
-      });
+    if (complex?.id === id)
+      repo
+        .stats(
+          { ...filters, property_type: complex.property_type },
+          id,
+          "complex",
+          a.signal,
+        )
+        .then((r) => {
+          if (!a.signal.aborted) setStats(r.data);
+        })
+        .catch(() => {
+          if (!a.signal.aborted) setStatsError(true);
+        });
     repo
       .analysis(id, a.signal)
       .then((r) => {
@@ -231,7 +261,24 @@ export function ComplexContent({
       })
       .catch(() => {});
     return () => a.abort();
-  }, [id, repo, filters, retry]);
+  }, [id, complex?.id, complex?.property_type, repo, filters, retry]);
+  useEffect(() => {
+    setComparison(null);
+    if (!complex) return;
+    const abort = new AbortController();
+    repo
+      .stats(
+        { ...filters, property_type: complex.property_type, period_months: 36 },
+        complex.region_code,
+        "region",
+        abort.signal,
+      )
+      .then((r) => {
+        if (!abort.signal.aborted) setComparison(r.data);
+      })
+      .catch(() => {});
+    return () => abort.abort();
+  }, [complex?.region_code, complex?.property_type, repo, filters, retry]);
   if (!complex || error)
     return (
       <StateCard
@@ -244,6 +291,16 @@ export function ComplexContent({
   const a =
     complex.area_types.find((a) => a.exclusive_area_m2 === area) ??
     complex.area_types[0];
+  const areaStats = stats?.area_types?.find(
+    (v) => v.exclusive_area_m2 === a?.exclusive_area_m2,
+  );
+  const selectedStats = stats?.area_types?.length ? areaStats : stats;
+  const metric =
+    filters.deal_type === "sale"
+      ? "median_price_per_pyeong"
+      : filters.deal_type === "jeonse"
+        ? "median_deposit_per_pyeong"
+        : "median_monthly_rent";
   return (
     <>
       <View style={s.between}>
@@ -334,15 +391,23 @@ export function ComplexContent({
             거래 이력은 모든 면적을 표시해요
           </T>
           <Section
-            title="평당가 추이 · 최근 3년"
+            title={
+              filters.deal_type === "monthly"
+                ? "월세 추이 · 최근 3년"
+                : "평당가 추이 · 최근 3년"
+            }
             right={<Help onPress={() => onHelp("평당가")} />}
           >
             {stats ? (
-              <Chart trend={stats.trend} comparison={repo.mode === "sample"} />
+              <Chart
+                trend={selectedStats?.trend ?? []}
+                comparison={comparison?.trend}
+                metric={metric}
+              />
             ) : (
               <T size={14} color={C.light}>
                 {statsError
-                  ? "시세 통계 API가 준비 중이에요"
+                  ? "시세 통계를 불러오지 못했어요"
                   : "시세 추이를 불러오는 중…"}
               </T>
             )}
