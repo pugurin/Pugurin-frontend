@@ -1,0 +1,45 @@
+{
+  "name": "pugurin-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "web": "expo start --web",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build:web": "expo export --platform web",
+    "api:dev": "node scripts/api-dev.mjs",
+    "verify:api": "node scripts/verify-api.mjs",
+    "verify:ui": "node scripts/ui-smoke.mjs"
+  },
+  "dependencies": {
+    "expo": "~57.0.26",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-web": "^0.21.2",
+    "react-native-webview": "^13.16.0",
+    "react-native-svg": "^15.15.3",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "expo-status-bar": "~57.0.1",
+    "expo-location": "~57.0.0",
+    "expo-crypto": "~57.0.0",
+    "expo-font": "~57.0.0",
+    "@expo/metro-runtime": "~57.0.0",
+    "lucide-react-native": "^1.52.0"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "@types/react": "~19.2.2",
+    "vitest": "^3.2.4",
+    "jsdom": "^26.1.0",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@types/node": "^22.0.0",
+    "playwright": "^1.56.0",
+    "lucide-react": "^1.52.0"
+  }
+}
