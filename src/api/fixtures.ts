@@ -1,13 +1,275 @@
-import type {Complex,Transaction,Trend,Stats,Filters,MarkerData,BBox,SearchResult,Envelope,Sort} from './types';
-import {TERMS} from './terms';
-export {TERMS};
-export const SAMPLE_META={data_as_of:'2026-10-05T04:00:00+09:00',reporting_lag_notice:true,data_mode:'sample'};
-const rows:[string,number,number,number,number|null,number,string][]=[['해운대아이파크',35.1565,129.1435,14.5,34,21,'우동'],['해운대두산위브더제니스',35.1578,129.1459,12.8,41,33,'우동'],['경동제이드',35.1631,129.1538,8.2,null,7,'우동'],['우동현대',35.1704,129.1447,4.3,32,5,'우동'],['마린시티자이',35.1617,129.1407,9.9,33,12,'우동'],['해운대센텀두산위브',35.1772,129.1284,7.4,35,8,'우동'],['엘시티더샵',35.16,129.17,19.4,61,32,'중동'],['해운대힐스테이트',35.168,129.166,9.6,33,14,'중동']];
-export const COMPLEXES:Complex[]=rows.map((r,i)=>({id:`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`,property_type:'apartment',name:r[0],lat:r[1],lng:r[2],address:`부산광역시 해운대구 ${r[6]} ${1407+i}`,region_code:r[6]==='우동'?'2635010500':'2635010600',pnu:null,build_year:2011+i,household_count:i===0?1631:742+i*137,area_types:[{exclusive_area_m2:84.97,exclusive_area_pyeong:25.7,supply_area_pyeong:r[4]},{exclusive_area_m2:112.4,exclusive_area_pyeong:34,supply_area_pyeong:45},{exclusive_area_m2:143.5,exclusive_area_pyeong:43.4,supply_area_pyeong:58}]}));
-export const TRANSACTIONS:Transaction[]=COMPLEXES.flatMap((c,i)=>Array.from({length:24},(_,j)=>({id:`tx-${i}-${j}`,complex_id:c.id,property_type:c.property_type,address:c.address,region_code:c.region_code,lat:c.lat,lng:c.lng,deal_type:(['sale','jeonse','monthly'] as const)[j%3],price:j%3===0?Math.round((rows[i][3]-j*.018)*1e8):null,deposit:j%3===1?500000000: j%3===2?50000000:null,monthly_rent:j%3===2?800000:null,exclusive_area_m2:j%4===0?84.97:112.4,exclusive_area_pyeong:j%4===0?25.7:34,supply_area_pyeong:j%4===0?rows[i][4]:45,price_per_pyeong:j%3===0?56420000:null,floor:rows[i][5]+j%5,contract_date:`2026-${String(9-Math.floor(j/3)).padStart(2,'0')}-${String(14+j%14).padStart(2,'0')}`,trade_method:j%5===0?'direct':'broker',is_cancelled:j===6,cancelled_at:j===6?'2026-09-21T10:00:00+09:00':null})));
-export const TREND:Trend[]=Array.from({length:36},(_,i)=>({month:`${2023+Math.floor((i+10)/12)}-${String((i+10)%12+1).padStart(2,'0')}`,median_price_per_pyeong:i===16||i===24?null:Math.round((4200+i*32+Math.sin(i*.75)*180)*1e4),count:i===16?2:8+i%7}));
-export const SAMPLE_STATS:Stats={median_price_per_pyeong:32000000,transaction_count:128,trend:TREND};
-function match(t:Transaction,f:Filters){if(t.deal_type!==f.deal_type||f.exclude_direct&&t.trade_method==='direct')return false; const after=new Date('2026-10-05');after.setMonth(after.getMonth()-f.period_months);if(new Date(t.contract_date)<after)return false; const pairs:[number|null|undefined,number|undefined,number|undefined][]=[[t.price,f.price_min,f.price_max],[t.deposit,f.deposit_min,f.deposit_max],[t.monthly_rent,f.rent_min,f.rent_max],[t.exclusive_area_pyeong,f.exclusive_area_pyeong_min,f.exclusive_area_pyeong_max]];return pairs.every(([v,min,max])=>(min===undefined||(v!=null&&v>=min))&&(max===undefined||(v!=null&&v<=max)));}
-export function sampleTransactions(f:Filters,options:{complexId?:string;region?:string;bbox?:BBox;sort?:Sort;cancelled?:boolean;page?:number;area?:number}={}):Envelope<Transaction[]>{let items=TRANSACTIONS.filter(t=>match(t,f)&&(options.cancelled||!t.is_cancelled)&&(!options.complexId||t.complex_id===options.complexId)&&(!options.region||t.region_code.startsWith(options.region))&&(!options.bbox||t.lng>=options.bbox[0]&&t.lat>=options.bbox[1]&&t.lng<=options.bbox[2]&&t.lat<=options.bbox[3])&&(!options.area||Math.abs((t.exclusive_area_m2??0)-options.area)<1));items=items.map(t=>({...t,property_type:f.property_type}));items.sort((a,b)=>options.sort==='price_asc'?(a.price??a.deposit??0)-(b.price??b.deposit??0):options.sort==='price_desc'?(b.price??b.deposit??0)-(a.price??a.deposit??0):b.contract_date.localeCompare(a.contract_date));const page=options.page??1;return {data:items.slice((page-1)*20,page*20),meta:{...SAMPLE_META,page,page_size:20,total:items.length,total_pages:Math.ceil(items.length/20)}};}
-export function sampleMarkers(f:Filters,b:BBox,z:number):Envelope<MarkerData>{const level=z<12?'sigungu':z<14?'dong':'complex';const region=(name:string,code:string,lat:number,lng:number)=>({kind:'region' as const,name,region_code:code,lat,lng,transaction_count:128,summary:f.deal_type==='sale'?{median_price_per_pyeong:f.property_type==='land'?10200000:32000000}:f.deal_type==='jeonse'?{median_deposit_per_pyeong:18000000}:{median_deposit:50000000,median_monthly_rent:800000}});const regions=level==='sigungu'?[region('해운대구','26350',35.163,129.154),region('수영구','26500',35.157,129.112)]:[region('우동','2635010500',35.166,129.143),region('중동','2635010600',35.162,129.169),region('좌동','2635010700',35.175,129.178)];const markers=level==='complex'&&f.property_type!=='land'?COMPLEXES.flatMap(c=>{const tx=sampleTransactions(f,{complexId:c.id}).data;if(!tx.length)return [];return [{kind:'complex' as const,complex_id:c.id,name:c.name,lat:c.lat,lng:c.lng,transaction_count:tx.length,latest:tx[0]}];}):regions;return {data:{level,markers:markers.filter(m=>m.lng>=b[0]&&m.lng<=b[2]&&m.lat>=b[1]&&m.lat<=b[3])},meta:SAMPLE_META};}
-export function sampleSearch(q:string):SearchResult[]{const regions:SearchResult[]=[{type:'region',name:'해운대구 우동',region_code:'2635010500',region_level:'dong',lat:35.166,lng:129.145,bbox:[129.12,35.14,129.165,35.18]},{type:'region',name:'해운대구',region_code:'26350',region_level:'sigungu',lat:35.17,lng:129.16,bbox:[129.1,35.14,129.2,35.21]},{type:'address',address:'부산광역시 해운대구 우동 1407',pnu:'2635010500114070000',lat:35.1565,lng:129.1435}];return [...COMPLEXES.map(c=>({type:'complex' as const,name:c.name,address:c.address,complex_id:c.id,lat:c.lat,lng:c.lng})),...regions].filter(r=>`${r.name??''} ${r.address??''}`.includes(q)).slice(0,30);}
+import type {
+  Complex,
+  Transaction,
+  Trend,
+  Stats,
+  Filters,
+  MarkerData,
+  BBox,
+  SearchResult,
+  Envelope,
+  Sort,
+} from "./types";
+import { TERMS } from "./terms";
+export { TERMS };
+export const SAMPLE_META = {
+  data_as_of: "2026-10-05T04:00:00+09:00",
+  reporting_lag_notice: true,
+  data_mode: "sample",
+};
+const rows: [string, number, number, number, number | null, number, string][] =
+  [
+    ["해운대아이파크", 35.1565, 129.1435, 14.5, 34, 21, "우동"],
+    ["해운대두산위브더제니스", 35.1578, 129.1459, 12.8, 41, 33, "우동"],
+    ["경동제이드", 35.1631, 129.1538, 8.2, null, 7, "우동"],
+    ["우동현대", 35.1704, 129.1447, 4.3, 32, 5, "우동"],
+    ["마린시티자이", 35.1617, 129.1407, 9.9, 33, 12, "우동"],
+    ["해운대센텀두산위브", 35.1772, 129.1284, 7.4, 35, 8, "우동"],
+    ["엘시티더샵", 35.16, 129.17, 19.4, 61, 32, "중동"],
+    ["해운대힐스테이트", 35.168, 129.166, 9.6, 33, 14, "중동"],
+  ];
+export const COMPLEXES: Complex[] = rows.map((r, i) => ({
+  id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
+  property_type: "apartment",
+  name: r[0],
+  lat: r[1],
+  lng: r[2],
+  address: `부산광역시 해운대구 ${r[6]} ${1407 + i}`,
+  region_code: r[6] === "우동" ? "2635010500" : "2635010600",
+  pnu: null,
+  build_year: 2011 + i,
+  household_count: i === 0 ? 1631 : 742 + i * 137,
+  area_types: [
+    {
+      exclusive_area_m2: 84.97,
+      exclusive_area_pyeong: 25.7,
+      supply_area_pyeong: r[4],
+    },
+    {
+      exclusive_area_m2: 112.4,
+      exclusive_area_pyeong: 34,
+      supply_area_pyeong: 45,
+    },
+    {
+      exclusive_area_m2: 143.5,
+      exclusive_area_pyeong: 43.4,
+      supply_area_pyeong: 58,
+    },
+  ],
+}));
+export const TRANSACTIONS: Transaction[] = COMPLEXES.flatMap((c, i) =>
+  Array.from({ length: 24 }, (_, j) => ({
+    id: `tx-${i}-${j}`,
+    complex_id: c.id,
+    property_type: c.property_type,
+    address: c.address,
+    region_code: c.region_code,
+    lat: c.lat,
+    lng: c.lng,
+    deal_type: (["sale", "jeonse", "monthly"] as const)[j % 3],
+    price: j % 3 === 0 ? Math.round((rows[i][3] - j * 0.018) * 1e8) : null,
+    deposit: j % 3 === 1 ? 500000000 : j % 3 === 2 ? 50000000 : null,
+    monthly_rent: j % 3 === 2 ? 800000 : null,
+    exclusive_area_m2: j % 4 === 0 ? 84.97 : 112.4,
+    exclusive_area_pyeong: j % 4 === 0 ? 25.7 : 34,
+    supply_area_pyeong: j % 4 === 0 ? rows[i][4] : 45,
+    price_per_pyeong: j % 3 === 0 ? 56420000 : null,
+    floor: rows[i][5] + (j % 5),
+    contract_date: `2026-${String(9 - Math.floor(j / 3)).padStart(2, "0")}-${String(14 + (j % 14)).padStart(2, "0")}`,
+    trade_method: j % 5 === 0 ? "direct" : "broker",
+    is_cancelled: j === 6,
+    cancelled_at: j === 6 ? "2026-09-21T10:00:00+09:00" : null,
+  })),
+);
+export const TREND: Trend[] = Array.from({ length: 36 }, (_, i) => ({
+  month: `${2023 + Math.floor((i + 10) / 12)}-${String(((i + 10) % 12) + 1).padStart(2, "0")}`,
+  median_price_per_pyeong:
+    i === 16 || i === 24
+      ? null
+      : Math.round((4200 + i * 32 + Math.sin(i * 0.75) * 180) * 1e4),
+  count: i === 16 ? 2 : 8 + (i % 7),
+}));
+export const SAMPLE_STATS: Stats = {
+  median_price_per_pyeong: 32000000,
+  transaction_count: 128,
+  trend: TREND,
+};
+function match(t: Transaction, f: Filters) {
+  if (
+    t.deal_type !== f.deal_type ||
+    (f.exclude_direct && t.trade_method === "direct")
+  )
+    return false;
+  const after = new Date("2026-10-05");
+  after.setMonth(after.getMonth() - f.period_months);
+  if (new Date(t.contract_date) < after) return false;
+  const pairs: [
+    number | null | undefined,
+    number | undefined,
+    number | undefined,
+  ][] = [
+    [t.price, f.price_min, f.price_max],
+    [t.deposit, f.deposit_min, f.deposit_max],
+    [t.monthly_rent, f.rent_min, f.rent_max],
+    [
+      t.exclusive_area_pyeong,
+      f.exclusive_area_pyeong_min,
+      f.exclusive_area_pyeong_max,
+    ],
+  ];
+  return pairs.every(
+    ([v, min, max]) =>
+      (min === undefined || (v != null && v >= min)) &&
+      (max === undefined || (v != null && v <= max)),
+  );
+}
+export function sampleTransactions(
+  f: Filters,
+  options: {
+    complexId?: string;
+    region?: string;
+    bbox?: BBox;
+    sort?: Sort;
+    cancelled?: boolean;
+    page?: number;
+    area?: number;
+  } = {},
+): Envelope<Transaction[]> {
+  let items = TRANSACTIONS.filter(
+    (t) =>
+      match(t, f) &&
+      (options.cancelled || !t.is_cancelled) &&
+      (!options.complexId || t.complex_id === options.complexId) &&
+      (!options.region || t.region_code.startsWith(options.region)) &&
+      (!options.bbox ||
+        (t.lng >= options.bbox[0] &&
+          t.lat >= options.bbox[1] &&
+          t.lng <= options.bbox[2] &&
+          t.lat <= options.bbox[3])) &&
+      (!options.area ||
+        Math.abs((t.exclusive_area_m2 ?? 0) - options.area) < 1),
+  );
+  items = items.map((t) => ({ ...t, property_type: f.property_type }));
+  items.sort((a, b) =>
+    options.sort === "price_asc"
+      ? (a.price ?? a.deposit ?? 0) - (b.price ?? b.deposit ?? 0)
+      : options.sort === "price_desc"
+        ? (b.price ?? b.deposit ?? 0) - (a.price ?? a.deposit ?? 0)
+        : b.contract_date.localeCompare(a.contract_date),
+  );
+  const page = options.page ?? 1;
+  return {
+    data: items.slice((page - 1) * 20, page * 20),
+    meta: {
+      ...SAMPLE_META,
+      page,
+      page_size: 20,
+      total: items.length,
+      total_pages: Math.ceil(items.length / 20),
+    },
+  };
+}
+export function sampleMarkers(
+  f: Filters,
+  b: BBox,
+  z: number,
+): Envelope<MarkerData> {
+  const level = z < 12 ? "sigungu" : z < 14 ? "dong" : "complex";
+  const region = (name: string, code: string, lat: number, lng: number) => ({
+    kind: "region" as const,
+    name,
+    region_code: code,
+    lat,
+    lng,
+    transaction_count: 128,
+    summary:
+      f.deal_type === "sale"
+        ? {
+            median_price_per_pyeong:
+              f.property_type === "land" ? 10200000 : 32000000,
+          }
+        : f.deal_type === "jeonse"
+          ? { median_deposit_per_pyeong: 18000000 }
+          : { median_deposit: 50000000, median_monthly_rent: 800000 },
+  });
+  const regions =
+    level === "sigungu"
+      ? [
+          region("해운대구", "26350", 35.163, 129.154),
+          region("수영구", "26500", 35.157, 129.112),
+        ]
+      : [
+          region("우동", "2635010500", 35.166, 129.143),
+          region("중동", "2635010600", 35.162, 129.169),
+          region("좌동", "2635010700", 35.175, 129.178),
+        ];
+  const markers =
+    level === "complex" && f.property_type !== "land"
+      ? COMPLEXES.flatMap((c) => {
+          const tx = sampleTransactions(f, { complexId: c.id }).data;
+          if (!tx.length) return [];
+          return [
+            {
+              kind: "complex" as const,
+              complex_id: c.id,
+              name: c.name,
+              lat: c.lat,
+              lng: c.lng,
+              transaction_count: tx.length,
+              latest: tx[0],
+            },
+          ];
+        })
+      : regions;
+  return {
+    data: {
+      level,
+      markers: markers.filter(
+        (m) => m.lng >= b[0] && m.lng <= b[2] && m.lat >= b[1] && m.lat <= b[3],
+      ),
+    },
+    meta: SAMPLE_META,
+  };
+}
+export function sampleSearch(q: string): SearchResult[] {
+  const regions: SearchResult[] = [
+    {
+      type: "region",
+      name: "해운대구 우동",
+      region_code: "2635010500",
+      region_level: "dong",
+      lat: 35.166,
+      lng: 129.145,
+      bbox: [129.12, 35.14, 129.165, 35.18],
+    },
+    {
+      type: "region",
+      name: "해운대구",
+      region_code: "26350",
+      region_level: "sigungu",
+      lat: 35.17,
+      lng: 129.16,
+      bbox: [129.1, 35.14, 129.2, 35.21],
+    },
+    {
+      type: "address",
+      address: "부산광역시 해운대구 우동 1407",
+      pnu: "2635010500114070000",
+      lat: 35.1565,
+      lng: 129.1435,
+    },
+  ];
+  return [
+    ...COMPLEXES.map((c) => ({
+      type: "complex" as const,
+      name: c.name,
+      address: c.address,
+      complex_id: c.id,
+      lat: c.lat,
+      lng: c.lng,
+    })),
+    ...regions,
+  ]
+    .filter((r) => `${r.name ?? ""} ${r.address ?? ""}`.includes(q))
+    .slice(0, 30);
+}

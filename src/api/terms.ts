@@ -1,20 +1,198 @@
-import type {Term} from './types';
+import type { Term } from "./types";
 export const TERMS: Term[] = [
-  { id: 'far', term: '용적률', category: 'building', is_popular: true, display_order: 10, short_definition: '땅 넓이에 비해 건물을 얼마나 크게 지을 수 있는지 나타낸 비율이에요.', long_definition: '건물 각 층의 바닥 넓이를 모두 더한 값(연면적)을 땅 넓이로 나눈 비율이에요. 용도지역마다 한도가 있고, 부산은 도시계획 조례로 정해요. 한도가 높을수록 같은 땅에 더 크고 높은 건물을 지을 수 있어요.', example: '땅 100평 · 용적률 250% → 연면적 250평까지 지을 수 있어요. 1층을 50평으로 지으면 5층까지예요.' },
-  { id: 'bcr', term: '건폐율', category: 'building', is_popular: true, display_order: 20, short_definition: '땅 넓이 중에서 건물이 들어설 수 있는 바닥 넓이의 비율이에요.', long_definition: '건물을 위에서 내려다봤을 때 땅을 덮는 넓이(건축면적)를 땅 넓이로 나눈 비율이에요. 나머지 땅은 마당·주차장·통로로 남겨야 해요.', example: '땅 100평 · 건폐율 60% → 건물 바닥은 60평까지, 나머지 40평은 비워 둬요.' },
-  { id: 'official-price', term: '공시지가', category: 'land', is_popular: true, display_order: 30, short_definition: '나라가 매년 정해서 알려주는 땅값이에요.', long_definition: '국토교통부와 구청이 매년 1월 1일 기준으로 정해 발표하는 땅값이에요. 실제로 사고파는 값(실거래가)과는 달라요. 세금이나 보상금을 정할 때 기준으로 써요.', example: '㎡당 512만 원 → 평당 약 1,692만 원 (1평 = 3.3058㎡)' },
-  { id: 'land-category', term: '지목', category: 'land', is_popular: true, display_order: 40, short_definition: '땅을 무엇에 쓰는지 나라 장부에 적어 둔 이름이에요.', long_definition: '토지대장에 적힌 땅의 용도예요. 모두 28가지가 있고, 자주 보는 것은 대(집·건물), 전(밭), 답(논), 임야(산)예요. 지목에 따라 건물을 바로 지을 수 있는지가 달라요.', example: '대 = 집이나 건물을 지을 수 있는 땅 · 전 = 밭 · 답 = 논 · 임야 = 산' },
-  { id: 'zoning', term: '용도지역', category: 'land', is_popular: true, display_order: 50, short_definition: '땅마다 정해진 쓰임새예요. 주거·상업·공업·녹지 등으로 나눠요.', long_definition: '도시를 계획적으로 쓰려고 땅마다 정해 둔 쓰임새예요. 용도지역에 따라 지을 수 있는 건물 종류와 건폐율·용적률 한도가 달라져요.', example: '제2종일반주거지역 → 주택·아파트 위주, 건폐율 60% · 용적률 250% (부산 조례 기준)' },
-  { id: 'road-side', term: '도로접면', category: 'land', is_popular: false, display_order: 60, short_definition: '땅이 어떤 폭의 도로에, 몇 면이 닿아 있는지 나타내요.', long_definition: '땅이 닿아 있는 도로의 폭과 닿은 면의 수를 줄여 쓴 말이에요. 도로에 닿지 않은 땅(맹지)은 건물을 짓기 어려워요.', example: '중로한면 = 폭 12~25m 도로에 한쪽이 닿아 있음 · 맹지 = 도로에 닿지 않음' },
-  { id: 'exclusive-area', term: '전용면적', category: 'building', is_popular: true, display_order: 70, short_definition: '우리 집만 쓰는 실제 면적이에요.', long_definition: '현관 안쪽처럼 그 집만 쓰는 공간의 넓이예요. 복도·계단·엘리베이터 같은 공용 부분은 빠져요. 이 앱의 평당가와 면적 필터는 전용면적 기준이에요.', example: '공급 34평 아파트의 전용면적은 보통 25.7평(84.97㎡)이에요.' },
-  { id: 'supply-area', term: '공급면적', category: 'building', is_popular: false, display_order: 80, short_definition: '전용면적에 복도·계단 같은 공용 부분을 더한 면적이에요.', long_definition: '흔히 말하는 "34평 아파트"가 이 기준이에요. 같은 공급면적이라도 단지마다 전용면적은 조금씩 달라요.', example: '전용 25.7평 + 공용 8.3평 = 공급 34평' },
-  { id: 'actual-price', term: '실거래가', category: 'trade', is_popular: true, display_order: 90, short_definition: '실제로 사고판 가격을 나라에 신고한 금액이에요.', long_definition: '계약하고 30일 안에 신고한 실제 거래 금액이에요. 국토교통부가 공개하고, 이 앱은 그 자료를 매일 받아와요. 신고 기한 때문에 최근 한 달 거래는 나중에 더 늘어날 수 있어요.', example: '8월 14일 계약 → 9월 13일까지 신고 → 지도에 표시' },
-  { id: 'cancelled', term: '해제거래', category: 'trade', is_popular: false, display_order: 100, short_definition: '계약했다가 나중에 취소된 거래예요.', long_definition: '실거래가로 신고됐다가 계약이 해제된 거래예요. 시세를 왜곡할 수 있어서 지도와 통계에서는 빼고, 거래 목록에서 따로 켜야 보여요.', example: '8월에 14.8억으로 신고 → 9월에 해제 → 지도와 평균에서 빠짐' },
-  { id: 'direct', term: '직거래', category: 'trade', is_popular: false, display_order: 110, short_definition: '중개사 없이 사는 사람과 파는 사람이 직접 한 거래예요.', long_definition: '가족·지인 사이 거래가 많아 시세와 다를 수 있어요. 필터에서 직거래를 빼고 볼 수 있어요.', example: '필터 → 직거래 제외 켜기 → 지도에서 직거래가 빠짐' },
-  { id: 'acquisition-tax', term: '취득세', category: 'tax', is_popular: true, display_order: 120, short_definition: '집이나 땅을 살 때 한 번 내는 세금이에요.', long_definition: '부동산을 산 사람이 잔금을 치른 날부터 60일 안에 내는 세금이에요. 집값, 가진 집 수, 지역에 따라 세율이 달라요. 정확한 금액은 관할 구청에 확인하세요.', example: '1주택자가 6억 원 이하 집을 사면 보통 집값의 1%' },
-  { id: 'property-tax', term: '재산세', category: 'tax', is_popular: false, display_order: 130, short_definition: '집이나 땅을 가진 사람이 매년 내는 세금이에요.', long_definition: '매년 6월 1일에 주인인 사람에게 나와요. 집은 7월과 9월에 나눠 내요.', example: '6월 1일 기준 주인 → 7월·9월 고지서' },
-  { id: 'median', term: '중위값', category: 'trade', is_popular: false, display_order: 140, short_definition: '가격을 줄 세웠을 때 딱 가운데 값이에요.', long_definition: '너무 싸거나 비싼 거래 몇 건에 휘둘리지 않도록 평균 대신 써요. 이 앱의 구·동 평당가는 중위값이에요.', example: '5억 · 6억 · 7억 · 8억 · 30억 → 중위값 7억 (평균은 11.2억)' },
-  { id: 'ppp', term: '평당가', category: 'trade', is_popular: false, display_order: 150, short_definition: '가격을 면적 1평 기준으로 나눈 값이에요.', long_definition: '크기가 다른 집이나 땅끼리 비교할 때 써요. 이 앱은 아파트·오피스텔·빌라는 전용면적, 토지는 토지면적으로 나눠요.', example: '14.5억 ÷ 전용 25.7평 = 평당 약 5,642만 원' },
-  { id: 'cadastral', term: '지적도', category: 'land', is_popular: false, display_order: 160, short_definition: '땅의 경계와 지번을 그려 놓은 나라 지도예요.', long_definition: '필지마다 경계선과 지번이 그려져 있어요. 지도에서 켜면 땅을 하나씩 눌러 볼 수 있어요.', example: '지도 레이어 → 지적도 켜기' },
-  { id: 'livestock', term: '가축사육제한구역', category: 'land', is_popular: false, display_order: 170, short_definition: '소·돼지 등 가축을 키우는 시설을 지을 수 없는 곳이에요.', long_definition: '냄새·소음으로 주민 생활이 불편해지지 않도록 구청이 정한 곳이에요. 주거지 가까운 땅은 대부분 여기에 들어가요.', example: '주택가 주변 땅 → 축사 신축 불가' }
+  {
+    id: "far",
+    term: "용적률",
+    category: "building",
+    is_popular: true,
+    display_order: 10,
+    short_definition:
+      "땅 넓이에 비해 건물을 얼마나 크게 지을 수 있는지 나타낸 비율이에요.",
+    long_definition:
+      "건물 각 층의 바닥 넓이를 모두 더한 값(연면적)을 땅 넓이로 나눈 비율이에요. 용도지역마다 한도가 있고, 부산은 도시계획 조례로 정해요. 한도가 높을수록 같은 땅에 더 크고 높은 건물을 지을 수 있어요.",
+    example:
+      "땅 100평 · 용적률 250% → 연면적 250평까지 지을 수 있어요. 1층을 50평으로 지으면 5층까지예요.",
+  },
+  {
+    id: "bcr",
+    term: "건폐율",
+    category: "building",
+    is_popular: true,
+    display_order: 20,
+    short_definition:
+      "땅 넓이 중에서 건물이 들어설 수 있는 바닥 넓이의 비율이에요.",
+    long_definition:
+      "건물을 위에서 내려다봤을 때 땅을 덮는 넓이(건축면적)를 땅 넓이로 나눈 비율이에요. 나머지 땅은 마당·주차장·통로로 남겨야 해요.",
+    example:
+      "땅 100평 · 건폐율 60% → 건물 바닥은 60평까지, 나머지 40평은 비워 둬요.",
+  },
+  {
+    id: "official-price",
+    term: "공시지가",
+    category: "land",
+    is_popular: true,
+    display_order: 30,
+    short_definition: "나라가 매년 정해서 알려주는 땅값이에요.",
+    long_definition:
+      "국토교통부와 구청이 매년 1월 1일 기준으로 정해 발표하는 땅값이에요. 실제로 사고파는 값(실거래가)과는 달라요. 세금이나 보상금을 정할 때 기준으로 써요.",
+    example: "㎡당 512만 원 → 평당 약 1,692만 원 (1평 = 3.3058㎡)",
+  },
+  {
+    id: "land-category",
+    term: "지목",
+    category: "land",
+    is_popular: true,
+    display_order: 40,
+    short_definition: "땅을 무엇에 쓰는지 나라 장부에 적어 둔 이름이에요.",
+    long_definition:
+      "토지대장에 적힌 땅의 용도예요. 모두 28가지가 있고, 자주 보는 것은 대(집·건물), 전(밭), 답(논), 임야(산)예요. 지목에 따라 건물을 바로 지을 수 있는지가 달라요.",
+    example:
+      "대 = 집이나 건물을 지을 수 있는 땅 · 전 = 밭 · 답 = 논 · 임야 = 산",
+  },
+  {
+    id: "zoning",
+    term: "용도지역",
+    category: "land",
+    is_popular: true,
+    display_order: 50,
+    short_definition:
+      "땅마다 정해진 쓰임새예요. 주거·상업·공업·녹지 등으로 나눠요.",
+    long_definition:
+      "도시를 계획적으로 쓰려고 땅마다 정해 둔 쓰임새예요. 용도지역에 따라 지을 수 있는 건물 종류와 건폐율·용적률 한도가 달라져요.",
+    example:
+      "제2종일반주거지역 → 주택·아파트 위주, 건폐율 60% · 용적률 250% (부산 조례 기준)",
+  },
+  {
+    id: "road-side",
+    term: "도로접면",
+    category: "land",
+    is_popular: false,
+    display_order: 60,
+    short_definition: "땅이 어떤 폭의 도로에, 몇 면이 닿아 있는지 나타내요.",
+    long_definition:
+      "땅이 닿아 있는 도로의 폭과 닿은 면의 수를 줄여 쓴 말이에요. 도로에 닿지 않은 땅(맹지)은 건물을 짓기 어려워요.",
+    example:
+      "중로한면 = 폭 12~25m 도로에 한쪽이 닿아 있음 · 맹지 = 도로에 닿지 않음",
+  },
+  {
+    id: "exclusive-area",
+    term: "전용면적",
+    category: "building",
+    is_popular: true,
+    display_order: 70,
+    short_definition: "우리 집만 쓰는 실제 면적이에요.",
+    long_definition:
+      "현관 안쪽처럼 그 집만 쓰는 공간의 넓이예요. 복도·계단·엘리베이터 같은 공용 부분은 빠져요. 이 앱의 평당가와 면적 필터는 전용면적 기준이에요.",
+    example: "공급 34평 아파트의 전용면적은 보통 25.7평(84.97㎡)이에요.",
+  },
+  {
+    id: "supply-area",
+    term: "공급면적",
+    category: "building",
+    is_popular: false,
+    display_order: 80,
+    short_definition: "전용면적에 복도·계단 같은 공용 부분을 더한 면적이에요.",
+    long_definition:
+      '흔히 말하는 "34평 아파트"가 이 기준이에요. 같은 공급면적이라도 단지마다 전용면적은 조금씩 달라요.',
+    example: "전용 25.7평 + 공용 8.3평 = 공급 34평",
+  },
+  {
+    id: "actual-price",
+    term: "실거래가",
+    category: "trade",
+    is_popular: true,
+    display_order: 90,
+    short_definition: "실제로 사고판 가격을 나라에 신고한 금액이에요.",
+    long_definition:
+      "계약하고 30일 안에 신고한 실제 거래 금액이에요. 국토교통부가 공개하고, 이 앱은 그 자료를 매일 받아와요. 신고 기한 때문에 최근 한 달 거래는 나중에 더 늘어날 수 있어요.",
+    example: "8월 14일 계약 → 9월 13일까지 신고 → 지도에 표시",
+  },
+  {
+    id: "cancelled",
+    term: "해제거래",
+    category: "trade",
+    is_popular: false,
+    display_order: 100,
+    short_definition: "계약했다가 나중에 취소된 거래예요.",
+    long_definition:
+      "실거래가로 신고됐다가 계약이 해제된 거래예요. 시세를 왜곡할 수 있어서 지도와 통계에서는 빼고, 거래 목록에서 따로 켜야 보여요.",
+    example: "8월에 14.8억으로 신고 → 9월에 해제 → 지도와 평균에서 빠짐",
+  },
+  {
+    id: "direct",
+    term: "직거래",
+    category: "trade",
+    is_popular: false,
+    display_order: 110,
+    short_definition: "중개사 없이 사는 사람과 파는 사람이 직접 한 거래예요.",
+    long_definition:
+      "가족·지인 사이 거래가 많아 시세와 다를 수 있어요. 필터에서 직거래를 빼고 볼 수 있어요.",
+    example: "필터 → 직거래 제외 켜기 → 지도에서 직거래가 빠짐",
+  },
+  {
+    id: "acquisition-tax",
+    term: "취득세",
+    category: "tax",
+    is_popular: true,
+    display_order: 120,
+    short_definition: "집이나 땅을 살 때 한 번 내는 세금이에요.",
+    long_definition:
+      "부동산을 산 사람이 잔금을 치른 날부터 60일 안에 내는 세금이에요. 집값, 가진 집 수, 지역에 따라 세율이 달라요. 정확한 금액은 관할 구청에 확인하세요.",
+    example: "1주택자가 6억 원 이하 집을 사면 보통 집값의 1%",
+  },
+  {
+    id: "property-tax",
+    term: "재산세",
+    category: "tax",
+    is_popular: false,
+    display_order: 130,
+    short_definition: "집이나 땅을 가진 사람이 매년 내는 세금이에요.",
+    long_definition:
+      "매년 6월 1일에 주인인 사람에게 나와요. 집은 7월과 9월에 나눠 내요.",
+    example: "6월 1일 기준 주인 → 7월·9월 고지서",
+  },
+  {
+    id: "median",
+    term: "중위값",
+    category: "trade",
+    is_popular: false,
+    display_order: 140,
+    short_definition: "가격을 줄 세웠을 때 딱 가운데 값이에요.",
+    long_definition:
+      "너무 싸거나 비싼 거래 몇 건에 휘둘리지 않도록 평균 대신 써요. 이 앱의 구·동 평당가는 중위값이에요.",
+    example: "5억 · 6억 · 7억 · 8억 · 30억 → 중위값 7억 (평균은 11.2억)",
+  },
+  {
+    id: "ppp",
+    term: "평당가",
+    category: "trade",
+    is_popular: false,
+    display_order: 150,
+    short_definition: "가격을 면적 1평 기준으로 나눈 값이에요.",
+    long_definition:
+      "크기가 다른 집이나 땅끼리 비교할 때 써요. 이 앱은 아파트·오피스텔·빌라는 전용면적, 토지는 토지면적으로 나눠요.",
+    example: "14.5억 ÷ 전용 25.7평 = 평당 약 5,642만 원",
+  },
+  {
+    id: "cadastral",
+    term: "지적도",
+    category: "land",
+    is_popular: false,
+    display_order: 160,
+    short_definition: "땅의 경계와 지번을 그려 놓은 나라 지도예요.",
+    long_definition:
+      "필지마다 경계선과 지번이 그려져 있어요. 지도에서 켜면 땅을 하나씩 눌러 볼 수 있어요.",
+    example: "지도 레이어 → 지적도 켜기",
+  },
+  {
+    id: "livestock",
+    term: "가축사육제한구역",
+    category: "land",
+    is_popular: false,
+    display_order: 170,
+    short_definition: "소·돼지 등 가축을 키우는 시설을 지을 수 없는 곳이에요.",
+    long_definition:
+      "냄새·소음으로 주민 생활이 불편해지지 않도록 구청이 정한 곳이에요. 주거지 가까운 땅은 대부분 여기에 들어가요.",
+    example: "주택가 주변 땅 → 축사 신축 불가",
+  },
 ];
