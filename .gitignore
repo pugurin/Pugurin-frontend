@@ -8,3 +8,10 @@ web-build/
 .DS_Store
 coverage/
 *.log
+
+# expo prebuild로 생성되는 네이티브 폴더 (MapLibre 때문에 development build 필요)
+/ios
+/android
+
+# maplibre-gl 웹 워커 (npm install 때 scripts/copy-maplibre-worker.mjs가 복사)
+/public/maplibre

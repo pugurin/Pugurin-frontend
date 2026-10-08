@@ -12,8 +12,13 @@
         "NSLocationWhenInUseUsageDescription": "현재 위치 주변의 실거래가를 보여드리기 위해 위치를 사용합니다."
       }
     },
-    "android": { "package": "com.pugurin.app" },
-    "web": { "name": "퍼그린 · 부산 실거래가 지도", "bundler": "metro" },
+    "android": {
+      "package": "com.pugurin.app"
+    },
+    "web": {
+      "name": "퍼그린 · 부산 실거래가 지도",
+      "bundler": "metro"
+    },
     "plugins": [
       [
         "expo-location",
@@ -21,7 +26,8 @@
           "locationWhenInUsePermission": "현재 위치 주변의 실거래가를 보여드리기 위해 위치를 사용합니다."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "@maplibre/maplibre-react-native"
     ]
   }
 }
