@@ -25,6 +25,8 @@ import {
   HOME,
   busanQueryBBox,
   markerId,
+  MAX_PERIOD_MONTHS,
+  PERIOD_NOTICE,
   PROPERTY,
 } from "../state/market";
 import { C } from "../theme/tokens";
@@ -178,10 +180,31 @@ export function MapHome({
         zoom: r.region_level === "sigungu" ? 12 : 14,
       });
     } else {
-      notify("토지 상세는 이번 구현 범위에 포함되지 않아요");
       move({ type: "move", lat: r.lat, lng: r.lng, zoom: 15 });
+      landLookup(r.lat, r.lng);
     }
   }, [focus]);
+  // 토지: 필지 정보 공급처가 없어 지금은 항상 안내만 나온다(백엔드 가이드 6번). 생기면 토지 시트로 잇는다
+  const landRequest = useRef<AbortController | null>(null);
+  const landLookup = (lat: number, lng: number) => {
+    landRequest.current?.abort();
+    const controller = new AbortController();
+    landRequest.current = controller;
+    repo
+      .parcelLookup(lat, lng, controller.signal)
+      .then((r) => {
+        if (controller.signal.aborted) return;
+        const reason = r.meta?.unavailable_reason;
+        if (r.data) notify("토지 상세 화면은 준비 중이에요");
+        else if (reason === "no_parcel") notify("이곳은 토지 정보가 없어요");
+        else if (reason === "out_of_service_area") notify("부산 지역만 지원해요");
+        else notify("토지 정보를 잠시 불러올 수 없어요");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          notify("토지 정보를 잠시 불러올 수 없어요");
+      });
+  };
   const markerPress = (m: Marker) => {
     if (m.kind === "region") {
       setSelected({ kind: "region", marker: m });
@@ -195,7 +218,7 @@ export function MapHome({
     } else if (m.kind === "complex") {
       setSelected({ kind: "complex", id: m.complex_id });
       setStage("peek");
-    } else notify("토지 상세는 이번 구현 범위에 포함되지 않아요");
+    } else landLookup(m.lat, m.lng);
   };
   const onEvent = (e: MapEvent) => {
     if (e.type === "camera") {
@@ -207,8 +230,10 @@ export function MapHome({
       if (m) markerPress(m);
     }
     if (e.type === "mapClick") {
-      if (isLand) notify("토지 상세는 이번 구현 범위에 포함되지 않아요");
-      else close();
+      if (!isLand) close();
+      else if (camera.zoom < 14)
+        notify("조금 더 확대하면 땅을 하나씩 골라 볼 수 있어요");
+      else landLookup(e.lat, e.lng);
     }
     if (e.type === "error") setMapError(e.message);
   };
@@ -464,24 +489,26 @@ export function MapHome({
             <T size={19} bold>
               이 조건의 거래가 없어요
             </T>
-            <T size={15} color={C.muted}>
-              기간을 늘리면 더 많은 거래를 볼 수 있어요
-            </T>
-            <Btn
-              secondary
-              small
-              onPress={() =>
-                onFilters({
-                  ...filters,
-                  period_months:
-                    filters.period_months < 12
-                      ? 12
-                      : Math.min(60, filters.period_months * 2),
-                })
-              }
-            >
-              기간 늘리기
-            </Btn>
+            {filters.period_months < MAX_PERIOD_MONTHS ? (
+              <>
+                <T size={15} color={C.muted}>
+                  기간을 늘리면 더 많은 거래를 볼 수 있어요
+                </T>
+                <Btn
+                  secondary
+                  small
+                  onPress={() =>
+                    onFilters({ ...filters, period_months: MAX_PERIOD_MONTHS })
+                  }
+                >
+                  기간 늘리기 (최근 {MAX_PERIOD_MONTHS}개월)
+                </Btn>
+              </>
+            ) : (
+              <T size={15} color={C.muted}>
+                최근 {MAX_PERIOD_MONTHS}개월 동안 이 지역에 신고된 거래가 없어요
+              </T>
+            )}
           </View>
         ) : null}
       </View>
@@ -651,7 +678,7 @@ export function MapHome({
               />
             </View>
             <View style={[s.row, { flexWrap: "wrap" }]}>
-              {[3, 6, 12, 24, 36, 60].map((n) => (
+              {[3, 6, 12].map((n) => (
                 <Chip
                   key={n}
                   selected={filters.period_months === n}
@@ -664,6 +691,9 @@ export function MapHome({
                 </Chip>
               ))}
             </View>
+            <T size={14} color={C.muted}>
+              {PERIOD_NOTICE}
+            </T>
           </Pressable>
         </Pressable>
       </Modal>

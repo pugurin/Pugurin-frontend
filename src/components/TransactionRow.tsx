@@ -52,13 +52,12 @@ export function TransactionRow({
           {tx.floor != null ? ` · ${tx.floor}층` : ""}
         </T>
         <View style={s.row}>
-          <T size={12} color={tx.trade_method === "direct" ? C.brown : C.muted}>
-            {tx.trade_method === "direct"
-              ? "직거래"
-              : tx.trade_method === "broker"
-                ? "중개"
-                : "거래방식 정보 없음"}
-          </T>
+          {/* 전월세 거래는 거래방식(중개/직거래)이 공공데이터에 없어 null로 온다 → 배지를 숨긴다 */}
+          {tx.trade_method != null && (
+            <T size={12} color={tx.trade_method === "direct" ? C.brown : C.muted}>
+              {tx.trade_method === "direct" ? "직거래" : "중개"}
+            </T>
+          )}
           {tx.is_cancelled && (
             <View
               style={{

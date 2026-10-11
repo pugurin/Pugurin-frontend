@@ -6,6 +6,7 @@ import {
   formatArea,
   kakaoZoom,
   validateDraft,
+  draftFor,
 } from "../src/state/market";
 const base = {
   property_type: "apartment" as const,
@@ -73,5 +74,13 @@ describe("지도 필터와 표시 계약", () => {
     expect(
       formatArea({ exclusive_area_pyeong: 25.7, supply_area_pyeong: null }),
     ).toBe("전용 25.7평");
+  });
+});
+
+describe("기간 제한 (실데이터 12개월)", () => {
+  it("12개월을 넘는 기간은 받지 않는다", () => {
+    const draft = draftFor(base);
+    expect(validateDraft(base, { ...draft, period: "24" }).error).toBe("기간은 1~12개월로 입력해 주세요");
+    expect(validateDraft(base, { ...draft, period: "12" }).filters?.period_months).toBe(12);
   });
 });

@@ -18,8 +18,14 @@ export type Filters = {
   land_area_pyeong_min?: number;
   land_area_pyeong_max?: number;
 };
+export type UnavailableReason =
+  | "no_parcel"
+  | "out_of_service_area"
+  | "source_unavailable";
 export type Meta = {
   data_as_of?: string;
+  // 토지 조회(/parcels/*)에서 정보를 줄 수 없는 이유
+  unavailable_reason?: UnavailableReason | null;
   reporting_lag_notice?: boolean;
   page?: number;
   page_size?: number;
@@ -148,4 +154,12 @@ export type Analysis = {
     ratio_source: string;
   } | null;
   glossary?: Record<string, string>;
+};
+
+// 토지 조회 결과 (/parcels/*). 토지 상세 화면은 아직 없어 주소·지목 정도만 쓴다
+export type Parcel = {
+  pnu: string;
+  jibun_address: string;
+  land_category?: string | null;
+  land_area_pyeong?: number | null;
 };

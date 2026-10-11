@@ -124,7 +124,11 @@ export default function MapCanvas(p: MapProps) {
         ? m.queryRenderedFeatures(e.point, { layers: [MARKER_LABEL_LAYER.id, MARKER_DOT_LAYER.id] })
         : [];
       const id = hit[0]?.properties?.id;
-      latest.current.onEvent(id ? { type: "marker", id: String(id) } : { type: "mapClick" });
+      latest.current.onEvent(
+        id
+          ? { type: "marker", id: String(id) }
+          : { type: "mapClick", lat: e.lngLat.lat, lng: e.lngLat.lng },
+      );
     });
     // 처음 지도를 띄우지 못한 경우만 화면에 알린다(타일 하나가 실패한 것은 무시)
     m.on("error", (e) => {

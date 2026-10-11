@@ -7,6 +7,7 @@ import {
   draftFor,
   validateDraft,
   changeProperty,
+  PERIOD_NOTICE,
   type Draft,
 } from "../state/market";
 import { Btn, Chip, Header, Section, T, s } from "../components/ui";
@@ -94,7 +95,7 @@ export function FilterScreen({
             />
           </View>
           <View style={[s.row, { flexWrap: "wrap" }]}>
-            {[1, 3, 6, 12, 24, 36, 60].map((n) => (
+            {[1, 3, 6, 12].map((n) => (
               <Chip
                 key={n}
                 selected={d.period === String(n)}
@@ -104,6 +105,9 @@ export function FilterScreen({
               </Chip>
             ))}
           </View>
+          <T size={14} color={C.muted}>
+            {PERIOD_NOTICE}
+          </T>
         </Section>
         {filters.deal_type === "sale"
           ? range("매매가", "priceMin", "priceMax", "억 원")
