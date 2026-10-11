@@ -1,44 +1,59 @@
 import React from "react";
 import { View } from "react-native";
-import Svg, { Path, Line, Rect } from "react-native-svg";
-import type { Trend } from "../api/types";
+import Svg, { Path, Line, Rect, Circle } from "react-native-svg";
+import type { Trend, Metrics } from "../api/types";
 import { C } from "../theme/tokens";
 import { T, s } from "./ui";
 export function Chart({
   trend,
   bar = false,
-  comparison = false,
+  comparison,
+  metric = "median_price_per_pyeong",
 }: {
   trend: Trend[];
   bar?: boolean;
-  comparison?: boolean;
+  comparison?: Trend[];
+  metric?: keyof Metrics;
 }) {
   const items = bar ? trend.slice(-12) : trend;
-  const values = items.flatMap((v) =>
-    v.median_price_per_pyeong == null ? [] : [v.median_price_per_pyeong],
+  const compared = items.map((p) =>
+    comparison?.find((c) => c.month === p.month),
+  );
+  const values = [...items, ...compared].flatMap((p) =>
+    p?.[metric] == null ? [] : [p[metric]!],
   );
   if (!values.length) return <T color={C.muted}>표시할 통계가 없어요</T>;
   const min = Math.min(...values) * 0.93,
     max = Math.max(...values) * 1.04;
   const x = (i: number) => 12 + (i * 296) / Math.max(1, items.length - 1);
-  const y = (v: number) => 118 - ((v - min) / (max - min)) * 95;
-  let path = "";
-  let pen = false;
-  items.forEach((v, i) => {
-    if (v.median_price_per_pyeong == null) {
+  const y = (v: number) => 118 - ((v - min) / Math.max(1, max - min)) * 95;
+  const path = (points: (Trend | undefined)[]) => {
+    let d = "",
       pen = false;
-      return;
-    }
-    path += `${pen ? "L" : "M"}${x(i)},${y(v.median_price_per_pyeong)} `;
-    pen = true;
-  });
+    points.forEach((p, i) => {
+      const v = p?.[metric];
+      if (v == null) {
+        pen = false;
+        return;
+      }
+      d += `${pen ? "L" : "M"}${x(i)},${y(v)} `;
+      pen = true;
+    });
+    return d;
+  };
+  const label =
+    metric === "median_monthly_rent"
+      ? "월세"
+      : metric === "median_deposit_per_pyeong"
+        ? "평당 보증금"
+        : "평당가";
   return (
     <View style={{ gap: 8 }}>
       <Svg
         viewBox="0 0 320 140"
         width="100%"
         height={140}
-        accessibilityLabel="월별 평당가 중위값 추이"
+        accessibilityLabel={`월별 ${label} 중위값 추이`}
       >
         {[25, 65, 105, 125].map((i) => (
           <Line
@@ -53,14 +68,14 @@ export function Chart({
         ))}
         {bar ? (
           items.map(
-            (v, i) =>
-              v.median_price_per_pyeong != null && (
+            (p, i) =>
+              p[metric] != null && (
                 <Rect
-                  key={i}
-                  x={12 + i * 25}
-                  y={y(v.median_price_per_pyeong)}
-                  width={16}
-                  height={125 - y(v.median_price_per_pyeong)}
+                  key={p.month}
+                  x={12 + (i * 296) / Math.max(1, items.length)}
+                  y={y(p[metric]!)}
+                  width={Math.min(16, 240 / Math.max(1, items.length))}
+                  height={125 - y(p[metric]!)}
                   rx={2}
                   fill={C.ink}
                 />
@@ -68,15 +83,46 @@ export function Chart({
           )
         ) : (
           <>
-            <Path d={path} stroke={C.ink} strokeWidth={2.5} fill="none" />
+            <Path
+              d={path(items)}
+              stroke={C.ink}
+              strokeWidth={2.5}
+              fill="none"
+            />
+            {items.map(
+              (p, i) =>
+                p[metric] != null && (
+                  <Circle
+                    key={p.month}
+                    cx={x(i)}
+                    cy={y(p[metric]!)}
+                    r={2.5}
+                    fill={C.ink}
+                  />
+                ),
+            )}
             {comparison && (
-              <Path
-                d="M12 105 L42 108 L62 96 L100 101 L132 90 L172 94 L204 80 L244 84 L275 77 L308 71"
-                stroke={C.light}
-                strokeWidth={2}
-                strokeDasharray="5 4"
-                fill="none"
-              />
+              <>
+                {compared.map(
+                  (p, i) =>
+                    p?.[metric] != null && (
+                      <Circle
+                        key={p.month}
+                        cx={x(i)}
+                        cy={y(p[metric]!)}
+                        r={2}
+                        fill={C.light}
+                      />
+                    ),
+                )}
+                <Path
+                  d={path(compared)}
+                  stroke={C.light}
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
+                  fill="none"
+                />
+              </>
             )}
           </>
         )}
@@ -89,14 +135,14 @@ export function Chart({
           {items.at(-1)?.month.replace("-", ".")}
         </T>
       </View>
-      {!bar && (
-        <T size={12} color={C.muted}>
-          중위값 · 전용 기준 · 거래 3건 미만인 달은 비움
-        </T>
-      )}
+      <T size={12} color={C.muted}>
+        {label} 중위값 ·{" "}
+        {metric === "median_monthly_rent" ? "월 금액" : "전용 기준"} · 거래 3건
+        미만인 달은 비움
+      </T>
       {comparison && (
         <T size={12} color={C.muted}>
-          ━ 이 단지　┅ 우동 전체 (샘플 비교)
+          ━ 이 단지　┅ 해당 지역 전체
         </T>
       )}
     </View>

@@ -31,6 +31,25 @@ const reg = await get(
   "/search?q=" + encodeURIComponent("해운대") + "&limit=30",
 );
 assert.ok(reg.data.some((r) => r.type === "region"));
+for (const deal of ["sale", "jeonse", "monthly"]) {
+  const stats = await get(
+    `/complexes/${c.complex_id}/stats?property_type=apartment&deal_type=${deal}&period_months=36`,
+  );
+  assert.equal(stats.data.trend.length, 36);
+  assert.ok(Array.isArray(stats.data.area_types));
+  const region = await get(
+    `/stats/regions/${d.data.region_code}?property_type=apartment&deal_type=${deal}&period_months=12&exclude_direct=true`,
+  );
+  assert.equal(region.data.trend.length, 12);
+  const metric =
+    deal === "sale"
+      ? "median_price_per_pyeong"
+      : deal === "jeonse"
+        ? "median_deposit_per_pyeong"
+        : "median_monthly_rent";
+  assert.ok(metric in stats.data);
+  assert.ok(region.meta.method.includes("직거래 제외"));
+}
 const terms = await get("/glossary");
 assert.ok(terms.data.length);
 const term = await get("/glossary/" + terms.data[0].id);
