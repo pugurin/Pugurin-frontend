@@ -110,8 +110,9 @@ export class Repository {
     });
     return this.mode === "sample"
       ? Promise.resolve({ data: SAMPLE_STATS, meta: SAMPLE_META })
-      : Promise.reject<Envelope<Stats>>(
-          new ApiError("시세 통계 API가 준비 중이에요", "API_PENDING"),
+      : this.client.get<Stats>(
+          `${kind === "complex" ? `/complexes/${encodeURIComponent(id)}/stats` : `/stats/regions/${encodeURIComponent(id)}`}?${q}`,
+          signal,
         );
   }
   analysis(id: string, signal?: AbortSignal): Promise<Envelope<Analysis>> {
