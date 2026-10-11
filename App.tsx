@@ -41,10 +41,11 @@ import {
 import { TransactionsScreen } from "./src/screens/TransactionsScreen";
 import { LoadingTip } from "./src/components/LoadingTip";
 import { GlossaryContext } from "./src/glossary/context";
+import { kstDateKey, pickToday, todayLabel } from "./src/glossary/today";
 type Route =
   | { kind: "filter" }
   | { kind: "search" }
-  | { kind: "term"; term: Term; map: boolean }
+  | { kind: "term"; term: Term; map: boolean; badge?: string }
   | { kind: "terms"; name: TermKind }
   | { kind: "date" }
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string };
@@ -73,6 +74,9 @@ export default function App() {
   const [termsRetry, setTermsRetry] = useState(0);
   const [popup, setPopup] = useState<Term | null>(null);
   const [toast, setToast] = useState("");
+  // 오늘의 용어: 더보기에서 끄기(계속), ✕로 닫은 날(그날만). 둘 다 기기에 저장
+  const [todayEnabled, setTodayEnabled] = useState(true);
+  const [todayClosedOn, setTodayClosedOn] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -106,6 +110,8 @@ export default function App() {
     loadStored<"평" | "㎡">("unit", "평").then(setUnit);
     loadStored<"normal" | "satellite">("base", "normal").then(setBase);
     loadStored<boolean>("cad", false).then(setCad);
+    loadStored<boolean>("today_enabled", true).then(setTodayEnabled);
+    loadStored<string>("today_closed_on", "").then(setTodayClosedOn);
     return () => clearTimeout(toastTimer.current);
   }, []);
   useEffect(() => {
@@ -183,6 +189,11 @@ export default function App() {
       notify("단지 위치를 불러올 수 없어요");
     }
   };
+  const todayKey = kstDateKey();
+  const todayTerm =
+    todayEnabled && todayClosedOn !== todayKey
+      ? pickToday(terms, todayKey)
+      : null;
   if (initError)
     return (
       <SafeAreaView
@@ -247,6 +258,7 @@ export default function App() {
       <TermDetail
         term={route.term}
         returnMap={route.map}
+        badge={route.badge}
         onBack={() => {
           setRoute(null);
           if (route.map) setTab("map");
@@ -339,6 +351,20 @@ export default function App() {
                 onHelp={onHelp}
                 notify={notify}
                 onMeta={setDataMeta}
+                todayTerm={todayTerm}
+                onTodayOpen={(term) =>
+                  setRoute({
+                    kind: "term",
+                    term,
+                    map: true,
+                    badge: `오늘의 용어 · ${todayLabel(todayKey)}`,
+                  })
+                }
+                onTodayClose={() => {
+                  setTodayClosedOn(todayKey);
+                  void store("today_closed_on", todayKey);
+                  notify("오늘은 더 보이지 않아요\n더보기에서 끌 수 있어요");
+                }}
               />
             </GlossaryContext.Provider>
           </View>
@@ -371,6 +397,11 @@ export default function App() {
               onDate={() => setRoute({ kind: "date" })}
               onTerms={(name) => setRoute({ kind: "terms", name })}
               notify={notify}
+              todayEnabled={todayEnabled}
+              onTodayEnabled={(on) => {
+                setTodayEnabled(on);
+                void store("today_enabled", on);
+              }}
             />
           )}
         </View>

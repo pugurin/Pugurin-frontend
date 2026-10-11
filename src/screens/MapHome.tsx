@@ -16,6 +16,7 @@ import type {
   Meta,
   RegionMarker,
   SearchResult,
+  Term,
 } from "../api/types";
 import {
   changeDeal,
@@ -30,6 +31,7 @@ import {
   PROPERTY,
 } from "../state/market";
 import { C } from "../theme/tokens";
+import { TodayTermCard } from "../components/TodayTermCard";
 import {
   AdSlot,
   Btn,
@@ -64,6 +66,9 @@ export function MapHome({
   onHelp,
   notify,
   onMeta,
+  todayTerm,
+  onTodayOpen,
+  onTodayClose,
 }: {
   repo: Repository;
   filters: Filters;
@@ -82,6 +87,10 @@ export function MapHome({
   onHelp: (name: string) => void;
   notify: (s: string) => void;
   onMeta: (m: Meta) => void;
+  // 오늘의 용어 (D01). null이면 카드를 보여주지 않는다(꺼짐·오늘 닫음·용어 없음)
+  todayTerm?: Term | null;
+  onTodayOpen?: (term: Term) => void;
+  onTodayClose?: () => void;
 }) {
   const [camera, setCamera] = useState<Camera>(HOME);
   const [markers, setMarkers] = useState<Marker[]>([]);
@@ -197,7 +206,8 @@ export function MapHome({
         const reason = r.meta?.unavailable_reason;
         if (r.data) notify("토지 상세 화면은 준비 중이에요");
         else if (reason === "no_parcel") notify("이곳은 토지 정보가 없어요");
-        else if (reason === "out_of_service_area") notify("부산 지역만 지원해요");
+        else if (reason === "out_of_service_area")
+          notify("부산 지역만 지원해요");
         else notify("토지 정보를 잠시 불러올 수 없어요");
       })
       .catch(() => {
@@ -439,6 +449,18 @@ export function MapHome({
             목록 보기
           </Btn>
         </View>
+        {/* D01·D04: 오늘의 용어 카드. 목록 보기 위, 시트가 열리면 숨긴다 */}
+        {todayTerm && !selected && (
+          <View
+            style={{ position: "absolute", left: 12, right: 12, bottom: 72 }}
+          >
+            <TodayTermCard
+              term={todayTerm}
+              onOpen={() => onTodayOpen?.(todayTerm)}
+              onClose={() => onTodayClose?.()}
+            />
+          </View>
+        )}
         {loading ? (
           <View
             style={{
