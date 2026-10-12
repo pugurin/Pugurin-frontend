@@ -23,4 +23,8 @@ export type MapProps = {
   initial: Camera;
   command?: MapCommand & { nonce: number };
   onEvent: (e: MapEvent) => void;
+  onMarkerHover?: (
+    marker: Marker | null,
+    point?: { x: number; y: number },
+  ) => void;
 };

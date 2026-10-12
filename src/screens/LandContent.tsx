@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import {
+  ActivityIndicator,
+  View,
+  Platform,
+  useWindowDimensions,
+} from "react-native";
 import type { Repository } from "../api/repository";
 import type {
   BBox,
@@ -46,7 +51,7 @@ export function LandContent({
   onHelp: (name: string) => void;
   unit: "평" | "㎡";
 }) {
-  const landFilters=useMemo(()=>changeProperty(filters,"land"),[filters]);
+  const landFilters = useMemo(() => changeProperty(filters, "land"), [filters]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [stats, setStats] = useState<Stats>();
   const [meta, setMeta] = useState<Meta>();
@@ -113,6 +118,8 @@ export function LandContent({
   const nonBuilding =
     parcel?.land_category &&
     ["도로", "하천", "구거", "제방"].includes(parcel.land_category);
+  const { width } = useWindowDimensions();
+  const twoColumns = Platform.OS === "web" && width >= 768 && width < 1024;
   const validTrend =
     stats?.trend.filter((p) => p.median_price_per_pyeong != null) ?? [];
   const max = Math.max(1, ...validTrend.map((p) => p.median_price_per_pyeong!));
@@ -214,7 +221,8 @@ export function LandContent({
           {nonBuilding ? (
             <View style={[s.card, { backgroundColor: C.landWash }]}>
               <T>
-                {parcel.land_category} 지목은 여기서 건축 규모를 계산하지 않아요.
+                {parcel.land_category} 지목은 여기서 건축 규모를 계산하지
+                않아요.
               </T>
             </View>
           ) : (
@@ -319,139 +327,154 @@ export function LandContent({
         <T size={14} color={C.muted}>
           지목별 조회는 아직 지원하지 않아 전체 토지 거래를 보여줘요.
         </T>
-        {statsBusy ? (
-          <ActivityIndicator />
-        ) : statsError ? (
-          <View style={{ gap: 8 }}>
-            <T color={C.muted}>{statsError}</T>
-            <Btn secondary small onPress={retryStats}>
-              통계 다시 시도
-            </Btn>
-          </View>
-        ) : stats ? (
-          <View style={[s.row, { alignItems: "stretch", gap: 12 }]}>
-            <View style={[s.card, { flex: 1, gap: 5 }]}>
-              <LabelHelp
-                title="평당가 중위값"
-                onPress={() => onHelp("중위값")}
-              />
-              <T size={22} bold>
-                {amount(stats.median_price_per_pyeong)}
-              </T>
-              <T size={12} color={C.muted}>
-                전체 지목 기준
-              </T>
-            </View>
-            <View style={[s.card, { flex: 1, gap: 5 }]}>
-              <T size={14} color={C.muted}>
-                거래
-              </T>
-              <T size={22} bold>
-                {stats.transaction_count}건
-              </T>
-              <T size={12} color={C.muted}>
-                해제 거래 제외
-              </T>
-            </View>
-          </View>
-        ) : (
-          <T size={15} color={C.muted}>
-            지역을 선택하면 동 단위 통계를 볼 수 있어요.
-          </T>
-        )}
-        {!!validTrend.length && (
-          <View style={{ gap: 8 }}>
-            <T size={18} bold>
-              월별 토지 땅값
-            </T>
-            <T size={13} color={C.muted}>
-              서버 제공 평당가 중위값 · 전체 지목
-            </T>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "flex-end",
-                height: 132,
-                gap: 6,
-              }}
-            >
-              {validTrend.map((point) => (
-                <View
-                  key={point.month}
-                  style={{ flex: 1, alignItems: "center", gap: 4 }}
-                >
-                  <T size={11} numberOfLines={1}>
-                    {amount(point.median_price_per_pyeong)}
-                  </T>
-                  <View
-                    style={{
-                      width: "100%",
-                      height: Math.max(
-                        8,
-                        (point.median_price_per_pyeong! / max) * 82,
-                      ),
-                      borderTopLeftRadius: 4,
-                      borderTopRightRadius: 4,
-                      backgroundColor: C.land,
-                    }}
-                  />
-                  <T size={11}>{point.month.slice(5)}월</T>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-        <T size={14} color={C.muted}>
-          토지 거래는 지번이 가려져 있어 동 단위로만 보여줘요.
-        </T>
-        <T size={18} bold>
-          최근 토지 거래
-        </T>
-        {txError ? (
-          <View style={{ gap: 8 }}>
-            <T color={C.muted}>{txError}</T>
-            <Btn
-              secondary
-              small
-              onPress={() => setTxRetry((value) => value + 1)}
-            >
-              거래 다시 시도
-            </Btn>
-          </View>
-        ) : !txBusy && !transactions.length ? (
-          <T size={15} color={C.muted}>
-            이 조건의 토지 거래가 없어요.
-          </T>
-        ) : (
-          transactions.slice(0, 5).map((tx) => (
-            <View
-              key={tx.id}
-              style={{
-                paddingVertical: 10,
-                borderBottomWidth: 1,
-                borderColor: C.rule,
-                gap: 4,
-              }}
-            >
-              <View style={s.between}>
-                <T bold>{tx.address}</T>
-                <T bold color={C.land}>
-                  {amount(tx.price)}
-                </T>
+        <View
+          style={{
+            flexDirection: twoColumns ? "row" : "column",
+            gap: twoColumns ? 20 : 12,
+          }}
+        >
+          <View
+            style={{ flex: twoColumns ? 1 : undefined, minWidth: 0, gap: 12 }}
+          >
+            {statsBusy ? (
+              <ActivityIndicator />
+            ) : statsError ? (
+              <View style={{ gap: 8 }}>
+                <T color={C.muted}>{statsError}</T>
+                <Btn secondary small onPress={retryStats}>
+                  통계 다시 시도
+                </Btn>
               </View>
-              <T size={13} color={C.muted}>
-                {tx.contract_date} · 평당 {amount(tx.price_per_pyeong)}
+            ) : stats ? (
+              <View style={[s.row, { alignItems: "stretch", gap: 12 }]}>
+                <View style={[s.card, { flex: 1, gap: 5 }]}>
+                  <LabelHelp
+                    title="평당가 중위값"
+                    onPress={() => onHelp("중위값")}
+                  />
+                  <T size={22} bold>
+                    {amount(stats.median_price_per_pyeong)}
+                  </T>
+                  <T size={12} color={C.muted}>
+                    전체 지목 기준
+                  </T>
+                </View>
+                <View style={[s.card, { flex: 1, gap: 5 }]}>
+                  <T size={14} color={C.muted}>
+                    거래
+                  </T>
+                  <T size={22} bold>
+                    {stats.transaction_count}건
+                  </T>
+                  <T size={12} color={C.muted}>
+                    해제 거래 제외
+                  </T>
+                </View>
+              </View>
+            ) : (
+              <T size={15} color={C.muted}>
+                지역을 선택하면 동 단위 통계를 볼 수 있어요.
               </T>
-            </View>
-          ))
-        )}
-        <Btn secondary icon="list" onPress={onList}>
-          토지 거래 목록 보기
-        </Btn>
-        <T size={13} color={C.light}>
-          실거래가 기준 {meta?.data_as_of ?? "확인 중"} · 최근 30일 거래는 아직
-          신고되지 않았을 수 있어요
-        </T>
+            )}
+            {!!validTrend.length && (
+              <View style={{ gap: 8 }}>
+                <T size={18} bold>
+                  월별 토지 땅값
+                </T>
+                <T size={13} color={C.muted}>
+                  서버 제공 평당가 중위값 · 전체 지목
+                </T>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-end",
+                    height: 132,
+                    gap: 6,
+                  }}
+                >
+                  {validTrend.map((point) => (
+                    <View
+                      key={point.month}
+                      style={{ flex: 1, alignItems: "center", gap: 4 }}
+                    >
+                      <T size={11} numberOfLines={1}>
+                        {amount(point.median_price_per_pyeong)}
+                      </T>
+                      <View
+                        style={{
+                          width: "100%",
+                          height: Math.max(
+                            8,
+                            (point.median_price_per_pyeong! / max) * 82,
+                          ),
+                          borderTopLeftRadius: 4,
+                          borderTopRightRadius: 4,
+                          backgroundColor: C.land,
+                        }}
+                      />
+                      <T size={11}>{point.month.slice(5)}월</T>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+          <View
+            style={{ flex: twoColumns ? 1 : undefined, minWidth: 0, gap: 12 }}
+          >
+            <T size={14} color={C.muted}>
+              토지 거래는 지번이 가려져 있어 동 단위로만 보여줘요.
+            </T>
+            <T size={18} bold>
+              최근 토지 거래
+            </T>
+            {txError ? (
+              <View style={{ gap: 8 }}>
+                <T color={C.muted}>{txError}</T>
+                <Btn
+                  secondary
+                  small
+                  onPress={() => setTxRetry((value) => value + 1)}
+                >
+                  거래 다시 시도
+                </Btn>
+              </View>
+            ) : !txBusy && !transactions.length ? (
+              <T size={15} color={C.muted}>
+                이 조건의 토지 거래가 없어요.
+              </T>
+            ) : (
+              transactions.slice(0, 5).map((tx) => (
+                <View
+                  key={tx.id}
+                  style={{
+                    paddingVertical: 10,
+                    borderBottomWidth: 1,
+                    borderColor: C.rule,
+                    gap: 4,
+                  }}
+                >
+                  <View style={s.between}>
+                    <T bold>{tx.address}</T>
+                    <T bold color={C.land}>
+                      {amount(tx.price)}
+                    </T>
+                  </View>
+                  <T size={13} color={C.muted}>
+                    {tx.contract_date} · 평당 {amount(tx.price_per_pyeong)}
+                  </T>
+                </View>
+              ))
+            )}
+            <Btn secondary icon="list" onPress={onList}>
+              토지 거래 목록 보기
+            </Btn>
+            <T size={13} color={C.light}>
+              실거래가 기준 {meta?.data_as_of ?? "확인 중"} · 최근 30일 거래는
+              아직 신고되지 않았을 수 있어요
+            </T>
+          </View>
+        </View>
       </View>
     </View>
   );
