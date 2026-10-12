@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import type { Repository } from "../api/repository";
 import type {
   Analysis,
@@ -33,7 +33,6 @@ import {
 } from "../components/ui";
 import { Chart } from "../components/Chart";
 import { TransactionRow } from "../components/TransactionRow";
-import { LoadingTip } from "../components/LoadingTip";
 import type { SheetStage } from "../components/Sheet";
 export function RegionContent({
   marker,
@@ -142,13 +141,7 @@ export function RegionContent({
             }
           />
         ) : loading ? (
-          <>
-            <StateCard loading />
-            {/* 1초 넘게 걸리면 지역 시트 아래 용어 팁 (토지는 토지 용어) */}
-            <LoadingTip
-              context={filters.property_type === "land" ? "land" : "region"}
-            />
-          </>
+          <StateCard loading />
         ) : (
           <T size={14} color={C.light}>
             {statsMessage ?? "표시할 지역 통계가 없어요"}
@@ -287,40 +280,12 @@ export function ComplexContent({
     return () => abort.abort();
   }, [complex?.region_code, complex?.property_type, repo, filters, retry]);
   if (!complex || error)
-    return error ? (
-      // T03: 실패하면 팁 없이 다시 시도만
-      <View style={{ gap: 12, paddingTop: 12 }}>
-        <View style={{ gap: 6 }}>
-          <T size={19} bold>
-            단지 정보를 불러오지 못했어요
-          </T>
-          <T size={15} color={C.muted}>
-            인터넷 연결을 확인하고 다시 시도해 주세요.
-          </T>
-        </View>
-        <Btn secondary onPress={() => setRetry((x) => x + 1)}>
-          다시 시도
-        </Btn>
-      </View>
-    ) : !loading ? (
-      <StateCard />
-    ) : (
-      // 살짝 높이에서도 팁이 다 보이게 로딩 표시는 한 줄로 줄인다 (T02)
-      <View style={{ gap: 12 }}>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-            paddingVertical: 8,
-          }}
-        >
-          <ActivityIndicator color={C.primary} />
-          <T color={C.muted}>단지 정보를 불러오는 중…</T>
-        </View>
-        {/* 1초 넘게 걸리면 용어 팁. 실패하면 팁 없이 다시 시도만 (T03) */}
-        <LoadingTip context="complex" />
-      </View>
+    return (
+      <StateCard
+        loading={loading}
+        error={error}
+        onRetry={() => setRetry((x) => x + 1)}
+      />
     );
   const tx = items[0];
   const a =

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   BackHandler,
   Platform,
   Pressable,
@@ -38,8 +39,6 @@ import {
   type TermKind,
 } from "./src/screens/MoreScreen";
 import { TransactionsScreen } from "./src/screens/TransactionsScreen";
-import { Splash } from "./src/components/Splash";
-import { GlossaryContext } from "./src/glossary/context";
 type Route =
   | { kind: "filter" }
   | { kind: "search" }
@@ -204,8 +203,18 @@ export default function App() {
     );
   if (!fonts || !id)
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
-        <Splash />
+      <SafeAreaView
+        style={{
+          flex: 1,
+          backgroundColor: C.bg,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <ActivityIndicator />
+        <T color={C.muted} style={{ marginTop: 12 }}>
+          퍼그린을 준비하는 중…
+        </T>
       </SafeAreaView>
     );
   let overlay: React.ReactNode = null;
@@ -292,43 +301,35 @@ export default function App() {
               pointerEvents: tab === "map" ? "auto" : "none",
             }}
           >
-            {/* 시트 로딩 팁이 용어 목록을 쓰고 용어 상세를 연다 */}
-            <GlossaryContext.Provider
-              value={{
-                terms,
-                openTerm: (term) => setRoute({ kind: "term", term, map: true }),
+            <MapHome
+              key={mode}
+              repo={repo}
+              filters={filters}
+              onFilters={setFilters}
+              onSearch={() => setRoute({ kind: "search" })}
+              onFilter={() => setRoute({ kind: "filter" })}
+              onList={(args) => setRoute({ kind: "transactions", ...args })}
+              onDate={() => setRoute({ kind: "date" })}
+              unit={unit}
+              onUnit={(u) => {
+                setUnit(u);
+                void store("unit", u);
               }}
-            >
-              <MapHome
-                key={mode}
-                repo={repo}
-                filters={filters}
-                onFilters={setFilters}
-                onSearch={() => setRoute({ kind: "search" })}
-                onFilter={() => setRoute({ kind: "filter" })}
-                onList={(args) => setRoute({ kind: "transactions", ...args })}
-                onDate={() => setRoute({ kind: "date" })}
-                unit={unit}
-                onUnit={(u) => {
-                  setUnit(u);
-                  void store("unit", u);
-                }}
-                base={base}
-                onBase={(b) => {
-                  setBase(b);
-                  void store("base", b);
-                }}
-                cadastral={cad}
-                onCadastral={(c) => {
-                  setCad(c);
-                  void store("cad", c);
-                }}
-                focus={focus}
-                onHelp={onHelp}
-                notify={notify}
-                onMeta={setDataMeta}
-              />
-            </GlossaryContext.Provider>
+              base={base}
+              onBase={(b) => {
+                setBase(b);
+                void store("base", b);
+              }}
+              cadastral={cad}
+              onCadastral={(c) => {
+                setCad(c);
+                void store("cad", c);
+              }}
+              focus={focus}
+              onHelp={onHelp}
+              notify={notify}
+              onMeta={setDataMeta}
+            />
           </View>
           {tab === "glossary" && (
             <GlossaryScreen
