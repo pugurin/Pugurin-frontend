@@ -21,7 +21,7 @@ export const DEFAULT_TIPS: Term[] = TERMS.slice()
   .slice(0, 10);
 
 // 매물 유형 탭을 바꿀 때 로딩 화면(용어 팁)을 보여주는 최소 시간
-export const TYPE_SWITCH_MS = 1000;
+export const TYPE_SWITCH_MS = 700;
 
 let lastTipId: string | null = null;
 

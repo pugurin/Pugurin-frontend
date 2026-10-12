@@ -90,7 +90,7 @@ export function MapHome({
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [meta, setMeta] = useState<Meta>();
   const [loading, setLoading] = useState(true);
-  // 매물 유형 탭을 바꿀 때 보여주는 로딩 화면(용어 팁). 최소 1초, 마커가 더 늦으면 다 불러올 때까지
+  // 매물 유형 탭을 바꿀 때 보여주는 로딩 화면(용어 팁). 최소 0.7초, 마커가 더 늦으면 다 불러올 때까지
   const [switching, setSwitching] = useState<{ to: Property; n: number }>();
   const [switchWait, setSwitchWait] = useState(false);
   const [error, setError] = useState<string | null>(null);

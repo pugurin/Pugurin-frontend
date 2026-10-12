@@ -49,19 +49,19 @@ function Harness() {
 
 describe("매물 유형 탭을 바꿀 때 로딩 화면", () => {
   afterEach(cleanup);
-  it("다른 유형을 누르면 용어 팁과 함께 1초 정도 보이고 사라진다", async () => {
+  it("다른 유형을 누르면 용어 팁과 함께 0.7초 정도 보이고 사라진다", async () => {
     render(<Harness />);
     fireEvent.click(screen.getByText("오피스텔"));
     expect(screen.getByText("오피스텔 실거래가를 불러오는 중")).toBeTruthy();
     expect(screen.getByText("용어 자세히 ›")).toBeTruthy();
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 500));
     expect(screen.queryByText("오피스텔 실거래가를 불러오는 중")).toBeTruthy();
     await waitFor(
       () =>
         expect(
           screen.queryByText("오피스텔 실거래가를 불러오는 중"),
         ).toBeNull(),
-      { timeout: 2000 },
+      { timeout: 1500 },
     );
   });
   it("이미 선택된 탭을 다시 누르면 띄우지 않는다", () => {
