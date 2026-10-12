@@ -22,7 +22,7 @@ import {
   sampleSearch,
   sampleTransactions,
 } from "./fixtures";
-import { queryForFilters } from "../state/market";
+import { queryForFilters, TREND_MONTHS } from "../state/market";
 export type Mode = "api" | "sample";
 export class Repository {
   constructor(
@@ -106,7 +106,8 @@ export class Repository {
     const q = new URLSearchParams({
       property_type: f.property_type,
       deal_type: f.deal_type,
-      period_months: kind === "complex" ? "36" : String(f.period_months),
+      period_months:
+        kind === "complex" ? String(TREND_MONTHS) : String(f.period_months),
       exclude_direct: String(f.exclude_direct),
     });
     return this.mode === "sample"

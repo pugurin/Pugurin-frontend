@@ -19,6 +19,7 @@ import {
   formatPrice,
   markerLabel,
   priceLabel,
+  TREND_MONTHS,
 } from "../state/market";
 import {
   Btn,
@@ -268,7 +269,11 @@ export function ComplexContent({
     const abort = new AbortController();
     repo
       .stats(
-        { ...filters, property_type: complex.property_type, period_months: 36 },
+        {
+          ...filters,
+          property_type: complex.property_type,
+          period_months: TREND_MONTHS,
+        },
         complex.region_code,
         "region",
         abort.signal,
@@ -358,15 +363,18 @@ export function ComplexContent({
         </>
       ) : (
         <>
-          <T size={14} color={C.muted} style={{ marginVertical: 8 }}>
-            {complex.build_year
-              ? `${complex.build_year}년 준공`
-              : "준공연도 정보 없음"}{" "}
-            ·{" "}
-            {complex.household_count
-              ? `${complex.household_count.toLocaleString()}세대`
-              : "세대수 정보 없음"}
-          </T>
+          {/* 세대수는 공공데이터에 없어 실데이터에서 항상 null, 준공연도도 비어 올 수 있다 → 있는 것만 */}
+          {(complex.build_year || complex.household_count) && (
+            <T size={14} color={C.muted} style={{ marginVertical: 8 }}>
+              {[
+                complex.build_year && `${complex.build_year}년 준공`,
+                complex.household_count &&
+                  `${complex.household_count.toLocaleString()}세대`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </T>
+          )}
           <View style={[s.row, { marginVertical: 10, flexWrap: "wrap" }]}>
             {complex.area_types.map((ar) => (
               <Chip
@@ -393,8 +401,8 @@ export function ComplexContent({
           <Section
             title={
               filters.deal_type === "monthly"
-                ? "월세 추이 · 최근 3년"
-                : "평당가 추이 · 최근 3년"
+                ? "월세 추이 · 최근 1년"
+                : "평당가 추이 · 최근 1년"
             }
             right={<Help onPress={() => onHelp("평당가")} />}
           >

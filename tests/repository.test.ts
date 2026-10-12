@@ -79,7 +79,8 @@ it("지역·단지 통계는 머지된 경로와 필터를 사용하고 응답 �
   expect(urls[0]).toContain("/complexes/id/stats?");
   expect(urls[0]).toContain("deal_type=monthly");
   expect(urls[0]).toContain("exclude_direct=true");
-  expect(urls[0]).toContain("period_months=36");
+  // 실데이터가 12개월뿐이라 단지 추이도 12개월만 받는다
+  expect(urls[0]).toContain("period_months=12");
   expect(urls[1]).toContain("/stats/regions/2635010500?");
   expect(urls[1]).toContain("period_months=12");
   expect(result.data).toEqual(data);

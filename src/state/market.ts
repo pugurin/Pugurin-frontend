@@ -140,6 +140,8 @@ export function draftFor(f: Filters): Draft {
 // 실거래 데이터는 최근 12개월만 있다(백엔드 가이드). 그보다 긴 기간은 같은 결과라 고르지 못하게 한다
 export const MAX_PERIOD_MONTHS = 12;
 export const PERIOD_NOTICE = "실거래 데이터는 최근 12개월까지 있어요";
+// 단지·비교 추이 그래프 기간. 데이터가 12개월뿐이라 더 길게 받으면 그래프 대부분이 비어 보인다
+export const TREND_MONTHS = MAX_PERIOD_MONTHS;
 export function validateDraft(
   f: Filters,
   d: Draft,
