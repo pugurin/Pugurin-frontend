@@ -219,10 +219,13 @@ export function TermDetail({
   term,
   onBack,
   returnMap = false,
+  badge,
 }: {
   term: Term;
   onBack: () => void;
   returnMap?: boolean;
+  // 오늘의 용어 카드에서 들어오면 "오늘의 용어 · 10월 11일"
+  badge?: string;
 }) {
   return (
     <View style={s.screen}>
@@ -233,6 +236,22 @@ export function TermDetail({
       <ScrollView
         contentContainerStyle={{ padding: 20, paddingBottom: 32, gap: 16 }}
       >
+        {badge && (
+          <View
+            style={{
+              alignSelf: "flex-start",
+              borderWidth: 1.5,
+              borderColor: C.ink,
+              borderRadius: 6,
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+            }}
+          >
+            <T size={14} bold>
+              {badge}
+            </T>
+          </View>
+        )}
         <T size={14} color={term.category === "land" ? C.land : C.muted}>
           {CATEGORIES[term.category]}
         </T>
