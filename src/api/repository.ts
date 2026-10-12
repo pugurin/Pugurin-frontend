@@ -60,13 +60,6 @@ export class Repository {
   ): Promise<Envelope<Transaction[]>> {
     if (this.mode === "sample")
       return Promise.resolve(sampleTransactions(f, opts));
-    if (!opts.complexId)
-      return Promise.reject(
-        new ApiError(
-          "지역·지도 영역의 거래 목록 API가 준비 중이에요",
-          "API_PENDING",
-        ),
-      );
     // 단지 거래이력 API는 지도 가격/기간 필터를 받지 않는다. 명세에 있는 필드만 보낸다.
     const q = opts.complexId
       ? new URLSearchParams({
@@ -117,23 +110,29 @@ export class Repository {
           signal,
         );
   }
-  analysis(id: string, signal?: AbortSignal): Promise<Envelope<Analysis>> {
-    return this.mode === "sample"
-      ? Promise.resolve({
-          data: {
-            zoning_summary: {
-              zone_type: "제3종일반주거지역",
-              plain_explanation:
-                "중간 높이 이상의 아파트를 지을 수 있는 주거지역이에요.",
-              max_building_coverage_ratio: 50,
-              max_floor_area_ratio: 300,
-              ratio_source: "샘플 · 부산광역시 도시계획 조례",
-            },
-          },
-        })
-      : Promise.reject<Envelope<Analysis>>(
-          new ApiError("분석 API가 준비 중이에요", "API_PENDING"),
-        );
+  analysis(
+    id: string,
+    signal?: AbortSignal,
+    filters?: Filters,
+  ): Promise<Envelope<Analysis>> {
+    if (this.mode === "sample")
+      return Promise.resolve({
+        data: {
+          zonings: null,
+          comparison: null,
+          disclaimer: "샘플 통계 · 실제 거래 정보가 아닙니다",
+        },
+        meta: SAMPLE_META,
+      });
+    const q = new URLSearchParams({
+      deal_type: filters?.deal_type ?? "sale",
+      period_months: String(TREND_MONTHS),
+      exclude_direct: String(filters?.exclude_direct ?? false),
+    });
+    return this.client.get<Analysis>(
+      `/analysis/complexes/${encodeURIComponent(id)}?${q}`,
+      signal,
+    );
   }
   // 토지 정보(VWorld 미사용으로 공급처 없음)는 지금 항상 data: null + unavailable_reason으로 온다
   parcelLookup(lat: number, lng: number, signal?: AbortSignal) {

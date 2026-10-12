@@ -25,6 +25,7 @@ import {
   toMapZoom,
 } from "./style";
 import type { MapProps } from "./types";
+import { selectionFeatures, SELECTION_SOURCE, SELECTION_CIRCLE_LAYER, PARCEL_FILL_LAYER, PARCEL_LINE_LAYER } from "./selection";
 
 // Metro가 maplibre-gl 워커를 번들하지 못해 public/maplibre/에 복사해 둔 파일을 쓴다 (scripts/copy-maplibre-worker.mjs)
 setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
@@ -64,6 +65,21 @@ export default function MapCanvas(p: MapProps) {
       m.addSource(MARKER_SOURCE, { type: "geojson", data });
       m.addLayer(MARKER_DOT_LAYER as WebLayer);
       m.addLayer(MARKER_LABEL_LAYER as WebLayer);
+    }
+  };
+
+  // 선택 전용 소스만 갱신하고 기존 거래 마커는 유지한다.
+  const syncSelection = (m: MapLibre) => {
+    if (!styleReady.current) return;
+    const { selectionPoint, parcelGeometry } = latest.current;
+    const data = selectionFeatures(selectionPoint, parcelGeometry);
+    const source = m.getSource(SELECTION_SOURCE) as GeoJSONSource | undefined;
+    if (source) source.setData(data);
+    else {
+      m.addSource(SELECTION_SOURCE, { type: "geojson", data });
+      const before = m.getLayer(MARKER_DOT_LAYER.id) ? MARKER_DOT_LAYER.id : undefined;
+      for (const layer of [PARCEL_FILL_LAYER, PARCEL_LINE_LAYER, SELECTION_CIRCLE_LAYER])
+        m.addLayer(layer as WebLayer, before);
     }
   };
 
@@ -112,6 +128,7 @@ export default function MapCanvas(p: MapProps) {
             stretchY: [[RADIUS, BOX - RADIUS]],
           });
       });
+      syncSelection(m);
       syncMarkers(m);
     });
     m.once("load", () => {
@@ -150,6 +167,10 @@ export default function MapCanvas(p: MapProps) {
   useEffect(() => {
     if (map.current) syncMarkers(map.current);
   }, [p.markers, p.property, p.unit, p.selected]);
+
+  useEffect(() => {
+    if (map.current) syncSelection(map.current);
+  }, [p.selectionPoint, p.parcelGeometry]);
 
   useEffect(() => {
     const m = map.current, c = p.command;

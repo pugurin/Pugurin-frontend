@@ -14,6 +14,7 @@ import type {
   Filters,
   Marker,
   Meta,
+  Parcel,
   RegionMarker,
   SearchResult,
   Term,
@@ -48,6 +49,7 @@ import { Sheet, type SheetStage } from "../components/Sheet";
 import MapCanvas from "../map/MapCanvas";
 import type { Camera, MapCommand, MapEvent } from "../map/types";
 import { ComplexContent, RegionContent } from "./MarketSheets";
+import { LandContent } from "./LandContent";
 export type Focus = { result: SearchResult; nonce: number };
 export function MapHome({
   repo,
@@ -110,6 +112,16 @@ export function MapHome({
   const [selected, setSelected] = useState<
     | { kind: "complex"; id: string }
     | { kind: "region"; marker: RegionMarker }
+    | {
+        kind: "land";
+        lat: number;
+        lng: number;
+        bbox: BBox;
+        region?: { code: string; name: string };
+        parcel: Parcel | null;
+        loading: boolean;
+        error?: string;
+      }
     | null
   >(null);
   const [stage, setStage] = useState<SheetStage>("peek");
@@ -121,20 +133,27 @@ export function MapHome({
   const outside = !queryBBox;
   const isLand = filters.property_type === "land";
   const move = (c: MapCommand) => setCommand({ ...c, nonce: ++ref.current });
-  const close = () => setSelected(null);
+  const landRequest = useRef<AbortController | null>(null);
+  const pendingLand = useRef<{ lat: number; lng: number; region?: { code: string; name: string } } | null>(null);
+  const close = () => {
+    pendingLand.current = null;
+    landRequest.current?.abort();
+    setSelected(null);
+  };
+  useEffect(() => () => landRequest.current?.abort(), []);
   useEffect(() => {
     const controller = new AbortController();
-    if (outside) {
-      setLoading(false);
-      setMarkers([]);
-      setError(null);
-      return () => controller.abort();
-    }
     const changed = lastFilters.current !== filters;
     lastFilters.current = filters;
     if (changed) {
       setMarkers([]);
       close();
+    }
+    if (outside) {
+      setLoading(false);
+      setMarkers([]);
+      setError(null);
+      return () => controller.abort();
     }
     setError(null);
     const loadingTimer = setTimeout(() => setLoading(true), 250);
@@ -179,6 +198,7 @@ export function MapHome({
   }, [repo, filters, camera, outside, retry]);
   useEffect(() => {
     if (!focus) return;
+    close();
     const r = focus.result;
     if (r.type === "complex" && r.complex_id) {
       setSelected({ kind: "complex", id: r.complex_id });
@@ -186,6 +206,21 @@ export function MapHome({
       move({ type: "move", lat: r.lat, lng: r.lng, zoom: 15 });
     } else if (r.type === "region") {
       close();
+      if (isLand && r.region_code) {
+        setSelected({
+          kind: "land",
+          lat: r.lat,
+          lng: r.lng,
+          bbox: r.bbox ?? camera.bbox,
+          region: {
+            code: r.region_code,
+            name: r.name ?? r.address ?? "선택한 지역",
+          },
+          parcel: null,
+          loading: false,
+        });
+        setStage("half");
+      }
       move({
         type: "move",
         bbox: r.bbox,
@@ -194,35 +229,79 @@ export function MapHome({
         zoom: r.region_level === "sigungu" ? 12 : 14,
       });
     } else {
+      if (isLand) pendingLand.current = {
+        lat: r.lat,
+        lng: r.lng,
+        region: r.region_code ? { code: r.region_code, name: r.name ?? r.address ?? "선택한 지역" } : undefined,
+      };
       move({ type: "move", lat: r.lat, lng: r.lng, zoom: 15 });
-      landLookup(r.lat, r.lng);
     }
   }, [focus]);
-  // 토지: 필지 정보 공급처가 없어 지금은 항상 안내만 나온다(백엔드 가이드 6번). 생기면 토지 시트로 잇는다
-  const landRequest = useRef<AbortController | null>(null);
-  const landLookup = (lat: number, lng: number) => {
+  // 공급처가 없으면 동 단위 토지 거래(A), 필지를 받으면 필지 상세(B)를 연다.
+  const landLookup = (
+    lat: number,
+    lng: number,
+    region?: { code: string; name: string },
+    destinationBBox?: BBox,
+  ) => {
+    pendingLand.current = null;
     landRequest.current?.abort();
     const controller = new AbortController();
     landRequest.current = controller;
+    const selection = {
+      kind: "land" as const,
+      lat,
+      lng,
+      bbox: destinationBBox ?? queryBBox ?? camera.bbox,
+      region,
+      parcel: null,
+      loading: true,
+    };
+    setSelected(selection);
+    setStage("half");
     repo
       .parcelLookup(lat, lng, controller.signal)
       .then((r) => {
         if (controller.signal.aborted) return;
         const reason = r.meta?.unavailable_reason;
-        if (r.data) notify("토지 상세 화면은 준비 중이에요");
-        else if (reason === "no_parcel") notify("이곳은 토지 정보가 없어요");
-        else if (reason === "out_of_service_area")
-          notify("부산 지역만 지원해요");
-        else notify("토지 정보를 잠시 불러올 수 없어요");
+        if (reason === "no_parcel" || reason === "out_of_service_area") {
+          setSelected(null);
+          notify(
+            reason === "no_parcel"
+              ? "이곳은 토지 정보가 없어요"
+              : "부산 지역만 지원해요",
+          );
+          return;
+        }
+        setSelected({ ...selection, parcel: r.data, loading: false });
       })
-      .catch(() => {
+      .catch((e) => {
         if (!controller.signal.aborted)
-          notify("토지 정보를 잠시 불러올 수 없어요");
+          setSelected({
+            ...selection,
+            loading: false,
+            error: e.message ?? "토지 정보를 잠시 불러올 수 없어요",
+          });
       });
   };
   const markerPress = (m: Marker) => {
+    pendingLand.current = null;
+    landRequest.current?.abort();
     if (m.kind === "region") {
-      setSelected({ kind: "region", marker: m });
+      landRequest.current?.abort();
+      setSelected(
+        isLand
+          ? {
+              kind: "land",
+              lat: m.lat,
+              lng: m.lng,
+              bbox: queryBBox ?? camera.bbox,
+              region: { code: m.region_code, name: m.name },
+              parcel: null,
+              loading: false,
+            }
+          : { kind: "region", marker: m },
+      );
       setStage("half");
       move({
         type: "move",
@@ -237,8 +316,14 @@ export function MapHome({
   };
   const onEvent = (e: MapEvent) => {
     if (e.type === "camera") {
-      if (e.bbox.every(Number.isFinite))
+      if (e.bbox.every(Number.isFinite)) {
         setCamera({ lat: e.lat, lng: e.lng, zoom: e.zoom, bbox: e.bbox });
+        const pending = pendingLand.current;
+        if (pending && Math.abs(e.lat - pending.lat) < 0.0005 && Math.abs(e.lng - pending.lng) < 0.0005) {
+          pendingLand.current = null;
+          landLookup(pending.lat, pending.lng, pending.region, busanQueryBBox(e.bbox) ?? e.bbox);
+        }
+      }
     }
     if (e.type === "marker") {
       const m = markers.find((m) => markerId(m) === e.id);
@@ -407,6 +492,16 @@ export function MapHome({
           property={filters.property_type}
           selected={selected?.kind === "complex" ? selected.id : null}
           unit={unit}
+          selectionPoint={
+            selected?.kind === "land"
+              ? { lat: selected.lat, lng: selected.lng }
+              : undefined
+          }
+          parcelGeometry={
+            selected?.kind === "land"
+              ? (selected.parcel?.geometry as any)
+              : null
+          }
           base={base}
           cadastral={isLand || cadastral}
           initial={HOME}
@@ -446,16 +541,18 @@ export function MapHome({
             />
           )}
         </View>
-        <View style={{ position: "absolute", left: 12, bottom: 16 }}>
-          <Btn
-            secondary
-            small
-            icon="list"
-            onPress={() => onList({ bbox: camera.bbox })}
-          >
-            목록 보기
-          </Btn>
-        </View>
+        {!selected && (
+          <View style={{ position: "absolute", left: 12, bottom: 16 }}>
+            <Btn
+              secondary
+              small
+              icon="list"
+              onPress={() => onList({ bbox: camera.bbox })}
+            >
+              목록 보기
+            </Btn>
+          </View>
+        )}
         {/* D01·D04: 오늘의 용어 카드. 목록 보기 위, 시트가 열리면 숨긴다 */}
         {todayTerm && !selected && (
           <View
@@ -543,15 +640,39 @@ export function MapHome({
           </View>
         ) : null}
       </View>
-      <Notice
-        date={meta?.data_as_of}
-        mode={meta?.data_mode ?? repo.mode}
-        onPress={onDate}
-      />
+      {!selected && (
+        <Notice
+          date={meta?.data_as_of}
+          mode={meta?.data_mode ?? repo.mode}
+          onPress={onDate}
+        />
+      )}
       <AdSlot />
       {selected && (
-        <Sheet stage={stage} onStage={setStage} onClose={close}>
-          {selected.kind === "complex" ? (
+        <Sheet key={selected.kind === "complex" ? `complex:${selected.id}` : selected.kind === "land" ? `land:${selected.lat},${selected.lng}` : `region:${selected.marker.region_code}`} stage={stage} onStage={setStage} onClose={close}>
+          {selected.kind === "land" ? (
+            <LandContent
+              repo={repo}
+              filters={filters}
+              bbox={selected.bbox}
+              region={selected.region}
+              parcel={selected.parcel}
+              loading={selected.loading}
+              error={selected.error}
+              onRetry={() =>
+                landLookup(selected.lat, selected.lng, selected.region, selected.bbox)
+              }
+              onList={() =>
+                onList({
+                  bbox: selected.bbox,
+                  region: selected.region?.code,
+                  name: selected.region?.name,
+                })
+              }
+              onHelp={onHelp}
+              unit={unit}
+            />
+          ) : selected.kind === "complex" ? (
             <ComplexContent
               key={selected.id}
               id={selected.id}

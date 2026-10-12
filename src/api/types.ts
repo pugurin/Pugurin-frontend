@@ -150,20 +150,42 @@ export type Stats = Metrics & {
     Metrics & { transaction_count: number; trend: Trend[] })[];
 };
 export type Analysis = {
-  zoning_summary: {
-    zone_type: string;
-    plain_explanation: string;
-    max_building_coverage_ratio: number;
-    max_floor_area_ratio: number;
-    ratio_source: string;
-  } | null;
-  glossary?: Record<string, string>;
+  region?: { region_code: string; name: string };
+  complex_stats?: Stats;
+  region_stats?: Stats;
+  comparison?: { summary: string; difference_percent: number } | null;
+  zonings: NonNullable<Parcel["zonings"]> | null;
+  disclaimer?: string;
 };
 
-// 토지 조회 결과 (/parcels/*). 토지 상세 화면은 아직 없어 주소·지목 정도만 쓴다
+// 토지 조회 결과 (/parcels/*). 공급처가 응답한 값만 화면에 사용한다
 export type Parcel = {
   pnu: string;
   jibun_address: string;
   land_category?: string | null;
   land_area_pyeong?: number | null;
+  land_area_m2?: number | null;
+  official_land_price_per_m2?: number | null;
+  official_land_price_year?: number | null;
+  road_side?: string | null;
+  shape?: string | null;
+  geometry?: Record<string, unknown> | null;
+  zonings?:
+    | {
+        zone_type: string;
+        area_ratio: number | null;
+        inclusion: string;
+        max_building_coverage_ratio: number | null;
+        max_floor_area_ratio: number | null;
+      }[]
+    | null;
+  ratio_source?: string | null;
+  restrictions?:
+    | {
+        name: string;
+        plain_explanation: string;
+        glossary_term_id: string | null;
+      }[]
+    | null;
+  glossary?: Record<string, string>;
 };
