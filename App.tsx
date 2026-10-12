@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   BackHandler,
   Platform,
   Pressable,
@@ -39,7 +38,7 @@ import {
   type TermKind,
 } from "./src/screens/MoreScreen";
 import { TransactionsScreen } from "./src/screens/TransactionsScreen";
-import { LoadingTip } from "./src/components/LoadingTip";
+import { Splash } from "./src/components/Splash";
 import { GlossaryContext } from "./src/glossary/context";
 import { kstDateKey, pickToday, todayLabel } from "./src/glossary/today";
 type Route =
@@ -217,18 +216,7 @@ export default function App() {
   if (!fonts || !id)
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
-        <View
-          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-        >
-          <ActivityIndicator />
-          <T color={C.muted} style={{ marginTop: 12 }}>
-            퍼그린을 준비하는 중…
-          </T>
-        </View>
-        {/* T01: 처음 열 때 1초 넘게 걸리면 기본 용어에서 팁. 누를 수 없다 */}
-        <View style={{ alignSelf: "stretch", padding: 20, paddingBottom: 28 }}>
-          <LoadingTip context="splash" terms={[]} linked={false} />
-        </View>
+        <Splash />
       </SafeAreaView>
     );
   let overlay: React.ReactNode = null;
