@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "퍼그린",
+    "name": "가지가지",
     "slug": "pugurin",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -16,7 +16,7 @@
       "package": "com.pugurin.app"
     },
     "web": {
-      "name": "퍼그린 · 부산 실거래가 지도",
+      "name": "가지가지 · 부산 실거래가 지도",
       "bundler": "metro"
     },
     "plugins": [
@@ -28,6 +28,7 @@
       ],
       "expo-font",
       "@maplibre/maplibre-react-native"
-    ]
+    ],
+    "icon": "./assets/brand/icon.png"
   }
 }
