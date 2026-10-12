@@ -20,6 +20,9 @@ export const DEFAULT_TIPS: Term[] = TERMS.slice()
   .sort((a, b) => a.display_order - b.display_order)
   .slice(0, 10);
 
+// 매물 유형 탭을 바꿀 때 로딩 화면(용어 팁)을 보여주는 최소 시간
+export const TYPE_SWITCH_MS = 700;
+
 let lastTipId: string | null = null;
 
 // 화면에 맞는 분류에서 직전 팁과 다른 용어를 고른다. 용어 목록이 없으면 기본 팁 10개에서 고른다

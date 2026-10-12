@@ -14,6 +14,7 @@ import type {
   Filters,
   Marker,
   Meta,
+  Property,
   RegionMarker,
   SearchResult,
 } from "../api/types";
@@ -30,6 +31,8 @@ import {
   PROPERTY,
 } from "../state/market";
 import { C } from "../theme/tokens";
+import { LoadingTip } from "../components/LoadingTip";
+import { TYPE_SWITCH_MS } from "../glossary/tips";
 import {
   AdSlot,
   Btn,
@@ -87,6 +90,9 @@ export function MapHome({
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [meta, setMeta] = useState<Meta>();
   const [loading, setLoading] = useState(true);
+  // 매물 유형 탭을 바꿀 때 보여주는 로딩 화면(용어 팁). 최소 0.7초, 마커가 더 늦으면 다 불러올 때까지
+  const [switching, setSwitching] = useState<{ to: Property; n: number }>();
+  const [switchWait, setSwitchWait] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapRetry, setMapRetry] = useState(0);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -197,7 +203,8 @@ export function MapHome({
         const reason = r.meta?.unavailable_reason;
         if (r.data) notify("토지 상세 화면은 준비 중이에요");
         else if (reason === "no_parcel") notify("이곳은 토지 정보가 없어요");
-        else if (reason === "out_of_service_area") notify("부산 지역만 지원해요");
+        else if (reason === "out_of_service_area")
+          notify("부산 지역만 지원해요");
         else notify("토지 정보를 잠시 불러올 수 없어요");
       })
       .catch(() => {
@@ -205,6 +212,14 @@ export function MapHome({
           notify("토지 정보를 잠시 불러올 수 없어요");
       });
   };
+  useEffect(() => {
+    if (!switching) return;
+    const timer = setTimeout(() => setSwitchWait(false), TYPE_SWITCH_MS);
+    return () => clearTimeout(timer);
+  }, [switching?.n]);
+  useEffect(() => {
+    if (switching && !switchWait && !loading) setSwitching(undefined);
+  }, [switching, switchWait, loading]);
   const markerPress = (m: Marker) => {
     if (m.kind === "region") {
       setSelected({ kind: "region", marker: m });
@@ -314,6 +329,9 @@ export function MapHome({
             accessibilityRole="tab"
             accessibilityState={{ selected: filters.property_type === k }}
             onPress={() => {
+              if (k === filters.property_type) return;
+              setSwitching({ to: k, n: (switching?.n ?? 0) + 1 });
+              setSwitchWait(true);
               onFilters(changeProperty(filters, k));
               if (k === "land") notify("토지는 매매 거래만 볼 수 있어요");
             }}
@@ -511,6 +529,33 @@ export function MapHome({
             )}
           </View>
         ) : null}
+        {switching && (
+          <Pressable
+            accessibilityLabel="로딩 화면 닫기"
+            onPress={() => setSwitching(undefined)}
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 30,
+              backgroundColor: C.bg,
+              justifyContent: "center",
+              padding: 20,
+              gap: 18,
+            }}
+          >
+            <View style={{ alignItems: "center", gap: 10 }}>
+              <ActivityIndicator color={C.primary} />
+              <T size={16} color={C.muted}>
+                {PROPERTY[switching.to]} 실거래가를 불러오는 중
+              </T>
+            </View>
+            <LoadingTip
+              key={switching.n}
+              context={switching.to === "land" ? "land" : "complex"}
+              delayMs={0}
+            />
+          </Pressable>
+        )}
       </View>
       <Notice
         date={meta?.data_as_of}

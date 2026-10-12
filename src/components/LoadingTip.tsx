@@ -11,20 +11,26 @@ export function LoadingTip({
   context,
   terms: given,
   linked = true,
+  delayMs = TIP_DELAY_MS,
 }: {
   context: TipContext;
   // 스플래시는 컨텍스트가 없어 직접 넘긴다(비우면 앱에 넣어 둔 기본 용어)
   terms?: Term[];
   // false면 누를 수 없다(스플래시)
   linked?: boolean;
+  // 0이면 바로 보여준다(유형 탭 전환처럼 일부러 기다리는 화면)
+  delayMs?: number;
 }) {
   const glossary = useGlossary();
-  const [tip, setTip] = useState<Term | null>(null);
+  const [tip, setTip] = useState<Term | null>(() =>
+    delayMs > 0 ? null : pickTip(given ?? glossary.terms, context),
+  );
   // 로딩이 1초를 넘을 때만 고른다. 팁 때문에 로딩을 늦추지 않는다
   useEffect(() => {
+    if (delayMs <= 0) return;
     const timer = setTimeout(
       () => setTip(pickTip(given ?? glossary.terms, context)),
-      TIP_DELAY_MS,
+      delayMs,
     );
     return () => clearTimeout(timer);
   }, []);
