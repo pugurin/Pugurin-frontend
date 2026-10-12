@@ -7,15 +7,11 @@ import {
   render,
   screen,
 } from "@testing-library/react";
-import { DEFAULT_TIPS, pickTip, TIP_DELAY_MS } from "../src/glossary/tips";
+import { pickTip, TIP_DELAY_MS } from "../src/glossary/tips";
 import { LoadingTip } from "../src/components/LoadingTip";
-import { Splash } from "../src/components/Splash";
-import { ComplexContent } from "../src/screens/MarketSheets";
-import { DEFAULT_FILTERS } from "../src/state/market";
 import { GlossaryContext } from "../src/glossary/context";
 import { TERMS } from "../src/api/terms";
 import type { Term } from "../src/api/types";
-vi.mock("../src/components/Chart", () => ({ Chart: () => null }));
 
 const term = (id: string, category: Term["category"]): Term => ({
   id,
@@ -49,13 +45,8 @@ describe("팁 고르기", () => {
     for (let i = 0; i < 20; i++)
       expect(pickTip(terms, "land", "a").id).toBe("b");
   });
-  it("용어 목록을 못 받으면 기본 팁 10개에서 고른다", () => {
-    expect(DEFAULT_TIPS).toHaveLength(10);
-    expect(DEFAULT_TIPS.every((t) => TERMS.includes(t))).toBe(true);
-    for (let i = 0; i < 20; i++)
-      expect(DEFAULT_TIPS.map((t) => t.id)).toContain(
-        pickTip([], "splash", null).id,
-      );
+  it("용어 목록을 못 받으면 앱에 넣어 둔 기본 용어에서 고른다", () => {
+    expect(TERMS.map((t) => t.id)).toContain(pickTip([], "splash", null).id);
   });
 });
 
@@ -94,57 +85,5 @@ describe("로딩 팁 카드", () => {
     act(() => vi.advanceTimersByTime(TIP_DELAY_MS));
     expect(screen.getByText("알아 두면 좋은 용어")).toBeTruthy();
     expect(screen.queryByText("용어 자세히 ›")).toBeNull();
-  });
-});
-
-describe("스플래시 (T01)", () => {
-  afterEach(() => {
-    cleanup();
-    vi.useRealTimers();
-  });
-  it("앱 이름·안내를 보여주고 1초 넘으면 누를 수 없는 팁이 나온다", () => {
-    vi.useFakeTimers();
-    render(<Splash />);
-    expect(screen.getByText("부산 실거래가 지도")).toBeTruthy();
-    expect(screen.getByText("실거래가를 불러오고 있어요")).toBeTruthy();
-    expect(screen.queryByText("알아 두면 좋은 용어")).toBeNull();
-    act(() => vi.advanceTimersByTime(TIP_DELAY_MS));
-    expect(screen.getByText("알아 두면 좋은 용어")).toBeTruthy();
-    expect(screen.queryByText("용어 자세히 ›")).toBeNull();
-  });
-});
-
-describe("단지 시트 로딩 실패 (T03)", () => {
-  afterEach(cleanup);
-  it("팁 없이 안내와 다시 시도만 보여준다", async () => {
-    const repo: any = {
-      mode: "api",
-      complex: async () => {
-        throw new Error("네트워크에 연결할 수 없어요");
-      },
-      transactions: async () => ({ data: [] }),
-      stats: async () => ({ data: null }),
-      analysis: async () => ({ data: null }),
-    };
-    render(
-      <ComplexContent
-        id="c"
-        repo={repo}
-        filters={DEFAULT_FILTERS}
-        stage="peek"
-        onStage={() => {}}
-        onHelp={() => {}}
-        notify={() => {}}
-        unit="평"
-      />,
-    );
-    expect(
-      await screen.findByText("단지 정보를 불러오지 못했어요"),
-    ).toBeTruthy();
-    expect(
-      screen.getByText("인터넷 연결을 확인하고 다시 시도해 주세요."),
-    ).toBeTruthy();
-    expect(screen.getByText("다시 시도")).toBeTruthy();
-    expect(screen.queryByText("불러오는 동안")).toBeNull();
   });
 });

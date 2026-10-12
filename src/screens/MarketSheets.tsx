@@ -287,23 +287,12 @@ export function ComplexContent({
     return () => abort.abort();
   }, [complex?.region_code, complex?.property_type, repo, filters, retry]);
   if (!complex || error)
-    return error ? (
-      // T03: 실패하면 팁 없이 다시 시도만
-      <View style={{ gap: 12, paddingTop: 12 }}>
-        <View style={{ gap: 6 }}>
-          <T size={19} bold>
-            단지 정보를 불러오지 못했어요
-          </T>
-          <T size={15} color={C.muted}>
-            인터넷 연결을 확인하고 다시 시도해 주세요.
-          </T>
-        </View>
-        <Btn secondary onPress={() => setRetry((x) => x + 1)}>
-          다시 시도
-        </Btn>
-      </View>
-    ) : !loading ? (
-      <StateCard />
+    return error || !loading ? (
+      <StateCard
+        loading={loading}
+        error={error}
+        onRetry={() => setRetry((x) => x + 1)}
+      />
     ) : (
       // 살짝 높이에서도 팁이 다 보이게 로딩 표시는 한 줄로 줄인다 (T02)
       <View style={{ gap: 12 }}>

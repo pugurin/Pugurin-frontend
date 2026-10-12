@@ -15,21 +15,16 @@ const CATEGORIES: Record<TipContext, Term["category"][] | null> = {
 // 로딩이 이 시간을 넘을 때만 팁을 보여준다(빨리 끝나면 깜빡이지 않게)
 export const TIP_DELAY_MS = 1000;
 
-// 팁 목록을 못 받을 때(오프라인) 쓰는 기본 팁 10개: 앱에 넣어 둔 용어 중 관리자 순서 앞쪽
-export const DEFAULT_TIPS: Term[] = TERMS.slice()
-  .sort((a, b) => a.display_order - b.display_order)
-  .slice(0, 10);
-
 let lastTipId: string | null = null;
 
-// 화면에 맞는 분류에서 직전 팁과 다른 용어를 고른다. 용어 목록이 없으면 기본 팁 10개에서 고른다
+// 화면에 맞는 분류에서 직전 팁과 다른 용어를 고른다. 용어 목록이 없으면 앱에 넣어 둔 기본 용어를 쓴다
 export function pickTip(
   terms: Term[],
   context: TipContext,
   last: string | null = lastTipId,
   random: () => number = Math.random,
 ): Term {
-  const source = terms.length ? terms : DEFAULT_TIPS;
+  const source = terms.length ? terms : TERMS;
   const categories = CATEGORIES[context];
   const matching = categories
     ? source.filter((t) => categories.includes(t.category))
