@@ -24,10 +24,10 @@ export const DEFAULT_FILTERS: Filters = {
   exclude_direct: false,
 };
 export const HOME = {
-  lat: 35.163,
-  lng: 129.145,
-  zoom: 15,
-  bbox: [129.12, 35.14, 129.18, 35.185] as BBox,
+  lat: 36,
+  lng: 128,
+  zoom: 6.3,
+  bbox: [124, 32, 132, 40] as BBox,
 };
 export function kakaoZoom(level: number) {
   return Math.max(0, Math.min(22, 18 - level));
@@ -137,13 +137,16 @@ export function draftFor(f: Filters): Draft {
     exclude: f.exclude_direct,
   };
 }
+// 실거래 데이터는 최근 12개월만 있다(백엔드 가이드). 그보다 긴 기간은 같은 결과라 고르지 못하게 한다
+export const MAX_PERIOD_MONTHS = 12;
+export const PERIOD_NOTICE = "실거래 데이터는 최근 12개월까지 있어요";
 export function validateDraft(
   f: Filters,
   d: Draft,
 ): { filters?: Filters; error?: string } {
   const n = Number(d.period);
-  if (!Number.isInteger(n) || n < 1 || n > 60)
-    return { error: "기간은 1~60개월로 입력해 주세요" };
+  if (!Number.isInteger(n) || n < 1 || n > MAX_PERIOD_MONTHS)
+    return { error: `기간은 1~${MAX_PERIOD_MONTHS}개월로 입력해 주세요` };
   const result = changeProperty(f, f.property_type);
   result.period_months = n;
   result.exclude_direct = d.exclude;
@@ -178,4 +181,15 @@ export function validateDraft(
       });
   }
   return { filters: result };
+}
+
+// 전국 지도 중 부산 거래 데이터가 있는 부분만 서버에 요청한다.
+export function busanQueryBBox(bbox: BBox): BBox | undefined {
+  const box: BBox = [
+    Math.max(128.75, bbox[0]),
+    Math.max(34.85, bbox[1]),
+    Math.min(129.35, bbox[2]),
+    Math.min(35.4, bbox[3]),
+  ];
+  return box[0] < box[2] && box[1] < box[3] ? box : undefined;
 }

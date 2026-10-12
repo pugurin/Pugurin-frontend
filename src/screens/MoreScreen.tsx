@@ -1,12 +1,10 @@
 import React, { useState } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
+import { Linking, Pressable, ScrollView, Switch, View } from "react-native";
 import type { Mode } from "../api/repository";
 import { C } from "../theme/tokens";
 import { Btn, Header, Icon, Section, T, s } from "../components/ui";
 export type TermKind =
-  | "서비스 이용약관"
-  | "위치기반서비스 이용약관"
-  | "개인정보 처리방침";
+  "서비스 이용약관" | "위치기반서비스 이용약관" | "개인정보 처리방침";
 export function MoreScreen({
   date,
   mode,
@@ -14,12 +12,16 @@ export function MoreScreen({
   onDate,
   onTerms,
   notify,
+  todayEnabled,
+  onTodayEnabled,
 }: {
   date?: string;
   mode: Mode;
   onMode: (m: Mode) => void;
   onDate: () => void;
   onTerms: (k: TermKind) => void;
+  todayEnabled: boolean;
+  onTodayEnabled: (on: boolean) => void;
   notify: (s: string) => void;
 }) {
   const contact = process.env.EXPO_PUBLIC_CONTACT_EMAIL;
@@ -64,6 +66,21 @@ export function MoreScreen({
             관심 등록과 중개사 채팅은 2차에서 열려요
           </T>
         </View>
+        <Section title="용어">
+          <View style={[s.between, { minHeight: 48 }]}>
+            <T>오늘의 용어 보기</T>
+            <Switch
+              value={todayEnabled}
+              onValueChange={onTodayEnabled}
+              accessibilityLabel="오늘의 용어 보기"
+              trackColor={{ true: C.primary, false: C.rule }}
+              thumbColor={C.surface}
+            />
+          </View>
+          <T size={14} color={C.muted}>
+            지도 아래에 하루 한 개씩 부동산 용어를 보여드려요
+          </T>
+        </Section>
         <Section title="데이터">
           {row(
             "실거래가 기준일",

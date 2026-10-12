@@ -76,7 +76,7 @@ export function Icon({
   color?: string;
 }) {
   const I: LucideIcon = ICONS[name];
-  return <I size={size} color={color} strokeWidth={1.8} />;
+  return <I size={size * 0.875} color={color} strokeWidth={1.8} />;
 }
 export function T({
   children,
@@ -100,8 +100,8 @@ export function T({
       style={[
         {
           fontFamily: bold ? "Pretendard-Bold" : FONT,
-          fontSize: size,
-          lineHeight: size * 1.5,
+          fontSize: Math.max(11, size * 0.875),
+          lineHeight: Math.max(11, size * 0.875) * 1.45,
           fontWeight: bold ? "700" : "400",
           color,
         },
@@ -140,7 +140,7 @@ export function Btn({
       style={({ pressed }) => [
         s.btn,
         secondary && s.secondary,
-        small && { height: 48 },
+        small && { height: 38 },
         disabled && { opacity: 0.45 },
         pressed && { opacity: 0.75 },
         style,
@@ -168,6 +168,7 @@ export function IconBtn({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      hitSlop={5}
       onPress={onPress}
       style={({ pressed }) => [
         s.iconBtn,
@@ -362,10 +363,10 @@ export const s = StyleSheet.create({
     gap: 8,
   },
   btn: {
-    height: 52,
+    height: 44,
     borderRadius: 12,
     backgroundColor: C.primary,
-    paddingHorizontal: 18,
+    paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -377,15 +378,15 @@ export const s = StyleSheet.create({
     borderColor: C.rule,
   },
   iconBtn: {
-    width: 48,
-    height: 48,
+    width: 38,
+    height: 38,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 12,
   },
   chip: {
-    height: 44,
-    paddingHorizontal: 14,
+    height: 34,
+    paddingHorizontal: 10,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: C.rule,
@@ -394,7 +395,7 @@ export const s = StyleSheet.create({
     justifyContent: "center",
   },
   header: {
-    height: 64,
+    height: 52,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -404,14 +405,15 @@ export const s = StyleSheet.create({
     backgroundColor: C.bg,
   },
   input: {
+    minWidth: 0,
     fontFamily: FONT,
-    fontSize: 16,
+    fontSize: 14,
     color: C.ink,
-    height: 52,
+    height: 44,
     borderWidth: 1,
     borderColor: C.rule,
     borderRadius: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     backgroundColor: C.surface,
   },
   card: {
@@ -419,7 +421,7 @@ export const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.rule,
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
   },
   rule: { height: 1, backgroundColor: C.rule },
   screen: { flex: 1, backgroundColor: C.bg },
