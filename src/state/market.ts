@@ -137,11 +137,15 @@ export function draftFor(f: Filters): Draft {
     exclude: f.exclude_direct,
   };
 }
-// 실거래 데이터는 최근 12개월만 있다(백엔드 가이드). 그보다 긴 기간은 같은 결과라 고르지 못하게 한다
-export const MAX_PERIOD_MONTHS = 12;
-export const PERIOD_NOTICE = "실거래 데이터는 최근 12개월까지 있어요";
-// 단지·비교 추이 그래프 기간. 데이터가 12개월뿐이라 더 길게 받으면 그래프 대부분이 비어 보인다
-export const TREND_MONTHS = MAX_PERIOD_MONTHS;
+// 조회 기간: 최근 1~60개월 (API period_months 범위)
+export const MAX_PERIOD_MONTHS = 60;
+export const PERIOD_OPTIONS = [3, 6, 12, 24, 36, 60];
+export const FILTER_PERIOD_OPTIONS = [1, ...PERIOD_OPTIONS];
+// 거래 없음 카드의 [기간 늘리기]: 12개월 미만이면 12, 이상이면 두 배(최대 60)
+export const nextPeriod = (n: number) =>
+  n < 12 ? 12 : Math.min(MAX_PERIOD_MONTHS, n * 2);
+// 단지·지역 비교 추이 그래프 기간 (API 명세 기본값 3년)
+export const TREND_MONTHS = 36;
 export function validateDraft(
   f: Filters,
   d: Draft,
