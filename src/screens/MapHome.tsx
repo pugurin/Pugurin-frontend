@@ -27,7 +27,8 @@ import {
   busanQueryBBox,
   markerId,
   MAX_PERIOD_MONTHS,
-  PERIOD_NOTICE,
+  PERIOD_OPTIONS,
+  nextPeriod,
   PROPERTY,
 } from "../state/market";
 import { C } from "../theme/tokens";
@@ -520,10 +521,13 @@ export function MapHome({
                   secondary
                   small
                   onPress={() =>
-                    onFilters({ ...filters, period_months: MAX_PERIOD_MONTHS })
+                    onFilters({
+                      ...filters,
+                      period_months: nextPeriod(filters.period_months),
+                    })
                   }
                 >
-                  기간 늘리기 (최근 {MAX_PERIOD_MONTHS}개월)
+                  기간 늘리기 (최근 {nextPeriod(filters.period_months)}개월)
                 </Btn>
               </>
             ) : (
@@ -700,7 +704,7 @@ export function MapHome({
               />
             </View>
             <View style={[s.row, { flexWrap: "wrap" }]}>
-              {[3, 6, 12].map((n) => (
+              {PERIOD_OPTIONS.map((n) => (
                 <Chip
                   key={n}
                   selected={filters.period_months === n}
@@ -713,9 +717,6 @@ export function MapHome({
                 </Chip>
               ))}
             </View>
-            <T size={14} color={C.muted}>
-              {PERIOD_NOTICE}
-            </T>
           </Pressable>
         </Pressable>
       </Modal>
