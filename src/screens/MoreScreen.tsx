@@ -4,7 +4,9 @@ import type { Mode } from "../api/repository";
 import { C } from "../theme/tokens";
 import { Btn, Header, Icon, Section, T, s } from "../components/ui";
 export type TermKind =
-  "서비스 이용약관" | "위치기반서비스 이용약관" | "개인정보 처리방침";
+  | "서비스 이용약관"
+  | "위치기반서비스 이용약관"
+  | "개인정보 처리방침";
 export function MoreScreen({
   date,
   mode,
@@ -14,12 +16,16 @@ export function MoreScreen({
   notify,
   todayEnabled,
   onTodayEnabled,
+  tipsEnabled = true,
+  onTipsEnabled,
 }: {
   date?: string;
   mode: Mode;
   onMode: (m: Mode) => void;
   onDate: () => void;
   onTerms: (k: TermKind) => void;
+  tipsEnabled?: boolean;
+  onTipsEnabled?: (on: boolean) => void;
   todayEnabled: boolean;
   onTodayEnabled: (on: boolean) => void;
   notify: (s: string) => void;
@@ -63,10 +69,23 @@ export function MoreScreen({
         >
           <T bold>로그인 · 회원가입</T>
           <T size={14} color={C.light}>
-            관심 등록과 중개사 채팅은 2차에서 열려요
+            로그인과 관심 기능은 다음 단계에서 준비하고 있어요
           </T>
         </View>
         <Section title="용어">
+          <View style={[s.between, { minHeight: 48 }]}>
+            <T>로딩 중 용어 팁</T>
+            <Switch
+              value={tipsEnabled}
+              onValueChange={onTipsEnabled}
+              accessibilityLabel="로딩 중 용어 팁"
+              trackColor={{ true: C.primary, false: C.rule }}
+              thumbColor={C.surface}
+            />
+          </View>
+          <T size={14} color={C.muted}>
+            불러오는 시간이 길어질 때 쉬운 용어 설명을 보여드려요
+          </T>
           <View style={[s.between, { minHeight: 48 }]}>
             <T>오늘의 용어 보기</T>
             <Switch
@@ -78,7 +97,7 @@ export function MoreScreen({
             />
           </View>
           <T size={14} color={C.muted}>
-            지도 아래에 하루 한 개씩 부동산 용어를 보여드려요
+            하루 다섯 용어의 단어와 뜻을 짝지어 익혀요
           </T>
         </Section>
         <Section title="데이터">
@@ -110,7 +129,8 @@ export function MoreScreen({
         </Section>
         <Section title="데이터 출처">
           <T size={14} color={C.muted}>
-            국토교통부 실거래가 (공공데이터포털){"\n"}카카오맵 지도{"\n"}
+            국토교통부 실거래가 (공공데이터포털){"\n"}OpenFreeMap ·
+            OpenStreetMap 지도{"\n"}
             부산광역시 도시계획 조례
           </T>
         </Section>

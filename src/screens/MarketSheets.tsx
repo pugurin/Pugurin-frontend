@@ -32,6 +32,7 @@ import {
   T,
   s,
 } from "../components/ui";
+import { LoadingTip } from "../components/LoadingTip";
 import { Chart } from "../components/Chart";
 import { TransactionRow } from "../components/TransactionRow";
 import type { SheetStage } from "../components/Sheet";
@@ -286,11 +287,14 @@ export function ComplexContent({
   }, [complex?.region_code, complex?.property_type, repo, filters, retry]);
   if (!complex || error)
     return (
-      <StateCard
-        loading={loading}
-        error={error}
-        onRetry={() => setRetry((x) => x + 1)}
-      />
+      <>
+        <StateCard
+          loading={loading}
+          error={error}
+          onRetry={() => setRetry((x) => x + 1)}
+        />
+        <LoadingTip loading={loading} error={!!error} context="complex" />
+      </>
     );
   const tx = items[0];
   const a =
