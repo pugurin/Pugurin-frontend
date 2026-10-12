@@ -25,15 +25,24 @@ import {
   toMapZoom,
 } from "./style";
 import type { MapProps } from "./types";
-import { selectionFeatures, SELECTION_SOURCE, SELECTION_CIRCLE_LAYER, PARCEL_FILL_LAYER, PARCEL_LINE_LAYER } from "./selection";
+import { hoverLayers, markerHover } from "./hover";
+import {
+  selectionFeatures,
+  SELECTION_SOURCE,
+  SELECTION_CIRCLE_LAYER,
+  PARCEL_FILL_LAYER,
+  PARCEL_LINE_LAYER,
+} from "./selection";
 
 // Metro가 maplibre-gl 워커를 번들하지 못해 public/maplibre/에 복사해 둔 파일을 쓴다 (scripts/copy-maplibre-worker.mjs)
 setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
 // 마커 배경(둥근 사각형)을 캔버스로 그린다. 앱은 assets/map/box-*.png를 쓴다
-const BOX = 48, RADIUS = 16;
+const BOX = 48,
+  RADIUS = 16;
 function boxImage(color: string) {
-  const size = BOX, r = RADIUS;
+  const size = BOX,
+    r = RADIUS;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d")!;
@@ -77,8 +86,14 @@ export default function MapCanvas(p: MapProps) {
     if (source) source.setData(data);
     else {
       m.addSource(SELECTION_SOURCE, { type: "geojson", data });
-      const before = m.getLayer(MARKER_DOT_LAYER.id) ? MARKER_DOT_LAYER.id : undefined;
-      for (const layer of [PARCEL_FILL_LAYER, PARCEL_LINE_LAYER, SELECTION_CIRCLE_LAYER])
+      const before = m.getLayer(MARKER_DOT_LAYER.id)
+        ? MARKER_DOT_LAYER.id
+        : undefined;
+      for (const layer of [
+        PARCEL_FILL_LAYER,
+        PARCEL_LINE_LAYER,
+        SELECTION_CIRCLE_LAYER,
+      ])
         m.addLayer(layer as WebLayer, before);
     }
   };
@@ -88,7 +103,10 @@ export default function MapCanvas(p: MapProps) {
       .then((r) => r.json())
       .then((s: StyleSpecification) => setFreeStyle(koreanLabels(s)))
       .catch(() =>
-        latest.current.onEvent({ type: "error", message: "지도를 불러올 수 없어요" }),
+        latest.current.onEvent({
+          type: "error",
+          message: "지도를 불러올 수 없어요",
+        }),
       );
   }, []);
 
@@ -106,8 +124,11 @@ export default function MapCanvas(p: MapProps) {
     });
     m.touchZoomRotate.disableRotation();
     map.current = m;
+    const resize = new ResizeObserver(() => m.resize());
+    resize.observe(el.current!);
     const emit = () => {
-      const c = m.getCenter(), b = m.getBounds();
+      const c = m.getCenter(),
+        b = m.getBounds();
       latest.current.onEvent({
         type: "camera",
         lat: c.lat,
@@ -121,7 +142,8 @@ export default function MapCanvas(p: MapProps) {
       styleReady.current = true;
       const colors = { ...MARKER_COLOR, selected: SELECTED_COLOR };
       Object.entries(colors).forEach(([k, c]) => {
-        if (!m.hasImage(`box-${k}`)) m.addImage(`box-${k}`, boxImage(c), {
+        if (!m.hasImage(`box-${k}`))
+          m.addImage(`box-${k}`, boxImage(c), {
             pixelRatio: 2,
             // 모서리는 그대로 두고 가운데만 늘린다(9-slice)
             stretchX: [[RADIUS, BOX - RADIUS]],
@@ -136,9 +158,37 @@ export default function MapCanvas(p: MapProps) {
       emit();
     });
     m.on("moveend", emit);
+    const clearHover = () => latest.current.onMarkerHover?.(null);
+    const hover = (e: { point: { x: number; y: number } }) => {
+      const callback = latest.current.onMarkerHover;
+      if (!callback) return;
+      const finePointer =
+        window.matchMedia?.("(pointer: fine)").matches ?? false;
+      if (!styleReady.current || window.innerWidth < 1024 || !finePointer) {
+        callback(null);
+        return;
+      }
+      const layers = hoverLayers((id) => Boolean(m.getLayer(id)));
+      const hits = layers.length
+        ? m.queryRenderedFeatures([e.point.x, e.point.y], { layers })
+        : [];
+      const marker = markerHover(
+        latest.current.markers,
+        hits,
+        window.innerWidth,
+        finePointer,
+      );
+      callback(marker, marker ? { x: e.point.x, y: e.point.y } : undefined);
+    };
+    m.on("mousemove", hover);
+    m.on("mouseout", clearHover);
+    m.on("movestart", clearHover);
     m.on("click", (e) => {
+      clearHover();
       const hit = m.getLayer(MARKER_DOT_LAYER.id)
-        ? m.queryRenderedFeatures(e.point, { layers: [MARKER_LABEL_LAYER.id, MARKER_DOT_LAYER.id] })
+        ? m.queryRenderedFeatures(e.point, {
+            layers: [MARKER_LABEL_LAYER.id, MARKER_DOT_LAYER.id],
+          })
         : [];
       const id = hit[0]?.properties?.id;
       latest.current.onEvent(
@@ -150,22 +200,36 @@ export default function MapCanvas(p: MapProps) {
     // 처음 지도를 띄우지 못한 경우만 화면에 알린다(타일 하나가 실패한 것은 무시)
     m.on("error", (e) => {
       if (!m.loaded() && !m.isStyleLoaded())
-        latest.current.onEvent({ type: "error", message: "지도를 불러올 수 없어요" });
+        latest.current.onEvent({
+          type: "error",
+          message: "지도를 불러올 수 없어요",
+        });
       console.warn("[map]", e.error?.message);
     });
-    return () => m.remove();
+    return () => {
+      resize.disconnect();
+      m.off("mousemove", hover);
+      m.off("mouseout", clearHover);
+      m.off("movestart", clearHover);
+      m.remove();
+    };
   }, []);
 
   useEffect(() => {
     // diff로 바꾸면 마커 레이어가 지워진 채 style.load가 오지 않아서, 항상 새로 만든다
     styleReady.current = false;
-    map.current?.setStyle(baseStyle(p.base, p.cadastral, freeStyle) as WebStyle, {
-      diff: false,
-    });
+    latest.current.onMarkerHover?.(null);
+    map.current?.setStyle(
+      baseStyle(p.base, p.cadastral, freeStyle) as WebStyle,
+      {
+        diff: false,
+      },
+    );
   }, [p.base, p.cadastral, freeStyle]);
 
   useEffect(() => {
     if (map.current) syncMarkers(map.current);
+    latest.current.onMarkerHover?.(null);
   }, [p.markers, p.property, p.unit, p.selected]);
 
   useEffect(() => {
@@ -173,7 +237,8 @@ export default function MapCanvas(p: MapProps) {
   }, [p.selectionPoint, p.parcelGeometry]);
 
   useEffect(() => {
-    const m = map.current, c = p.command;
+    const m = map.current,
+      c = p.command;
     if (!m || !c) return;
     if (c.type === "zoom") {
       const next = Math.round(m.getZoom()) + Math.sign(c.delta);
@@ -182,7 +247,8 @@ export default function MapCanvas(p: MapProps) {
       m.fitBounds(c.bbox, { duration: 360 });
     } else {
       m.easeTo({
-        ...(c.lat != null && c.lng != null && { center: [c.lng, c.lat] as [number, number] }),
+        ...(c.lat != null &&
+          c.lng != null && { center: [c.lng, c.lat] as [number, number] }),
         ...(c.zoom != null && { zoom: toMapZoom(c.zoom) }),
         duration: 360,
       });

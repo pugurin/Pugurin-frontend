@@ -27,6 +27,7 @@ import { C } from "./src/theme/tokens";
 import { Icon, StateCard, T, s } from "./src/components/ui";
 import { MapHome, type Focus } from "./src/screens/MapHome";
 import { FilterScreen } from "./src/screens/FilterScreen";
+import { WebSearch } from "./src/components/WebSearch";
 import { SearchScreen } from "./src/screens/SearchScreen";
 import {
   GlossaryScreen,
@@ -87,6 +88,7 @@ export default function App() {
   const [termsLoading, setTermsLoading] = useState(true);
   const [termsError, setTermsError] = useState<string | null>(null);
   const [termsRetry, setTermsRetry] = useState(0);
+  const [popupAnchor, setPopupAnchor] = useState<{ x: number; y: number }>();
   const [popup, setPopup] = useState<Term | null>(null);
   const [toast, setToast] = useState("");
   // 오늘의 용어: 더보기에서 끄기(계속), ✕로 닫은 날(그날만). 둘 다 기기에 저장
@@ -102,6 +104,27 @@ export default function App() {
     undefined,
   );
   const { width } = useWindowDimensions();
+  const wide = Platform.OS === "web" && width >= 768;
+  const desktop = Platform.OS === "web" && width >= 1024;
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const escape = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (popup) {
+        e.preventDefault();
+        setPopup(null);
+      } else if (route && route.kind !== "search") {
+        e.preventDefault();
+        setRoute(
+          route.kind === "term" && route.returnTo === "matching"
+            ? { kind: "matching" }
+            : null,
+        );
+      }
+    };
+    document.addEventListener("keydown", escape);
+    return () => document.removeEventListener("keydown", escape);
+  }, [popup, route]);
   const repo = useMemo(
     () =>
       new Repository(
@@ -190,8 +213,13 @@ export default function App() {
   };
   const onHelp = (name: string) => {
     const term = terms.find((t) => t.term === name);
-    if (term) setPopup(term);
-    else notify("용어 설명을 아직 불러올 수 없어요");
+    if (term) {
+      if (Platform.OS === "web") {
+        const rect = document.activeElement?.getBoundingClientRect();
+        setPopupAnchor(rect ? { x: rect.left, y: rect.bottom } : undefined);
+      }
+      setPopup(term);
+    } else notify("용어 설명을 아직 불러올 수 없어요");
   };
   const setHistory = (list: Recent[]) => {
     setRecent(list);
@@ -321,7 +349,15 @@ export default function App() {
       />
     );
   if (route?.kind === "search")
-    overlay = (
+    overlay = desktop ? (
+      <WebSearch
+        repo={repo}
+        recent={recent}
+        onRecent={setHistory}
+        onSelect={select}
+        onClose={() => setRoute(null)}
+      />
+    ) : (
       <SearchScreen
         repo={repo}
         recent={recent}
@@ -382,7 +418,7 @@ export default function App() {
           style={{
             flex: 1,
             width: "100%",
-            maxWidth: 420,
+            maxWidth: wide ? undefined : 420,
             alignSelf: "center",
             backgroundColor: C.bg,
             position: "relative",
@@ -406,6 +442,8 @@ export default function App() {
                 filters={filters}
                 onFilters={setFilters}
                 onSearch={() => setRoute({ kind: "search" })}
+                onGlossary={() => setTab("glossary")}
+                interactionBlocked={!!popup || !!route || tab !== "map"}
                 onFilter={() => setRoute({ kind: "filter" })}
                 onList={(args) => setRoute({ kind: "transactions", ...args })}
                 onDate={() => setRoute({ kind: "date" })}
@@ -529,11 +567,42 @@ export default function App() {
               style={{
                 position: "absolute",
                 inset: 0,
-                backgroundColor: C.bg,
+                backgroundColor: wide ? "rgba(17,17,16,.24)" : C.bg,
                 zIndex: 50,
+                alignItems: wide ? "center" : undefined,
+                justifyContent: wide ? "center" : undefined,
               }}
             >
-              {overlay}
+              {wide && (
+                <Pressable
+                  accessibilityLabel="화면 닫기"
+                  onPress={() => setRoute(null)}
+                  style={{ position: "absolute", inset: 0 }}
+                />
+              )}
+              <View
+                style={
+                  wide
+                    ? {
+                        width: route?.kind === "search" && desktop ? 520 : 560,
+                        maxWidth: "95%",
+                        height:
+                          route?.kind === "search" && desktop
+                            ? undefined
+                            : "92%",
+                        maxHeight: "92%",
+                        backgroundColor: C.bg,
+                        borderRadius: 14,
+                        overflow: "hidden",
+                        ...(route?.kind === "search" && desktop
+                          ? { position: "absolute", left: 190, top: 72 }
+                          : {}),
+                      }
+                    : { flex: 1 }
+                }
+              >
+                {overlay}
+              </View>
             </View>
           )}
           {toast !== "" && (
@@ -557,6 +626,7 @@ export default function App() {
           )}
           <TermPopup
             term={popup}
+            anchor={popupAnchor}
             onClose={() => setPopup(null)}
             onDetail={(term) => {
               setPopup(null);

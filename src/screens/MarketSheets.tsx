@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, View, Platform, useWindowDimensions } from "react-native";
 import type { Repository } from "../api/repository";
 import type {
   Analysis,
@@ -55,6 +55,8 @@ export function RegionContent({
   date?: string;
   unit: "평" | "㎡";
 }) {
+  const { width } = useWindowDimensions();
+  const twoColumns = Platform.OS === "web" && width >= 768 && width < 1024;
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsMessage, setStatsMessage] = useState<string | null>(null);
   const [items, setItems] = useState<Transaction[]>([]);
@@ -123,52 +125,63 @@ export function RegionContent({
           </T>
         </View>
       </View>
-      <Section
-        title={
-          filters.deal_type === "monthly"
-            ? "월별 월세 (중위값)"
-            : "월별 평당가 (중위값)"
-        }
+      <View
+        style={{
+          flexDirection: twoColumns ? "row" : "column",
+          gap: twoColumns ? 20 : 0,
+        }}
       >
-        {stats ? (
-          <Chart
-            trend={stats.trend}
-            bar
-            metric={
-              filters.deal_type === "sale"
-                ? "median_price_per_pyeong"
-                : filters.deal_type === "jeonse"
-                  ? "median_deposit_per_pyeong"
-                  : "median_monthly_rent"
+        <View style={{ flex: twoColumns ? 1 : undefined, minWidth: 0 }}>
+          <Section
+            title={
+              filters.deal_type === "monthly"
+                ? "월별 월세 (중위값)"
+                : "월별 평당가 (중위값)"
             }
-          />
-        ) : loading ? (
-          <StateCard loading />
-        ) : (
-          <T size={14} color={C.light}>
-            {statsMessage ?? "표시할 지역 통계가 없어요"}
-          </T>
-        )}
-      </Section>
-      <Section title="최근 거래">
-        {items.map((tx) => (
-          <TransactionRow
-            tx={tx}
-            key={tx.id}
-            unit={unit}
-            name={tx.address}
-            onPress={
-              tx.complex_id ? () => onComplex(tx.complex_id!) : undefined
-            }
-          />
-        ))}
-        {error && (
-          <StateCard error={error} onRetry={() => setRetry((x) => x + 1)} />
-        )}
-        <Btn secondary onPress={onList}>
-          목록 전체 보기
-        </Btn>
-      </Section>
+          >
+            {stats ? (
+              <Chart
+                trend={stats.trend}
+                bar
+                metric={
+                  filters.deal_type === "sale"
+                    ? "median_price_per_pyeong"
+                    : filters.deal_type === "jeonse"
+                      ? "median_deposit_per_pyeong"
+                      : "median_monthly_rent"
+                }
+              />
+            ) : loading ? (
+              <StateCard loading />
+            ) : (
+              <T size={14} color={C.light}>
+                {statsMessage ?? "표시할 지역 통계가 없어요"}
+              </T>
+            )}
+          </Section>
+        </View>
+        <View style={{ flex: twoColumns ? 1 : undefined, minWidth: 0 }}>
+          <Section title="최근 거래">
+            {items.map((tx) => (
+              <TransactionRow
+                tx={tx}
+                key={tx.id}
+                unit={unit}
+                name={tx.address}
+                onPress={
+                  tx.complex_id ? () => onComplex(tx.complex_id!) : undefined
+                }
+              />
+            ))}
+            {error && (
+              <StateCard error={error} onRetry={() => setRetry((x) => x + 1)} />
+            )}
+            <Btn secondary onPress={onList}>
+              목록 전체 보기
+            </Btn>
+          </Section>
+        </View>
+      </View>
       <View style={[s.card, { borderStyle: "dashed" }]}>
         <T color={C.light} size={14}>
           ⏸ 주변 중개사 연결은 보류 중이에요
@@ -197,13 +210,15 @@ export function ComplexContent({
   notify: (s: string) => void;
   unit: "평" | "㎡";
 }) {
+  const { width } = useWindowDimensions();
+  const twoColumns = Platform.OS === "web" && width >= 768 && width < 1024;
   const [complex, setComplex] = useState<Complex | null>(null);
   const [items, setItems] = useState<Transaction[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [comparison, setComparison] = useState<Stats | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [analysisError,setAnalysisError] = useState<string|null>(null);
-  const [analysisRetry,setAnalysisRetry] = useState(0);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisRetry, setAnalysisRetry] = useState(0);
   const [meta, setMeta] = useState<Meta>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -264,9 +279,19 @@ export function ComplexContent({
       .then((r) => {
         if (!a.signal.aborted) setAnalysis(r.data);
       })
-      .catch(e => {if(!a.signal.aborted)setAnalysisError(e.message);});
+      .catch((e) => {
+        if (!a.signal.aborted) setAnalysisError(e.message);
+      });
     return () => a.abort();
-  }, [id, complex?.id, complex?.property_type, repo, filters, retry, analysisRetry]);
+  }, [
+    id,
+    complex?.id,
+    complex?.property_type,
+    repo,
+    filters,
+    retry,
+    analysisRetry,
+  ]);
   useEffect(() => {
     setComparison(null);
     if (!complex) return;
@@ -435,116 +460,130 @@ export function ComplexContent({
           {stage === "half" ? (
             <Btn onPress={() => onStage("full")}>자세히 보기</Btn>
           ) : (
-            <>
-              <Section title="거래 이력">
-                <View style={[s.row, { flexWrap: "wrap" }]}>
-                  {(
-                    [
-                      ["contract_date_desc", "최신순"],
-                      ["price_asc", "가격 낮은순"],
-                      ["price_desc", "가격 높은순"],
-                    ] as const
-                  ).map(([k, n]) => (
-                    <Chip
-                      key={k}
-                      selected={sort === k}
+            <View
+              style={{
+                flexDirection: twoColumns ? "row" : "column",
+                gap: twoColumns ? 20 : 0,
+              }}
+            >
+              <View style={{ flex: twoColumns ? 1 : undefined, minWidth: 0 }}>
+                <Section title="거래 이력">
+                  <View style={[s.row, { flexWrap: "wrap" }]}>
+                    {(
+                      [
+                        ["contract_date_desc", "최신순"],
+                        ["price_asc", "가격 낮은순"],
+                        ["price_desc", "가격 높은순"],
+                      ] as const
+                    ).map(([k, n]) => (
+                      <Chip
+                        key={k}
+                        selected={sort === k}
+                        onPress={() => {
+                          setSort(k);
+                          setPage(1);
+                        }}
+                      >
+                        {n}
+                      </Chip>
+                    ))}
+                  </View>
+                  <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: cancelled }}
+                    onPress={() => {
+                      setCancelled((v) => !v);
+                      setPage(1);
+                    }}
+                    style={[s.row, { paddingVertical: 6 }]}
+                  >
+                    <Icon name={cancelled ? "check" : "plus"} size={18} />
+                    <T size={14}>해제 거래 포함</T>
+                  </Pressable>
+                  {items.map((t) => (
+                    <TransactionRow
+                      key={t.id}
+                      tx={{
+                        ...t,
+                        supply_area_pyeong: complex.area_types.find(
+                          (a) => a.exclusive_area_m2 === t.exclusive_area_m2,
+                        )?.supply_area_pyeong,
+                      }}
+                      unit={unit}
+                    />
+                  ))}
+                  {loading && <StateCard loading />}
+                  {page < (meta?.total_pages ?? 1) && (
+                    <Btn
+                      secondary
+                      disabled={loading}
                       onPress={() => {
-                        setSort(k);
-                        setPage(1);
+                        setLoading(true);
+                        setPage((v) => v + 1);
                       }}
                     >
-                      {n}
-                    </Chip>
-                  ))}
-                </View>
-                <Pressable
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: cancelled }}
-                  onPress={() => {
-                    setCancelled((v) => !v);
-                    setPage(1);
-                  }}
-                  style={[s.row, { paddingVertical: 6 }]}
+                      거래 더 보기
+                    </Btn>
+                  )}
+                </Section>
+              </View>
+              <View style={{ flex: twoColumns ? 1 : undefined, minWidth: 0 }}>
+                <Section
+                  title="용도지역 요약"
+                  right={<Help onPress={() => onHelp("용도지역")} />}
                 >
-                  <Icon name={cancelled ? "check" : "plus"} size={18} />
-                  <T size={14}>해제 거래 포함</T>
-                </Pressable>
-                {items.map((t) => (
-                  <TransactionRow
-                    key={t.id}
-                    tx={{
-                      ...t,
-                      supply_area_pyeong: complex.area_types.find(
-                        (a) => a.exclusive_area_m2 === t.exclusive_area_m2,
-                      )?.supply_area_pyeong,
-                    }}
-                    unit={unit}
-                  />
-                ))}
-                {loading && <StateCard loading />}
-                {page < (meta?.total_pages ?? 1) && (
-                  <Btn
-                    secondary
-                    disabled={loading}
-                    onPress={() => {
-                      setLoading(true);
-                      setPage((v) => v + 1);
-                    }}
-                  >
-                    거래 더 보기
-                  </Btn>
-                )}
-              </Section>
-              <Section
-                title="용도지역 요약"
-                right={<Help onPress={() => onHelp("용도지역")} />}
-              >
-                {analysisError ? <StateCard error={analysisError} onRetry={()=>setAnalysisRetry(x=>x+1)}/> : analysis?.zonings?.length ? (
-                  analysis.zonings.map((zone, i) => (
-                    <View
-                      key={`${zone.zone_type}-${i}`}
-                      style={[
-                        s.card,
-                        {
-                          backgroundColor: C.landWash,
-                          borderColor: C.land,
-                          gap: 8,
-                        },
-                      ]}
-                    >
-                      <T bold color={C.land}>
-                        {zone.zone_type}
-                      </T>
-                      <T size={14}>
-                        {zone.inclusion}
-                        {zone.area_ratio != null
-                          ? ` · ${(zone.area_ratio * 100).toFixed(0)}%`
-                          : ""}
-                      </T>
-                      <T>
-                        건폐율{" "}
-                        {zone.max_building_coverage_ratio == null
-                          ? "정보 없음"
-                          : `${zone.max_building_coverage_ratio}%`}{" "}
-                        · 용적률{" "}
-                        {zone.max_floor_area_ratio == null
-                          ? "정보 없음"
-                          : `${zone.max_floor_area_ratio}%`}
-                      </T>
-                    </View>
-                  ))
-                ) : (
-                  <T size={14} color={C.light}>
-                    필지 정보를 확보한 뒤 용도지역을 보여드릴 수 있어요.
-                  </T>
-                )}
-                {analysis?.disclaimer && (
-                  <T size={12} color={C.muted}>
-                    {analysis.disclaimer}
-                  </T>
-                )}
-              </Section>
-            </>
+                  {analysisError ? (
+                    <StateCard
+                      error={analysisError}
+                      onRetry={() => setAnalysisRetry((x) => x + 1)}
+                    />
+                  ) : analysis?.zonings?.length ? (
+                    analysis.zonings.map((zone, i) => (
+                      <View
+                        key={`${zone.zone_type}-${i}`}
+                        style={[
+                          s.card,
+                          {
+                            backgroundColor: C.landWash,
+                            borderColor: C.land,
+                            gap: 8,
+                          },
+                        ]}
+                      >
+                        <T bold color={C.land}>
+                          {zone.zone_type}
+                        </T>
+                        <T size={14}>
+                          {zone.inclusion}
+                          {zone.area_ratio != null
+                            ? ` · ${(zone.area_ratio * 100).toFixed(0)}%`
+                            : ""}
+                        </T>
+                        <T>
+                          건폐율{" "}
+                          {zone.max_building_coverage_ratio == null
+                            ? "정보 없음"
+                            : `${zone.max_building_coverage_ratio}%`}{" "}
+                          · 용적률{" "}
+                          {zone.max_floor_area_ratio == null
+                            ? "정보 없음"
+                            : `${zone.max_floor_area_ratio}%`}
+                        </T>
+                      </View>
+                    ))
+                  ) : (
+                    <T size={14} color={C.light}>
+                      필지 정보를 확보한 뒤 용도지역을 보여드릴 수 있어요.
+                    </T>
+                  )}
+                  {analysis?.disclaimer && (
+                    <T size={12} color={C.muted}>
+                      {analysis.disclaimer}
+                    </T>
+                  )}
+                </Section>
+              </View>
+            </View>
           )}
           <Pressable
             onPress={() => notify("중개사 연결은 보류 중이에요")}

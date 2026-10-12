@@ -287,11 +287,20 @@ export function Notice({
     </Pressable>
   );
 }
-export function AdSlot() {
+export function AdSlot({
+  width = 320,
+  height = 50,
+}: {
+  width?: number;
+  height?: number;
+}) {
   return (
     <View
       style={{
-        height: 50,
+        height,
+        width,
+        maxWidth: "95%",
+        alignSelf: "center",
         marginHorizontal: 20,
         marginBottom: 6,
         borderWidth: 1,
@@ -303,7 +312,7 @@ export function AdSlot() {
       }}
     >
       <T size={12} color={C.light}>
-        광고 배너 (외부 SDK) 320×50
+        광고 영역 {width}×{height}
       </T>
     </View>
   );

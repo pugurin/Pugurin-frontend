@@ -6,6 +6,8 @@ import {
   ScrollView,
   Switch,
   View,
+  Platform,
+  useWindowDimensions,
 } from "react-native";
 import * as Location from "expo-location";
 import type { Repository } from "../api/repository";
@@ -56,6 +58,8 @@ export function MapHome({
   filters,
   onFilters,
   onSearch,
+  onGlossary,
+  interactionBlocked = false,
   onFilter,
   onList,
   onDate,
@@ -79,6 +83,8 @@ export function MapHome({
   filters: Filters;
   onFilters: (f: Filters) => void;
   onSearch: () => void;
+  onGlossary?: () => void;
+  interactionBlocked?: boolean;
   onFilter: () => void;
   onList: (args: { bbox: BBox; region?: string; name?: string }) => void;
   onDate: () => void;
@@ -99,6 +105,14 @@ export function MapHome({
   onTodayOpen?: (term: Term) => void;
   onTodayClose?: () => void;
 }) {
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === "web" && width >= 1024;
+  const [hover, setHover] = useState<{
+    marker: Marker;
+    point: { x: number; y: number };
+  } | null>(null);
+  const panelWidth = width >= 1280 ? 400 : 360;
+  const [panelDismissed, setPanelDismissed] = useState(false);
   const [camera, setCamera] = useState<Camera>(HOME);
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [meta, setMeta] = useState<Meta>();
@@ -134,13 +148,27 @@ export function MapHome({
   const isLand = filters.property_type === "land";
   const move = (c: MapCommand) => setCommand({ ...c, nonce: ++ref.current });
   const landRequest = useRef<AbortController | null>(null);
-  const pendingLand = useRef<{ lat: number; lng: number; region?: { code: string; name: string } } | null>(null);
+  const pendingLand = useRef<{
+    lat: number;
+    lng: number;
+    region?: { code: string; name: string };
+  } | null>(null);
   const close = () => {
     pendingLand.current = null;
     landRequest.current?.abort();
     setSelected(null);
+    setPanelDismissed(true);
   };
   useEffect(() => () => landRequest.current?.abort(), []);
+  useEffect(() => {
+    if (!desktop) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !interactionBlocked && !layers && !period)
+        close();
+    };
+    document.addEventListener("keydown", escape);
+    return () => document.removeEventListener("keydown", escape);
+  }, [desktop, interactionBlocked, layers, period]);
   useEffect(() => {
     const controller = new AbortController();
     const changed = lastFilters.current !== filters;
@@ -148,6 +176,7 @@ export function MapHome({
     if (changed) {
       setMarkers([]);
       close();
+      setPanelDismissed(false);
     }
     if (outside) {
       setLoading(false);
@@ -229,11 +258,17 @@ export function MapHome({
         zoom: r.region_level === "sigungu" ? 12 : 14,
       });
     } else {
-      if (isLand) pendingLand.current = {
-        lat: r.lat,
-        lng: r.lng,
-        region: r.region_code ? { code: r.region_code, name: r.name ?? r.address ?? "선택한 지역" } : undefined,
-      };
+      if (isLand)
+        pendingLand.current = {
+          lat: r.lat,
+          lng: r.lng,
+          region: r.region_code
+            ? {
+                code: r.region_code,
+                name: r.name ?? r.address ?? "선택한 지역",
+              }
+            : undefined,
+        };
       move({ type: "move", lat: r.lat, lng: r.lng, zoom: 15 });
     }
   }, [focus]);
@@ -319,9 +354,18 @@ export function MapHome({
       if (e.bbox.every(Number.isFinite)) {
         setCamera({ lat: e.lat, lng: e.lng, zoom: e.zoom, bbox: e.bbox });
         const pending = pendingLand.current;
-        if (pending && Math.abs(e.lat - pending.lat) < 0.0005 && Math.abs(e.lng - pending.lng) < 0.0005) {
+        if (
+          pending &&
+          Math.abs(e.lat - pending.lat) < 0.0005 &&
+          Math.abs(e.lng - pending.lng) < 0.0005
+        ) {
           pendingLand.current = null;
-          landLookup(pending.lat, pending.lng, pending.region, busanQueryBBox(e.bbox) ?? e.bbox);
+          landLookup(
+            pending.lat,
+            pending.lng,
+            pending.region,
+            busanQueryBBox(e.bbox) ?? e.bbox,
+          );
         }
       }
     }
@@ -337,6 +381,28 @@ export function MapHome({
     }
     if (e.type === "error") setMapError(e.message);
   };
+  const panelVisible = desktop && (!!selected || !panelDismissed);
+  useEffect(() => {
+    if (!desktop || selected || panelDismissed || pendingLand.current) return;
+    const region = markers
+      .filter((marker): marker is RegionMarker => marker.kind === "region")
+      .sort((a, b) => b.transaction_count - a.transaction_count)[0];
+    if (!region) return;
+    setSelected(
+      isLand
+        ? {
+            kind: "land",
+            lat: region.lat,
+            lng: region.lng,
+            bbox: queryBBox ?? camera.bbox,
+            region: { code: region.region_code, name: region.name },
+            parcel: null,
+            loading: false,
+          }
+        : { kind: "region", marker: region },
+    );
+    setStage("full");
+  }, [desktop, markers, selected, panelDismissed, isLand]);
   const locate = async () => {
     setLocating(true);
     try {
@@ -360,118 +426,312 @@ export function MapHome({
       setLocating(false);
     }
   };
+  const detailSheet = selected ? (
+    <Sheet
+      key={
+        selected.kind === "complex"
+          ? `complex:${selected.id}`
+          : selected.kind === "land"
+            ? `land:${selected.lat},${selected.lng}`
+            : `region:${selected.marker.region_code}`
+      }
+      stage={desktop ? "full" : stage}
+      onStage={desktop ? () => {} : setStage}
+      onClose={close}
+      docked={desktop}
+      panelWidth={panelWidth}
+    >
+      {selected.kind === "land" ? (
+        <LandContent
+          repo={repo}
+          filters={filters}
+          bbox={selected.bbox}
+          region={selected.region}
+          parcel={selected.parcel}
+          loading={selected.loading}
+          error={selected.error}
+          onRetry={() =>
+            landLookup(
+              selected.lat,
+              selected.lng,
+              selected.region,
+              selected.bbox,
+            )
+          }
+          onList={() =>
+            onList({
+              bbox: selected.bbox,
+              region: selected.region?.code,
+              name: selected.region?.name,
+            })
+          }
+          onHelp={onHelp}
+          unit={unit}
+        />
+      ) : selected.kind === "complex" ? (
+        <ComplexContent
+          key={selected.id}
+          id={selected.id}
+          repo={repo}
+          filters={filters}
+          stage={desktop ? "full" : stage}
+          onStage={setStage}
+          onHelp={onHelp}
+          notify={notify}
+          unit={unit}
+        />
+      ) : (
+        <>
+          {desktop && todayTerm && (
+            <View style={{ marginBottom: 16 }}>
+              <TodayTermCard
+                term={todayTerm}
+                streak={todayStreak}
+                completed={todayCompleted}
+                onOpen={() => onTodayOpen?.(todayTerm)}
+                onClose={() => onTodayClose?.()}
+              />
+            </View>
+          )}
+          <RegionContent
+            marker={selected.marker}
+            filters={filters}
+            repo={repo}
+            onList={() =>
+              onList({
+                bbox: camera.bbox,
+                region: selected.marker.region_code,
+                name: selected.marker.name,
+              })
+            }
+            onComplex={(id) => {
+              setSelected({ kind: "complex", id });
+              setStage("peek");
+            }}
+            onHelp={onHelp}
+            date={meta?.data_as_of}
+            unit={unit}
+          />
+        </>
+      )}
+    </Sheet>
+  ) : null;
   return (
     <View style={s.screen}>
-      <View style={{ paddingHorizontal: 12, paddingTop: 6, paddingBottom: 6 }}>
+      {desktop ? (
         <View
           style={[
             s.row,
             {
-              height: 42,
-              paddingHorizontal: 14,
-              borderWidth: 1,
-              borderColor: C.rule,
-              borderRadius: 12,
+              paddingHorizontal: 18,
+              paddingVertical: 12,
               backgroundColor: C.surface,
+              borderBottomWidth: 1,
+              borderColor: C.rule,
+              gap: 12,
+              flexWrap: "nowrap",
             },
           ]}
         >
-          <Brand size={32} />
+          <Brand size={34} wordmark />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="단지·주소·동네 검색"
             onPress={onSearch}
-            style={[s.row, { flex: 1, height: 40 }]}
+            style={[
+              s.row,
+              {
+                flex: 1,
+                minWidth: 180,
+                maxWidth: 360,
+                height: 44,
+                paddingHorizontal: 12,
+                borderWidth: 1,
+                borderColor: C.greenRule,
+                borderRadius: 10,
+                backgroundColor: C.bg,
+              },
+            ]}
           >
             <Icon name="search" color={C.light} />
-            <T color={C.light}>단지·주소·동네 검색</T>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="채팅"
-            onPress={(e) => {
-              e.stopPropagation();
-              notify("문의 채팅은 준비 중이에요");
-            }}
-            style={{ padding: 8 }}
-          >
-            <Icon name="chat" color={C.light} />
-          </Pressable>
-        </View>
-      </View>
-      <View
-        style={{
-          marginHorizontal: 12,
-          marginVertical: 6,
-          flexDirection: "row",
-          gap: 3,
-          padding: 3,
-          backgroundColor: C.bg2,
-          borderRadius: 12,
-        }}
-      >
-        {(Object.keys(PROPERTY) as (keyof typeof PROPERTY)[]).map((k) => (
-          <Pressable
-            key={k}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: filters.property_type === k }}
-            onPress={() => {
-              onFilters(changeProperty(filters, k));
-              if (k === "land") notify("토지는 매매 거래만 볼 수 있어요");
-            }}
-            style={{
-              flex: 1,
-              height: 34,
-              borderRadius: 9,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor:
-                filters.property_type === k ? C[k] : "transparent",
-            }}
-          >
-            <T
-              size={15}
-              bold={filters.property_type === k}
-              color={filters.property_type === k ? "#fff" : C.ink}
-            >
-              {PROPERTY[k]}
+            <T size={15} color={C.muted}>
+              단지·주소·동네 검색
             </T>
           </Pressable>
-        ))}
-      </View>
-      <View
-        style={{
-          paddingLeft: 12,
-          paddingVertical: 6,
-          borderBottomWidth: 1,
-          borderColor: C.rule,
-        }}
-      >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 6, paddingRight: 12 }}
-        >
-          {(Object.keys(DEAL) as (keyof typeof DEAL)[]).map((k) => (
-            <Chip
-              key={k}
-              selected={filters.deal_type === k}
-              disabled={isLand && k !== "sale"}
-              onPress={() => {
-                if (isLand && k !== "sale")
-                  notify("토지는 매매 거래만 볼 수 있어요");
-                else onFilters(changeDeal(filters, k));
-              }}
-            >
-              {DEAL[k]}
+          <View
+            style={[
+              s.row,
+              { gap: 3, backgroundColor: C.bg2, padding: 3, borderRadius: 10 },
+            ]}
+          >
+            {(Object.keys(PROPERTY) as (keyof typeof PROPERTY)[]).map((key) => (
+              <Pressable
+                key={key}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: filters.property_type === key }}
+                onPress={() => onFilters(changeProperty(filters, key))}
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 9,
+                  borderRadius: 8,
+                  backgroundColor:
+                    filters.property_type === key ? C[key] : "transparent",
+                }}
+              >
+                <T
+                  size={14}
+                  bold={filters.property_type === key}
+                  color={filters.property_type === key ? "#fff" : C.ink}
+                >
+                  {PROPERTY[key]}
+                </T>
+              </Pressable>
+            ))}
+          </View>
+          <View style={[s.row, { gap: 5 }]}>
+            {width >= 1280 &&
+              (Object.keys(DEAL) as (keyof typeof DEAL)[]).map((key) => (
+                <Chip
+                  key={key}
+                  selected={filters.deal_type === key}
+                  disabled={isLand && key !== "sale"}
+                  onPress={() => onFilters(changeDeal(filters, key))}
+                >
+                  {DEAL[key]}
+                </Chip>
+              ))}
+            <Chip onPress={() => setPeriod(true)}>
+              최근 {filters.period_months}개월 ▾
             </Chip>
-          ))}
-          <Chip onPress={() => setPeriod(true)}>
-            최근 {filters.period_months}개월 ▾
-          </Chip>
-          <Chip onPress={onFilter}>☷ 필터</Chip>
-        </ScrollView>
-      </View>
+            <IconBtn name="filter" label="상세 필터" onPress={onFilter} />
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onGlossary ?? (() => onHelp("용어사전"))}
+            style={[s.row, { padding: 9 }]}
+          >
+            <Icon name="book" color={C.brown} />
+            <T size={15} bold color={C.brown}>
+              용어사전
+            </T>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          <View
+            style={{ paddingHorizontal: 12, paddingTop: 6, paddingBottom: 6 }}
+          >
+            <View
+              style={[
+                s.row,
+                {
+                  height: 42,
+                  paddingHorizontal: 14,
+                  borderWidth: 1,
+                  borderColor: C.rule,
+                  borderRadius: 12,
+                  backgroundColor: C.surface,
+                },
+              ]}
+            >
+              <Brand size={32} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="단지·주소·동네 검색"
+                onPress={onSearch}
+                style={[s.row, { flex: 1, height: 40 }]}
+              >
+                <Icon name="search" color={C.light} />
+                <T color={C.light}>단지·주소·동네 검색</T>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="채팅"
+                onPress={(e) => {
+                  e.stopPropagation();
+                  notify("문의 채팅은 준비 중이에요");
+                }}
+                style={{ padding: 8 }}
+              >
+                <Icon name="chat" color={C.light} />
+              </Pressable>
+            </View>
+          </View>
+          <View
+            style={{
+              marginHorizontal: 12,
+              marginVertical: 6,
+              flexDirection: "row",
+              gap: 3,
+              padding: 3,
+              backgroundColor: C.bg2,
+              borderRadius: 12,
+            }}
+          >
+            {(Object.keys(PROPERTY) as (keyof typeof PROPERTY)[]).map((k) => (
+              <Pressable
+                key={k}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: filters.property_type === k }}
+                onPress={() => {
+                  onFilters(changeProperty(filters, k));
+                  if (k === "land") notify("토지는 매매 거래만 볼 수 있어요");
+                }}
+                style={{
+                  flex: 1,
+                  height: 34,
+                  borderRadius: 9,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor:
+                    filters.property_type === k ? C[k] : "transparent",
+                }}
+              >
+                <T
+                  size={15}
+                  bold={filters.property_type === k}
+                  color={filters.property_type === k ? "#fff" : C.ink}
+                >
+                  {PROPERTY[k]}
+                </T>
+              </Pressable>
+            ))}
+          </View>
+          <View
+            style={{
+              paddingLeft: 12,
+              paddingVertical: 6,
+              borderBottomWidth: 1,
+              borderColor: C.rule,
+            }}
+          >
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 6, paddingRight: 12 }}
+            >
+              {(Object.keys(DEAL) as (keyof typeof DEAL)[]).map((k) => (
+                <Chip
+                  key={k}
+                  selected={filters.deal_type === k}
+                  disabled={isLand && k !== "sale"}
+                  onPress={() => {
+                    if (isLand && k !== "sale")
+                      notify("토지는 매매 거래만 볼 수 있어요");
+                    else onFilters(changeDeal(filters, k));
+                  }}
+                >
+                  {DEAL[k]}
+                </Chip>
+              ))}
+              <Chip onPress={() => setPeriod(true)}>
+                최근 {filters.period_months}개월 ▾
+              </Chip>
+              <Chip onPress={onFilter}>☷ 필터</Chip>
+            </ScrollView>
+          </View>
+        </>
+      )}
       {isLand && (
         <View
           style={{
@@ -486,159 +746,290 @@ export function MapHome({
         </View>
       )}
       <View style={{ flex: 1, minHeight: 100, position: "relative" }}>
-        <MapCanvas
-          key={mapRetry}
-          markers={markers}
-          property={filters.property_type}
-          selected={selected?.kind === "complex" ? selected.id : null}
-          unit={unit}
-          selectionPoint={
-            selected?.kind === "land"
-              ? { lat: selected.lat, lng: selected.lng }
-              : undefined
-          }
-          parcelGeometry={
-            selected?.kind === "land"
-              ? (selected.parcel?.geometry as any)
-              : null
-          }
-          base={base}
-          cadastral={isLand || cadastral}
-          initial={HOME}
-          command={command}
-          onEvent={onEvent}
-        />
-        <View style={{ position: "absolute", right: 12, top: 12, gap: 8 }}>
-          <View style={float}>
-            <IconBtn
-              name="layers"
-              label="지도 레이어"
-              onPress={() => setLayers(true)}
-            />
-          </View>
-          <View style={float}>
-            <IconBtn
-              name="plus"
-              label="지도 확대"
-              onPress={() => move({ type: "zoom", delta: 1 })}
-            />
-            <View style={s.rule} />
-            <IconBtn
-              name="minus"
-              label="지도 축소"
-              onPress={() => move({ type: "zoom", delta: -1 })}
-            />
-          </View>
-        </View>
-        <View style={{ position: "absolute", right: 12, bottom: 16, ...float }}>
-          {locating ? (
-            <ActivityIndicator style={{ width: 38, height: 38 }} />
-          ) : (
-            <IconBtn
-              name="locate"
-              label="내 위치"
-              onPress={() => void locate()}
-            />
-          )}
-        </View>
-        {!selected && (
-          <View style={{ position: "absolute", left: 12, bottom: 16 }}>
-            <Btn
-              secondary
-              small
-              icon="list"
-              onPress={() => onList({ bbox: camera.bbox })}
-            >
-              목록 보기
-            </Btn>
-          </View>
-        )}
-        {/* D01·D04: 오늘의 용어 카드. 목록 보기 위, 시트가 열리면 숨긴다 */}
-        {todayTerm && !selected && (
-          <View
-            style={{ position: "absolute", left: 12, right: 12, bottom: 72 }}
-          >
-            <TodayTermCard
-              term={todayTerm}
-              streak={todayStreak}
-              completed={todayCompleted}
-              onOpen={() => onTodayOpen?.(todayTerm)}
-              onClose={() => onTodayClose?.()}
-            />
-          </View>
-        )}
-        {loading ? (
-          <View
-            style={{
-              position: "absolute",
-              alignSelf: "center",
-              top: "42%",
-              backgroundColor: C.surface,
-              borderRadius: 20,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              flexDirection: "row",
-              gap: 8,
-            }}
-          >
-            <ActivityIndicator size="small" />
-            <T size={14}>실거래가 불러오는 중…</T>
-          </View>
-        ) : error || mapError ? (
-          <View
-            style={{
-              position: "absolute",
-              left: 20,
-              right: 20,
-              top: "20%",
-              ...s.card,
-            }}
-          >
-            <StateCard
-              error={error ?? mapError}
-              onRetry={() => {
-                if (mapError) setMapRetry((x) => x + 1);
-                setMapError(null);
-                setRetry((x) => x + 1);
+        <View
+          testID="map-viewport"
+          style={{
+            flex: 1,
+            marginLeft: panelVisible ? panelWidth : 0,
+            position: "relative",
+          }}
+        >
+          <MapCanvas
+            key={mapRetry}
+            markers={markers}
+            property={filters.property_type}
+            selected={selected?.kind === "complex" ? selected.id : null}
+            unit={unit}
+            selectionPoint={
+              selected?.kind === "land"
+                ? { lat: selected.lat, lng: selected.lng }
+                : undefined
+            }
+            parcelGeometry={
+              selected?.kind === "land"
+                ? (selected.parcel?.geometry as any)
+                : null
+            }
+            base={base}
+            cadastral={isLand || cadastral}
+            initial={HOME}
+            command={command}
+            onEvent={onEvent}
+            onMarkerHover={(marker, point) =>
+              setHover(marker && point ? { marker, point } : null)
+            }
+          />
+          {desktop && hover && (
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: Math.max(
+                  8,
+                  Math.min(
+                    hover.point.x + 16,
+                    width - (panelVisible ? panelWidth : 0) - 240,
+                  ),
+                ),
+                top: Math.max(8, hover.point.y - 75),
+                padding: 14,
+                width: 220,
+                backgroundColor: C.surface,
+                borderWidth: 1,
+                borderColor: C.greenRule,
+                borderRadius: 10,
               }}
-            />
-          </View>
-        ) : !outside && camera.zoom >= 11 && markers.length === 0 ? (
-          <View
-            style={{
-              position: "absolute",
-              left: 24,
-              right: 24,
-              top: "24%",
-              ...s.card,
-              gap: 12,
-            }}
-          >
-            <T size={19} bold>
-              이 조건의 거래가 없어요
-            </T>
-            {filters.period_months < MAX_PERIOD_MONTHS ? (
-              <>
-                <T size={15} color={C.muted}>
-                  기간을 늘리면 더 많은 거래를 볼 수 있어요
-                </T>
-                <Btn
-                  secondary
-                  small
-                  onPress={() =>
-                    onFilters({ ...filters, period_months: MAX_PERIOD_MONTHS })
-                  }
-                >
-                  기간 늘리기 (최근 {MAX_PERIOD_MONTHS}개월)
-                </Btn>
-              </>
-            ) : (
-              <T size={15} color={C.muted}>
-                최근 {MAX_PERIOD_MONTHS}개월 동안 이 지역에 신고된 거래가 없어요
+            >
+              <T bold>
+                {hover.marker.kind === "parcel"
+                  ? "선택한 필지"
+                  : hover.marker.name}
               </T>
+              {hover.marker.kind !== "parcel" && (
+                <T size={13} color={C.muted}>
+                  거래 {hover.marker.transaction_count}건
+                </T>
+              )}
+            </View>
+          )}
+          <View style={{ position: "absolute", right: 12, top: 12, gap: 8 }}>
+            <View style={float}>
+              <IconBtn
+                name="layers"
+                label="지도 레이어"
+                onPress={() => setLayers(true)}
+              />
+            </View>
+            <View style={float}>
+              <IconBtn
+                name="plus"
+                label="지도 확대"
+                onPress={() => move({ type: "zoom", delta: 1 })}
+              />
+              <View style={s.rule} />
+              <IconBtn
+                name="minus"
+                label="지도 축소"
+                onPress={() => move({ type: "zoom", delta: -1 })}
+              />
+            </View>
+          </View>
+          <View
+            style={{ position: "absolute", right: 12, bottom: 16, ...float }}
+          >
+            {locating ? (
+              <ActivityIndicator style={{ width: 38, height: 38 }} />
+            ) : (
+              <IconBtn
+                name="locate"
+                label="내 위치"
+                onPress={() => void locate()}
+              />
             )}
           </View>
-        ) : null}
+          {!selected && (
+            <View style={{ position: "absolute", left: 12, bottom: 16 }}>
+              <Btn
+                secondary
+                small
+                icon="list"
+                onPress={() => onList({ bbox: camera.bbox })}
+              >
+                목록 보기
+              </Btn>
+            </View>
+          )}
+          {/* D01·D04: 오늘의 용어 카드. 목록 보기 위, 시트가 열리면 숨긴다 */}
+          {todayTerm && !selected && !desktop && (
+            <View
+              style={{ position: "absolute", left: 12, right: 12, bottom: 72 }}
+            >
+              <TodayTermCard
+                term={todayTerm}
+                streak={todayStreak}
+                completed={todayCompleted}
+                onOpen={() => onTodayOpen?.(todayTerm)}
+                onClose={() => onTodayClose?.()}
+              />
+            </View>
+          )}
+          {loading ? (
+            <View
+              style={{
+                position: "absolute",
+                alignSelf: "center",
+                top: "42%",
+                backgroundColor: C.surface,
+                borderRadius: 20,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                flexDirection: "row",
+                gap: 8,
+              }}
+            >
+              <ActivityIndicator size="small" />
+              <T size={14}>실거래가 불러오는 중…</T>
+            </View>
+          ) : error || mapError ? (
+            <View
+              style={{
+                position: "absolute",
+                left: 20,
+                right: 20,
+                top: "20%",
+                ...s.card,
+              }}
+            >
+              <StateCard
+                error={error ?? mapError}
+                onRetry={() => {
+                  if (mapError) setMapRetry((x) => x + 1);
+                  setMapError(null);
+                  setRetry((x) => x + 1);
+                }}
+              />
+            </View>
+          ) : !outside && camera.zoom >= 11 && markers.length === 0 ? (
+            <View
+              style={{
+                position: "absolute",
+                left: 24,
+                right: 24,
+                top: "24%",
+                ...s.card,
+                gap: 12,
+              }}
+            >
+              <T size={19} bold>
+                이 조건의 거래가 없어요
+              </T>
+              {filters.period_months < MAX_PERIOD_MONTHS ? (
+                <>
+                  <T size={15} color={C.muted}>
+                    기간을 늘리면 더 많은 거래를 볼 수 있어요
+                  </T>
+                  <Btn
+                    secondary
+                    small
+                    onPress={() =>
+                      onFilters({
+                        ...filters,
+                        period_months: MAX_PERIOD_MONTHS,
+                      })
+                    }
+                  >
+                    기간 늘리기 (최근 {MAX_PERIOD_MONTHS}개월)
+                  </Btn>
+                </>
+              ) : (
+                <T size={15} color={C.muted}>
+                  최근 {MAX_PERIOD_MONTHS}개월 동안 이 지역에 신고된 거래가
+                  없어요
+                </T>
+              )}
+            </View>
+          ) : null}
+        </View>
+        {desktop && detailSheet}
+        {panelVisible && !selected && (
+          <View
+            accessibilityLabel="지역 요약 패널"
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: panelWidth,
+              backgroundColor: C.surface,
+              borderRightWidth: 1,
+              borderColor: C.rule,
+              padding: 20,
+              gap: 16,
+            }}
+          >
+            <View style={s.between}>
+              <T size={23} bold>
+                부산 실거래
+              </T>
+              <IconBtn
+                name="close"
+                label="지역 패널 닫기"
+                onPress={() => setPanelDismissed(true)}
+              />
+            </View>
+            <T color={C.muted}>
+              {PROPERTY[filters.property_type]} · {DEAL[filters.deal_type]} ·
+              최근 {filters.period_months}개월
+            </T>
+            {loading ? (
+              <StateCard loading />
+            ) : error ? (
+              <StateCard
+                error={error}
+                onRetry={() => setRetry((value) => value + 1)}
+              />
+            ) : (
+              <>
+                <T bold>지도에서 단지나 지역을 선택하세요</T>
+                <T size={14} color={C.muted}>
+                  {markers.length
+                    ? `지도에 표시된 ${markers.length}곳을 살펴볼 수 있어요.`
+                    : "현재 지도 영역에서 조회된 거래가 없어요."}
+                </T>
+                <ScrollView>
+                  {markers
+                    .filter((marker) => marker.kind !== "parcel")
+                    .map((marker) => (
+                      <Pressable
+                        key={markerId(marker)}
+                        onPress={() => markerPress(marker)}
+                        accessibilityRole="button"
+                        style={{
+                          paddingVertical: 14,
+                          borderBottomWidth: 1,
+                          borderColor: C.rule,
+                        }}
+                      >
+                        <T bold>{marker.name}</T>
+                        <T size={13} color={C.muted}>
+                          거래 {marker.transaction_count}건
+                        </T>
+                      </Pressable>
+                    ))}
+                </ScrollView>
+              </>
+            )}
+            {todayTerm && (
+              <TodayTermCard
+                term={todayTerm}
+                streak={todayStreak}
+                completed={todayCompleted}
+                onOpen={() => onTodayOpen?.(todayTerm)}
+                onClose={() => onTodayClose?.()}
+              />
+            )}
+          </View>
+        )}
       </View>
       {!selected && (
         <Notice
@@ -647,66 +1038,11 @@ export function MapHome({
           onPress={onDate}
         />
       )}
-      <AdSlot />
-      {selected && (
-        <Sheet key={selected.kind === "complex" ? `complex:${selected.id}` : selected.kind === "land" ? `land:${selected.lat},${selected.lng}` : `region:${selected.marker.region_code}`} stage={stage} onStage={setStage} onClose={close}>
-          {selected.kind === "land" ? (
-            <LandContent
-              repo={repo}
-              filters={filters}
-              bbox={selected.bbox}
-              region={selected.region}
-              parcel={selected.parcel}
-              loading={selected.loading}
-              error={selected.error}
-              onRetry={() =>
-                landLookup(selected.lat, selected.lng, selected.region, selected.bbox)
-              }
-              onList={() =>
-                onList({
-                  bbox: selected.bbox,
-                  region: selected.region?.code,
-                  name: selected.region?.name,
-                })
-              }
-              onHelp={onHelp}
-              unit={unit}
-            />
-          ) : selected.kind === "complex" ? (
-            <ComplexContent
-              key={selected.id}
-              id={selected.id}
-              repo={repo}
-              filters={filters}
-              stage={stage}
-              onStage={setStage}
-              onHelp={onHelp}
-              notify={notify}
-              unit={unit}
-            />
-          ) : (
-            <RegionContent
-              marker={selected.marker}
-              filters={filters}
-              repo={repo}
-              onList={() =>
-                onList({
-                  bbox: camera.bbox,
-                  region: selected.marker.region_code,
-                  name: selected.marker.name,
-                })
-              }
-              onComplex={(id) => {
-                setSelected({ kind: "complex", id });
-                setStage("peek");
-              }}
-              onHelp={onHelp}
-              date={meta?.data_as_of}
-              unit={unit}
-            />
-          )}
-        </Sheet>
-      )}
+      <AdSlot
+        width={desktop ? (width >= 1280 ? 728 : 468) : 320}
+        height={desktop && width >= 1280 ? 90 : desktop ? 60 : 50}
+      />
+      {!desktop && detailSheet}
       <Modal
         visible={layers}
         transparent
