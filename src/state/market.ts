@@ -137,13 +137,16 @@ export function draftFor(f: Filters): Draft {
     exclude: f.exclude_direct,
   };
 }
+// 실거래 데이터는 최근 12개월만 있다(백엔드 가이드). 그보다 긴 기간은 같은 결과라 고르지 못하게 한다
+export const MAX_PERIOD_MONTHS = 12;
+export const PERIOD_NOTICE = "실거래 데이터는 최근 12개월까지 있어요";
 export function validateDraft(
   f: Filters,
   d: Draft,
 ): { filters?: Filters; error?: string } {
   const n = Number(d.period);
-  if (!Number.isInteger(n) || n < 1 || n > 60)
-    return { error: "기간은 1~60개월로 입력해 주세요" };
+  if (!Number.isInteger(n) || n < 1 || n > MAX_PERIOD_MONTHS)
+    return { error: `기간은 1~${MAX_PERIOD_MONTHS}개월로 입력해 주세요` };
   const result = changeProperty(f, f.property_type);
   result.period_months = n;
   result.exclude_direct = d.exclude;

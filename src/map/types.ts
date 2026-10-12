@@ -7,7 +7,7 @@ export type MapEvent =
   | { type: "camera"; lat: number; lng: number; zoom: number; bbox: BBox }
   | { type: "marker"; id: string }
   | { type: "ready" }
-  | { type: "mapClick" }
+  | { type: "mapClick"; lat: number; lng: number }
   | { type: "error"; message: string };
 export type MapProps = {
   markers: Marker[];

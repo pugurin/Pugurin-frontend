@@ -6,6 +6,7 @@ import type {
   Envelope,
   Filters,
   MarkerData,
+  Parcel,
   SearchResult,
   Sort,
   Stats,
@@ -131,6 +132,18 @@ export class Repository {
         })
       : Promise.reject<Envelope<Analysis>>(
           new ApiError("분석 API가 준비 중이에요", "API_PENDING"),
+        );
+  }
+  // 토지 정보(VWorld 미사용으로 공급처 없음)는 지금 항상 data: null + unavailable_reason으로 온다
+  parcelLookup(lat: number, lng: number, signal?: AbortSignal) {
+    return this.mode === "sample"
+      ? Promise.resolve<Envelope<Parcel | null>>({
+          data: null,
+          meta: { unavailable_reason: "source_unavailable" },
+        })
+      : this.client.get<Parcel | null>(
+          `/parcels/lookup?lat=${lat}&lng=${lng}`,
+          signal,
         );
   }
 }

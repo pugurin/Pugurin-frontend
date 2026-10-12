@@ -112,7 +112,7 @@ export default function MapCanvas(p: MapProps) {
       }}
       onPress={async (e) => {
         // 글자 박스를 먼저, 없으면 점을 찾는다(겹친 마커 중 실제로 누른 것을 고르기 위해)
-        const point = e.nativeEvent.point;
+        const { point, lngLat } = e.nativeEvent;
         let hit = await map.current?.queryRenderedFeatures(point, {
           layers: [MARKER_LABEL_LAYER.id],
         });
@@ -121,7 +121,11 @@ export default function MapCanvas(p: MapProps) {
             layers: [MARKER_DOT_LAYER.id],
           });
         const id = hit?.[0]?.properties?.id;
-        p.onEvent(id ? { type: "marker", id: String(id) } : { type: "mapClick" });
+        p.onEvent(
+          id
+            ? { type: "marker", id: String(id) }
+            : { type: "mapClick", lng: lngLat[0], lat: lngLat[1] },
+        );
       }}
     >
       <Camera
