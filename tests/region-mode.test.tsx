@@ -31,6 +31,6 @@ it("샘플 지역 시트를 API로 전환하면 이전 샘플 차트를 지운�
   );
   await screen.findByText("샘플 차트");
   rerender(<RegionContent {...props} repo={new Repository("api", client)} />);
-  await screen.findByText("지역·지도 영역의 거래 목록 API가 준비 중이에요");
+  await screen.findAllByText("네트워크에 연결할 수 없어요. 연결 상태를 확인해 주세요");
   await waitFor(() => expect(screen.queryByText("샘플 차트")).toBeNull());
 });

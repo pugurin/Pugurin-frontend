@@ -1,5 +1,13 @@
-import React, { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, TextInput, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import type { Term } from "../api/types";
 import { C } from "../theme/tokens";
 import {
@@ -345,11 +353,39 @@ export function TermPopup({
   term,
   onClose,
   onDetail,
+  anchor,
 }: {
   term: Term | null;
   onClose: () => void;
   onDetail: (t: Term) => void;
+  anchor?: { x: number; y: number };
 }) {
+  const { width, height } = useWindowDimensions();
+  const viewportWidth =
+    width || (Platform.OS === "web" ? window.innerWidth : 0);
+  const viewportHeight =
+    height || (Platform.OS === "web" ? window.innerHeight : 0);
+  const desktop = Platform.OS === "web" && viewportWidth >= 1024;
+  const left = Math.max(
+    16,
+    Math.min(anchor?.x ?? (viewportWidth - 400) / 2, viewportWidth - 416),
+  );
+  const top = Math.max(
+    16,
+    Math.min((anchor?.y ?? 120) + 12, viewportHeight - 320),
+  );
+  useEffect(() => {
+    if (!term || Platform.OS !== "web") return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", escape, true);
+    return () => document.removeEventListener("keydown", escape, true);
+  }, [term, onClose]);
   return (
     <Modal
       visible={!!term}
@@ -361,14 +397,25 @@ export function TermPopup({
         onPress={onClose}
         style={{
           flex: 1,
-          backgroundColor: "rgba(17,17,16,.45)",
-          justifyContent: "center",
+          backgroundColor: desktop ? "transparent" : "rgba(17,17,16,.45)",
+          justifyContent: desktop ? "flex-start" : "center",
           padding: 20,
         }}
       >
         <Pressable
-          onPress={() => {}}
+          accessibilityLabel="용어 도움말"
+          onPress={(event) => event.stopPropagation()}
           style={{
+            position: desktop ? "absolute" : "relative",
+            left: desktop ? left : undefined,
+            top: desktop ? top : undefined,
+            width: desktop ? 400 : undefined,
+            maxHeight: desktop
+              ? Math.max(180, viewportHeight - top - 16)
+              : undefined,
+            borderWidth: desktop ? 1 : 0,
+            borderColor: C.greenRule,
+            boxShadow: desktop ? "0 8px 32px rgba(30,45,29,.18)" : undefined,
             backgroundColor: C.surface,
             borderRadius: 18,
             padding: 20,
