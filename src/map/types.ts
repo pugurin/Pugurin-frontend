@@ -1,3 +1,5 @@
+import type { Geometry } from "geojson";
+import type { SelectionPoint } from "./selection";
 import type { BBox, Marker, Property } from "../api/types";
 export type Camera = { lat: number; lng: number; zoom: number; bbox: BBox };
 export type MapCommand =
@@ -13,10 +15,16 @@ export type MapProps = {
   markers: Marker[];
   property: Property;
   selected: string | null;
+  selectionPoint?: SelectionPoint;
+  parcelGeometry?: Geometry | null;
   unit: "평" | "㎡";
   base: "normal" | "satellite";
   cadastral: boolean;
   initial: Camera;
   command?: MapCommand & { nonce: number };
   onEvent: (e: MapEvent) => void;
+  onMarkerHover?: (
+    marker: Marker | null,
+    point?: { x: number; y: number },
+  ) => void;
 };

@@ -3,21 +3,36 @@ import { Repository } from "../src/api/repository";
 import { ApiClient } from "../src/api/client";
 import { DEFAULT_FILTERS, HOME } from "../src/state/market";
 describe("메인 API 계약", () => {
-  it("머지되지 않은 API를 요청하거나 샘플로 대체하지 않는다", async () => {
-    let calls = 0;
+  it("단지 분석은 실제 머지된 경로와 거래 조건으로 조회한다", async () => {
+    let url = "";
+    const data = {
+      zonings: null,
+      region: { name: "우동", region_code: "2635010500" },
+      comparison: null,
+      disclaimer: "참고용 정보",
+    };
     const repo = new Repository(
       "api",
-      new ApiClient("http://api", "d", async () => {
-        calls++;
-        return new Response("{}");
+      new ApiClient("http://api", "d", async (value) => {
+        url = String(value);
+        return new Response(
+          JSON.stringify({
+            data,
+            meta: { zoning_unavailable_reason: "source_unavailable" },
+          }),
+        );
       }),
     );
-    for (const promise of [
-      repo.analysis("id"),
-      repo.transactions(DEFAULT_FILTERS, { bbox: HOME.bbox }),
-    ])
-      await expect(promise).rejects.toMatchObject({ code: "API_PENDING" });
-    expect(calls).toBe(0);
+    const result = await repo.analysis("id", undefined, {
+      ...DEFAULT_FILTERS,
+      deal_type: "jeonse",
+      exclude_direct: true,
+    });
+    expect(url).toContain("/analysis/complexes/id?");
+    expect(url).toContain("deal_type=jeonse");
+    expect(url).toContain("exclude_direct=true");
+    expect(url).toContain("period_months=12");
+    expect(result.data).toEqual(data);
   });
   it("검색과 단지 이력은 실제 계약에 있는 필드로 요청한다", async () => {
     const urls: string[] = [];
@@ -84,4 +99,22 @@ it("지역·단지 통계는 머지된 경로와 필터를 사용하고 응답 �
   expect(urls[1]).toContain("/stats/regions/2635010500?");
   expect(urls[1]).toContain("period_months=12");
   expect(result.data).toEqual(data);
+});
+
+it("토지 거래는 머지된 지도 영역 목록 API로 요청한다", async () => {
+  const urls: string[] = [];
+  const repo = new Repository(
+    "api",
+    new ApiClient("http://api", "d", async (url) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({ data: [] }));
+    }),
+  );
+  await repo.transactions(
+    { ...DEFAULT_FILTERS, property_type: "land", deal_type: "sale" },
+    { bbox: HOME.bbox },
+  );
+  expect(urls[0]).toContain("/transactions?");
+  expect(urls[0]).toContain("property_type=land");
+  expect(urls[0]).toContain("bbox=");
 });
