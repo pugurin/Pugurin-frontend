@@ -30,7 +30,8 @@ import {
   busanQueryBBox,
   markerId,
   MAX_PERIOD_MONTHS,
-  PERIOD_NOTICE,
+  PERIOD_OPTIONS,
+  nextPeriod,
   PROPERTY,
 } from "../state/market";
 import { C } from "../theme/tokens";
@@ -996,27 +997,47 @@ export function MapHome({
                     ? `지도에 표시된 ${markers.length}곳을 살펴볼 수 있어요.`
                     : "현재 지도 영역에서 조회된 거래가 없어요."}
                 </T>
-                <ScrollView>
-                  {markers
-                    .filter((marker) => marker.kind !== "parcel")
-                    .map((marker) => (
-                      <Pressable
-                        key={markerId(marker)}
-                        onPress={() => markerPress(marker)}
-                        accessibilityRole="button"
-                        style={{
-                          paddingVertical: 14,
-                          borderBottomWidth: 1,
-                          borderColor: C.rule,
-                        }}
-                      >
-                        <T bold>{marker.name}</T>
-                        <T size={13} color={C.muted}>
-                          거래 {marker.transaction_count}건
-                        </T>
-                      </Pressable>
-                    ))}
-                </ScrollView>
+                {markers.length > 0 ? (
+                  <ScrollView style={{ flex: 1 }}>
+                    {markers
+                      .filter(
+                        (marker): marker is Exclude<Marker, { kind: "parcel" }> =>
+                          marker.kind !== "parcel",
+                      )
+                      .map((marker) => (
+                        <Pressable
+                          key={markerId(marker)}
+                          onPress={() => markerPress(marker)}
+                          accessibilityRole="button"
+                          style={{
+                            paddingVertical: 14,
+                            borderBottomWidth: 1,
+                            borderColor: C.rule,
+                          }}
+                        >
+                          <T bold>{marker.name}</T>
+                          <T size={13} color={C.muted}>
+                            거래 {marker.transaction_count}건
+                          </T>
+                        </Pressable>
+                      ))}
+                  </ScrollView>
+                ) : (
+                  filters.period_months < MAX_PERIOD_MONTHS && (
+                    <Btn
+                      secondary
+                      small
+                      onPress={() =>
+                        onFilters({
+                          ...filters,
+                          period_months: nextPeriod(filters.period_months),
+                        })
+                      }
+                    >
+                      기간 늘리기 (최근 {nextPeriod(filters.period_months)}개월)
+                    </Btn>
+                  )
+                )}
               </>
             )}
             {todayTerm && (
@@ -1166,7 +1187,7 @@ export function MapHome({
               />
             </View>
             <View style={[s.row, { flexWrap: "wrap" }]}>
-              {[3, 6, 12].map((n) => (
+              {PERIOD_OPTIONS.map((n) => (
                 <Chip
                   key={n}
                   selected={filters.period_months === n}
@@ -1179,9 +1200,6 @@ export function MapHome({
                 </Chip>
               ))}
             </View>
-            <T size={14} color={C.muted}>
-              {PERIOD_NOTICE}
-            </T>
           </Pressable>
         </Pressable>
       </Modal>

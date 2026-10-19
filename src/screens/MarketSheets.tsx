@@ -433,8 +433,8 @@ export function ComplexContent({
           <Section
             title={
               filters.deal_type === "monthly"
-                ? "월세 추이 · 최근 1년"
-                : "평당가 추이 · 최근 1년"
+                ? `월세 추이 · 최근 ${TREND_MONTHS / 12}년`
+                : `평당가 추이 · 최근 ${TREND_MONTHS / 12}년`
             }
             right={<Help onPress={() => onHelp("평당가")} />}
           >
