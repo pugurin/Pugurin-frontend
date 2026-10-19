@@ -31,7 +31,8 @@ describe("메인 API 계약", () => {
     expect(url).toContain("/analysis/complexes/id?");
     expect(url).toContain("deal_type=jeonse");
     expect(url).toContain("exclude_direct=true");
-    expect(url).toContain("period_months=12");
+    // 비교 문구가 추이 그래프 아래에 붙으므로 그래프와 같은 기본 3년
+    expect(url).toContain("period_months=36");
     expect(result.data).toEqual(data);
   });
   it("검색과 단지 이력은 실제 계약에 있는 필드로 요청한다", async () => {
