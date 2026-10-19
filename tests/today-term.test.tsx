@@ -122,10 +122,10 @@ function setup(todayTerm: Term | null) {
 
 describe("오늘의 용어 카드", () => {
   afterEach(cleanup);
-  it("카드를 누르면 용어 상세, ✕를 누르면 닫기", () => {
+  it("카드를 누르면 학습 진입, ✕를 누르면 닫기", () => {
     const { onTodayOpen, onTodayClose } = setup(term("a", true));
-    expect(screen.getByText("a 한 줄 설명")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("오늘의 용어 용어a 자세히 보기"));
+    expect(screen.getByText("단어 5개 짝 맞추기")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("오늘의 용어 짝 맞추기 시작"));
     expect(onTodayOpen).toHaveBeenCalledWith(
       expect.objectContaining({ id: "a" }),
     );

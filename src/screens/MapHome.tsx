@@ -32,6 +32,7 @@ import {
   PROPERTY,
 } from "../state/market";
 import { C } from "../theme/tokens";
+import { Brand } from "../components/Brand";
 import { TodayTermCard } from "../components/TodayTermCard";
 import {
   AdSlot,
@@ -70,6 +71,8 @@ export function MapHome({
   todayTerm,
   onTodayOpen,
   onTodayClose,
+  todayStreak = 0,
+  todayCompleted = false,
 }: {
   repo: Repository;
   filters: Filters;
@@ -90,6 +93,8 @@ export function MapHome({
   onMeta: (m: Meta) => void;
   // 오늘의 용어 (D01). null이면 카드를 보여주지 않는다(꺼짐·오늘 닫음·용어 없음)
   todayTerm?: Term | null;
+  todayStreak?: number;
+  todayCompleted?: boolean;
   onTodayOpen?: (term: Term) => void;
   onTodayClose?: () => void;
 }) {
@@ -287,8 +292,10 @@ export function MapHome({
             },
           ]}
         >
+          <Brand size={32} />
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="단지·주소·동네 검색"
             onPress={onSearch}
             style={[s.row, { flex: 1, height: 40 }]}
           >
@@ -300,7 +307,7 @@ export function MapHome({
             accessibilityLabel="채팅"
             onPress={(e) => {
               e.stopPropagation();
-              notify("중개사 채팅은 2차에서 열려요");
+              notify("문의 채팅은 준비 중이에요");
             }}
             style={{ padding: 8 }}
           >
@@ -457,6 +464,8 @@ export function MapHome({
           >
             <TodayTermCard
               term={todayTerm}
+              streak={todayStreak}
+              completed={todayCompleted}
               onOpen={() => onTodayOpen?.(todayTerm)}
               onClose={() => onTodayClose?.()}
             />
