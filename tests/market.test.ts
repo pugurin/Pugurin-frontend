@@ -7,6 +7,7 @@ import {
   kakaoZoom,
   validateDraft,
   draftFor,
+  nextPeriod,
 } from "../src/state/market";
 const base = {
   property_type: "apartment" as const,
@@ -77,10 +78,19 @@ describe("지도 필터와 표시 계약", () => {
   });
 });
 
-describe("기간 제한 (실데이터 12개월)", () => {
-  it("12개월을 넘는 기간은 받지 않는다", () => {
+describe("기간 (최대 60개월)", () => {
+  it("1~60개월만 받는다", () => {
     const draft = draftFor(base);
-    expect(validateDraft(base, { ...draft, period: "24" }).error).toBe("기간은 1~12개월로 입력해 주세요");
-    expect(validateDraft(base, { ...draft, period: "12" }).filters?.period_months).toBe(12);
+    expect(
+      validateDraft(base, { ...draft, period: "60" }).filters?.period_months,
+    ).toBe(60);
+    expect(validateDraft(base, { ...draft, period: "61" }).error).toBe(
+      "기간은 1~60개월로 입력해 주세요",
+    );
+  });
+  it("기간 늘리기는 12개월 미만이면 12, 이상이면 두 배(최대 60)", () => {
+    expect([1, 6, 12, 24, 36, 60].map(nextPeriod)).toEqual([
+      12, 12, 24, 48, 60, 60,
+    ]);
   });
 });
