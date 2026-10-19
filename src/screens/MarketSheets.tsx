@@ -171,7 +171,7 @@ export function RegionContent({
       </Section>
       <View style={[s.card, { borderStyle: "dashed" }]}>
         <T color={C.light} size={14}>
-          주변 중개사 목록은 2차에서 열려요
+          ⏸ 주변 중개사 연결은 보류 중이에요
         </T>
       </View>
       <Notice date={date} mode={repo.mode} />
@@ -202,6 +202,8 @@ export function ComplexContent({
   const [stats, setStats] = useState<Stats | null>(null);
   const [comparison, setComparison] = useState<Stats | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [analysisError,setAnalysisError] = useState<string|null>(null);
+  const [analysisRetry,setAnalysisRetry] = useState(0);
   const [meta, setMeta] = useState<Meta>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -241,6 +243,7 @@ export function ComplexContent({
     const a = new AbortController();
     setStats(null);
     setAnalysis(null);
+    setAnalysisError(null);
     setStatsError(false);
     if (complex?.id === id)
       repo
@@ -257,13 +260,13 @@ export function ComplexContent({
           if (!a.signal.aborted) setStatsError(true);
         });
     repo
-      .analysis(id, a.signal)
+      .analysis(id, a.signal, filters)
       .then((r) => {
         if (!a.signal.aborted) setAnalysis(r.data);
       })
-      .catch(() => {});
+      .catch(e => {if(!a.signal.aborted)setAnalysisError(e.message);});
     return () => a.abort();
-  }, [id, complex?.id, complex?.property_type, repo, filters, retry]);
+  }, [id, complex?.id, complex?.property_type, repo, filters, retry, analysisRetry]);
   useEffect(() => {
     setComparison(null);
     if (!complex) return;
@@ -424,6 +427,11 @@ export function ComplexContent({
               </T>
             )}
           </Section>
+          {analysis?.comparison?.summary && (
+            <T size={14} color={C.muted}>
+              전체 평형 기준 · {analysis.comparison.summary}
+            </T>
+          )}
           {stage === "half" ? (
             <Btn onPress={() => onStage("full")}>자세히 보기</Btn>
           ) : (
@@ -491,45 +499,60 @@ export function ComplexContent({
                 title="용도지역 요약"
                 right={<Help onPress={() => onHelp("용도지역")} />}
               >
-                {analysis?.zoning_summary ? (
-                  <View
-                    style={[
-                      s.card,
-                      {
-                        backgroundColor: C.landWash,
-                        borderColor: C.land,
-                        gap: 8,
-                      },
-                    ]}
-                  >
-                    <T bold color={C.land}>
-                      {analysis.zoning_summary.zone_type}
-                    </T>
-                    <T>{analysis.zoning_summary.plain_explanation}</T>
-                    <T bold>
-                      건폐율{" "}
-                      {analysis.zoning_summary.max_building_coverage_ratio}% ·
-                      용적률 {analysis.zoning_summary.max_floor_area_ratio}%
-                    </T>
-                    <T size={12} color={C.muted}>
-                      출처 · {analysis.zoning_summary.ratio_source}
-                    </T>
-                  </View>
+                {analysisError ? <StateCard error={analysisError} onRetry={()=>setAnalysisRetry(x=>x+1)}/> : analysis?.zonings?.length ? (
+                  analysis.zonings.map((zone, i) => (
+                    <View
+                      key={`${zone.zone_type}-${i}`}
+                      style={[
+                        s.card,
+                        {
+                          backgroundColor: C.landWash,
+                          borderColor: C.land,
+                          gap: 8,
+                        },
+                      ]}
+                    >
+                      <T bold color={C.land}>
+                        {zone.zone_type}
+                      </T>
+                      <T size={14}>
+                        {zone.inclusion}
+                        {zone.area_ratio != null
+                          ? ` · ${(zone.area_ratio * 100).toFixed(0)}%`
+                          : ""}
+                      </T>
+                      <T>
+                        건폐율{" "}
+                        {zone.max_building_coverage_ratio == null
+                          ? "정보 없음"
+                          : `${zone.max_building_coverage_ratio}%`}{" "}
+                        · 용적률{" "}
+                        {zone.max_floor_area_ratio == null
+                          ? "정보 없음"
+                          : `${zone.max_floor_area_ratio}%`}
+                      </T>
+                    </View>
+                  ))
                 ) : (
                   <T size={14} color={C.light}>
-                    분석 API가 준비 중이에요
+                    필지 정보를 확보한 뒤 용도지역을 보여드릴 수 있어요.
+                  </T>
+                )}
+                {analysis?.disclaimer && (
+                  <T size={12} color={C.muted}>
+                    {analysis.disclaimer}
                   </T>
                 )}
               </Section>
             </>
           )}
           <Pressable
-            onPress={() => notify("중개사 문의는 2차에서 열려요")}
+            onPress={() => notify("중개사 연결은 보류 중이에요")}
             accessibilityRole="button"
             style={[s.card, { marginTop: 16, borderStyle: "dashed" }]}
           >
             <T size={15} color={C.light}>
-              주변 중개사에게 문의 · 2차
+              ⏸ 주변 중개사 연결 · 보류
             </T>
           </Pressable>
           <Notice date={meta?.data_as_of} mode={meta?.data_mode ?? repo.mode} />

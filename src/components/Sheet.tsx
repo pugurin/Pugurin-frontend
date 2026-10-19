@@ -45,7 +45,7 @@ export function Sheet({
     const id = position.addListener(({ value }) => {
       live.current = value;
     });
-    return () => position.removeListener(id);
+    return () => {position.stopAnimation();position.removeListener(id);};
   }, [position]);
   const snap = (target: number) =>
     Animated.spring(position, {

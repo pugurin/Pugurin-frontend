@@ -24,6 +24,7 @@ import {
   toMapZoom,
 } from "./style";
 import type { MapProps } from "./types";
+import { selectionFeatures, SELECTION_SOURCE, SELECTION_CIRCLE_LAYER, PARCEL_FILL_LAYER, PARCEL_LINE_LAYER } from "./selection";
 
 // 마커 배경(둥근 사각형). 웹은 MapCanvas.web.tsx에서 캔버스로 그린다
 const MARKER_IMAGES = {
@@ -59,6 +60,11 @@ export default function MapCanvas(p: MapProps) {
   const data = useMemo(
     () => markerFeatures(p.markers, p.property, p.unit, p.selected),
     [p.markers, p.property, p.unit, p.selected],
+  );
+
+  const selection = useMemo(
+    () => selectionFeatures(p.selectionPoint, p.parcelGeometry),
+    [p.selectionPoint, p.parcelGeometry],
   );
 
   useEffect(() => {
@@ -138,6 +144,11 @@ export default function MapCanvas(p: MapProps) {
         }}
       />
       <Images images={MARKER_IMAGES} />
+      <GeoJSONSource id={SELECTION_SOURCE} data={selection}>
+        <Layer {...PARCEL_FILL_LAYER} />
+        <Layer {...PARCEL_LINE_LAYER} />
+        <Layer {...SELECTION_CIRCLE_LAYER} />
+      </GeoJSONSource>
       <GeoJSONSource id={MARKER_SOURCE} data={data}>
         <Layer {...MARKER_DOT_LAYER} />
         <Layer {...MARKER_LABEL_LAYER} />
