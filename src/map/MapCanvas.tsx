@@ -96,7 +96,8 @@ export default function MapCanvas(p: MapProps) {
       touchRotate={false}
       touchPitch={false}
       logo={false}
-      attributionPosition={{ bottom: 6, left: 6 }}
+      // 출처 표시(OSM 저작권)는 가려지면 안 된다. 왼쪽 아래는 목록 보기, 오른쪽은 지도 버튼 자리라 비어 있는 왼쪽 위에 둔다(#77)
+      attributionPosition={{ top: 8, left: 8 }}
       onDidFinishLoadingStyle={() => {
         if (loaded.current) return;
         loaded.current = true;
