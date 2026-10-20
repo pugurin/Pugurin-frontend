@@ -16,6 +16,9 @@ import {
   loadMatchingRecord,
 } from "../src/glossary/matching";
 import { kstDateKey } from "../src/glossary/today";
+import { dailyQuizzes, translateQuiz, type Quiz } from "../src/glossary/quiz";
+const label = (quiz: Quiz, id = quiz.answerId) =>
+  `보기 ${quiz.choices.find((c) => c.id === id)!.text.replace(/\n/g, ", ")}`;
 const storage = vi.hoisted(() => ({
   data: new Map<string, string>(),
   getItem: vi.fn(),
@@ -155,6 +158,16 @@ describe("짝 맞추기 화면", () => {
       fireEvent.click(screen.getByLabelText(`뜻 ${term.short_definition}`));
     }
     await waitFor(() => expect(actions.onComplete).toHaveBeenCalledWith(1));
+    fireEvent.click(screen.getByText("다음 문제"));
+    const quizzes = dailyQuizzes(kstDateKey());
+    // 매물 카드 번역하기 → 헷갈리는 쌍 고르기를 정답으로 푼다
+    expect(screen.getByText("매물 카드 번역하기")).toBeTruthy();
+    expect(screen.getByText(quizzes[0].card!)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText(label(quizzes[0])));
+    expect(screen.getByText("✓ 맞았어요")).toBeTruthy();
+    fireEvent.click(screen.getByText("다음 문제"));
+    expect(screen.getByText("헷갈리는 쌍 고르기")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText(label(quizzes[1])));
     fireEvent.click(screen.getByText("결과 보기"));
     expect(screen.getByText("오늘의 용어 끝")).toBeTruthy();
     fireEvent.click(screen.getByLabelText(`${daily[0].term} 용어 상세 보기`));
@@ -162,6 +175,59 @@ describe("짝 맞추기 화면", () => {
     expect((await loadMatchingRecord())?.completedDates).toEqual([
       kstDateKey(),
     ]);
+  });
+  it("추가 문제에서 틀리면 이유를 보여주고 잘못 읽은 용어를 복습에 넣는다", async () => {
+    const parcel = {
+      pnu: "1",
+      jibun_address: "부산 해운대구 우동 1",
+      land_category: "전",
+      road_side: "맹지",
+      official_land_price_per_m2: 380_000,
+      zonings: [
+        {
+          zone_type: "자연녹지지역",
+          area_ratio: 1,
+          inclusion: "포함",
+          max_building_coverage_ratio: 20,
+          max_floor_area_ratio: 80,
+        },
+      ],
+    };
+    render(
+      <MatchingScreen
+        terms={terms}
+        parcel={parcel}
+        onClose={() => {}}
+        onTerm={() => {}}
+      />,
+    );
+    await ready();
+    for (const term of createMatchingSession(terms).termIds.map(
+      (id) => terms.find((t) => t.id === id)!,
+    )) {
+      fireEvent.click(screen.getByLabelText(`단어 ${term.term}`));
+      fireEvent.click(screen.getByLabelText(`뜻 ${term.short_definition}`));
+    }
+    await waitFor(async () =>
+      expect((await loadMatchingRecord())?.completedDates).toEqual([kstDateKey()]),
+    );
+    await waitFor(() => {
+      fireEvent.click(screen.getByText("다음 문제"));
+      expect(screen.getByText("매물 카드 번역하기")).toBeTruthy();
+    });
+    const quiz = translateQuiz(kstDateKey(), parcel)!;
+    expect(screen.getByText("전 · 자연녹지 · 맹지 · 공시지가 ㎡당 38만")).toBeTruthy();
+    expect(screen.queryByText(/샘플 카드예요/)).toBeNull();
+    const wrong = quiz.choices.find((c) => c.id !== quiz.answerId)!;
+    fireEvent.click(screen.getByLabelText(label(quiz, wrong.id)));
+    expect(screen.getByText("아쉬워요. 내일 다시 나와요")).toBeTruthy();
+    expect(screen.getByText(/맹지\(도로접면\) = 도로에 닿지 않은 땅/)).toBeTruthy();
+    await waitFor(async () =>
+      expect(
+        (await loadMatchingRecord())?.session.wrongCounts[wrong.termId!],
+      ).toBe(1),
+    );
+    expect((await loadMatchingRecord())?.completedDates).toEqual([kstDateKey()]);
   });
   it("저장소 읽기 실패를 숨기지 않고 다시 불러올 수 있다", async () => {
     storage.getItem.mockRejectedValueOnce(new Error("기기 오류"));
