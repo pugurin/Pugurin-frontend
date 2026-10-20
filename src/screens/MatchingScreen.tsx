@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Pressable, ScrollView, View } from "react-native";
-import type { Term } from "../api/types";
+import type { Parcel, Term } from "../api/types";
 import { Icon, IconBtn, T } from "../components/ui";
 import { C } from "../theme/tokens";
 import { kstDateKey } from "../glossary/today";
@@ -15,6 +15,7 @@ import {
   type MatchingRecord,
   type MatchingSession,
 } from "../glossary/matching";
+import { dailyQuizzes, missedTermId, type Quiz } from "../glossary/quiz";
 const GREEN = "#3f9a3a",
   DARK_GREEN = "#2f7a2c",
   WASH = "#eef7ec",
@@ -24,11 +25,14 @@ export function MatchingScreen({
   onClose,
   onTerm,
   onComplete,
+  parcel,
 }: {
   terms: Term[];
   onClose: () => void;
   onTerm: (term: Term) => void;
   onComplete?: (streak: number) => void;
+  // 지도에서 마지막으로 본 땅. 있으면 매물 카드 번역하기를 이 땅으로 낸다
+  parcel?: Parcel | null;
 }) {
   const [record, setRecord] = useState<MatchingRecord | null>(null);
   const [loading, setLoading] = useState(true),
@@ -36,6 +40,10 @@ export function MatchingScreen({
     [saveError, setSaveError] = useState(false),
     [result, setResult] = useState(false),
     [saving, setSaving] = useState(false);
+  // 짝 맞추기 뒤 추가 문제. step이 null이면 짝 맞추기(또는 결과) 화면
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]),
+    [step, setStep] = useState<number | null>(null),
+    [picked, setPicked] = useState<string | null>(null);
   const current = useRef<MatchingRecord | null>(null),
     queue = useRef<Promise<void>>(Promise.resolve()),
     mounted = useRef(true),
@@ -128,6 +136,7 @@ export function MatchingScreen({
     const next = recordMatchingProgress(old, createMatchingSession(terms, today, old.session));
     put(next);
     setResult(false);
+    setStep(null);
     persist(next);
     return true;
   }
@@ -179,6 +188,40 @@ export function MatchingScreen({
     const next = selectMatching(latest.session, side, id);
     if (next !== latest.session) update(next);
   }
+  function startQuiz() {
+    if (refreshDay() || !session) return;
+    const next = dailyQuizzes(session.dateKey, {
+      parcel,
+      wrongTermIds: Object.keys(session.wrongCounts),
+    });
+    setQuizzes(next);
+    setPicked(null);
+    setStep(0);
+  }
+  function answer(choiceId: string) {
+    if (refreshDay() || step == null || picked) return;
+    setPicked(choiceId);
+    const missed = missedTermId(quizzes[step], choiceId);
+    const latest = current.current?.session;
+    if (missed && latest)
+      update({
+        ...latest,
+        wrongCounts: {
+          ...latest.wrongCounts,
+          [missed]: (latest.wrongCounts[missed] ?? 0) + 1,
+        },
+      });
+  }
+  function nextQuiz() {
+    if (refreshDay() || step == null) return;
+    setPicked(null);
+    if (step + 1 < quizzes.length) setStep(step + 1);
+    else {
+      setStep(null);
+      setResult(true);
+    }
+  }
+  const quiz = step == null ? null : quizzes[step];
   const daily =
     session?.termIds
       .map((id) => terms.find((t) => t.id === id))
@@ -272,6 +315,26 @@ export function MatchingScreen({
           <T bold style={text(20)}>
             오늘의 용어 끝
           </T>
+        ) : quiz ? (
+          <>
+            <View style={{ flex: 1, flexDirection: "row", gap: 5 }}>
+              {quizzes.map((q, i) => (
+                <View
+                  key={q.id}
+                  style={{
+                    flex: 1,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor:
+                      i < step! || (i === step && picked) ? GREEN : C.bg2,
+                  }}
+                />
+              ))}
+            </View>
+            <T bold style={text(15)}>
+              추가 {step! + 1}/{quizzes.length}
+            </T>
+          </>
         ) : (
           session && (
             <>
@@ -315,7 +378,9 @@ export function MatchingScreen({
       ) : (
         <>
           <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
-            {result ? (
+            {quiz ? (
+              <QuizView quiz={quiz} picked={picked} onPick={answer} />
+            ) : result ? (
               <>
                 <View
                   style={{ alignItems: "center", paddingVertical: 16, gap: 6 }}
@@ -499,21 +564,146 @@ export function MatchingScreen({
               </View>
             )}
           </ScrollView>
-          {(result || complete) && (
-            <View
-              style={{ padding: 16, borderTopWidth: 1, borderColor: C.rule }}
-            >
-              <Action
-                disabled={saveError || saving}
-                onPress={result ? close : () => setResult(true)}
+          {quiz ? (
+            picked && (
+              <View
+                style={{ padding: 16, borderTopWidth: 1, borderColor: C.rule }}
               >
-                {result ? "지도로 돌아가기" : "결과 보기"}
-              </Action>
-            </View>
+                <Action onPress={nextQuiz}>
+                  {step! + 1 < quizzes.length ? "다음 문제" : "결과 보기"}
+                </Action>
+              </View>
+            )
+          ) : (
+            (result || complete) && (
+              <View
+                style={{ padding: 16, borderTopWidth: 1, borderColor: C.rule }}
+              >
+                <Action
+                  disabled={saveError || saving}
+                  onPress={result ? close : startQuiz}
+                >
+                  {result ? "지도로 돌아가기" : "다음 문제"}
+                </Action>
+              </View>
+            )
           )}
         </>
       )}
     </View>
+  );
+}
+// 매물 카드 번역하기·헷갈리는 쌍 고르기 한 문제. 고르면 정답과 이유를 바로 보여준다
+function QuizView({
+  quiz,
+  picked,
+  onPick,
+}: {
+  quiz: Quiz;
+  picked: string | null;
+  onPick: (choiceId: string) => void;
+}) {
+  const text = (size: number) => ({ fontSize: size, lineHeight: size * 1.4 });
+  const correct = picked === quiz.answerId;
+  const pair = quiz.kind === "confusable";
+  return (
+    <>
+      <View style={{ gap: 6, paddingBottom: 6 }}>
+        <T bold color={DARK_GREEN} style={text(15)}>
+          {quiz.title}
+        </T>
+        <T bold style={text(22)}>
+          {quiz.prompt}
+        </T>
+      </View>
+      {quiz.card && (
+        <View
+          style={{
+            padding: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: C.rule,
+            backgroundColor: C.bg,
+            gap: 6,
+          }}
+        >
+          <T bold style={text(18)}>
+            {quiz.card}
+          </T>
+          {quiz.sample && (
+            <T color={C.muted} style={text(13)}>
+              샘플 카드예요. 지도에서 땅을 눌러 보면 그 땅으로 나와요.
+            </T>
+          )}
+        </View>
+      )}
+      <View style={{ gap: 10, flexDirection: pair ? "row" : "column" }}>
+        {quiz.choices.map((choice) => {
+          const isAnswer = choice.id === quiz.answerId,
+            isPicked = choice.id === picked;
+          const shown = Boolean(picked) && (isAnswer || isPicked);
+          return (
+            <Pressable
+              key={choice.id}
+              accessibilityRole="button"
+              accessibilityLabel={`보기 ${choice.text.replace(/\n/g, ", ")}`}
+              accessibilityState={{
+                selected: isPicked,
+                disabled: Boolean(picked),
+              }}
+              disabled={Boolean(picked)}
+              onPress={() => onPick(choice.id)}
+              style={{
+                flex: pair ? 1 : undefined,
+                minHeight: pair ? 64 : 56,
+                padding: 14,
+                borderRadius: 12,
+                borderWidth: 1.5,
+                borderStyle: shown && !isAnswer ? "dashed" : "solid",
+                borderColor: shown ? (isAnswer ? GREEN : BROWN) : C.rule,
+                backgroundColor: shown && isAnswer ? WASH : C.surface,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: pair ? "center" : "flex-start",
+                gap: 8,
+              }}
+            >
+              {shown && (
+                <Icon
+                  name={isAnswer ? "check" : "close"}
+                  size={18}
+                  color={isAnswer ? DARK_GREEN : BROWN}
+                />
+              )}
+              <T
+                bold={pair}
+                color={shown && !isAnswer ? BROWN : C.ink}
+                style={[text(pair ? 18 : 16), { flexShrink: 1 }]}
+              >
+                {choice.text}
+              </T>
+            </Pressable>
+          );
+        })}
+      </View>
+      {picked && (
+        <View
+          style={{
+            padding: 12,
+            borderRadius: 10,
+            backgroundColor: correct ? WASH : "#f7f1eb",
+            gap: 4,
+          }}
+        >
+          <T bold color={correct ? DARK_GREEN : BROWN} style={text(17)}>
+            {correct ? "✓ 맞았어요" : "아쉬워요. 내일 다시 나와요"}
+          </T>
+          <T color={correct ? DARK_GREEN : BROWN} style={text(16)}>
+            {quiz.explain}
+          </T>
+        </View>
+      )}
+    </>
   );
 }
 function Action({

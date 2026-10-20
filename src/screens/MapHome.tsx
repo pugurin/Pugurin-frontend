@@ -79,6 +79,7 @@ export function MapHome({
   onTodayClose,
   todayStreak = 0,
   todayCompleted = false,
+  onParcel,
 }: {
   repo: Repository;
   filters: Filters;
@@ -105,6 +106,8 @@ export function MapHome({
   todayCompleted?: boolean;
   onTodayOpen?: (term: Term) => void;
   onTodayClose?: () => void;
+  // 땅 정보를 받아 오면 알린다. 오늘의 용어 '매물 카드 번역하기'에 쓴다
+  onParcel?: (parcel: Parcel) => void;
 }) {
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === "web" && width >= 1024;
@@ -310,6 +313,7 @@ export function MapHome({
           return;
         }
         setSelected({ ...selection, parcel: r.data, loading: false });
+        if (r.data) onParcel?.(r.data);
       })
       .catch((e) => {
         if (!controller.signal.aborted)
