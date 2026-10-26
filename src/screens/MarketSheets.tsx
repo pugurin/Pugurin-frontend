@@ -30,6 +30,7 @@ import {
   Section,
   StateCard,
   T,
+  UnitToggle,
   s,
 } from "../components/ui";
 import { LoadingTip } from "../components/LoadingTip";
@@ -45,6 +46,7 @@ export function RegionContent({
   onHelp,
   date,
   unit,
+  onUnit,
 }: {
   marker: RegionMarker;
   filters: Filters;
@@ -54,6 +56,7 @@ export function RegionContent({
   onHelp: (name: string) => void;
   date?: string;
   unit: "평" | "㎡";
+  onUnit?: (u: "평" | "㎡") => void;
 }) {
   const { width } = useWindowDimensions();
   const twoColumns = Platform.OS === "web" && width >= 768 && width < 1024;
@@ -85,9 +88,12 @@ export function RegionContent({
   }, [repo, filters, marker.region_code, retry]);
   return (
     <>
-      <T size={22} bold>
-        {marker.name}
-      </T>
+      <View style={s.between}>
+        <T size={22} bold style={{ flex: 1 }}>
+          {marker.name}
+        </T>
+        {onUnit && <UnitToggle unit={unit} onUnit={onUnit} />}
+      </View>
       <T size={14} color={C.muted}>
         {PROPERTY[filters.property_type]} · {DEAL[filters.deal_type]} · 최근{" "}
         {filters.period_months}개월
@@ -200,6 +206,7 @@ export function ComplexContent({
   onHelp,
   notify,
   unit,
+  onUnit,
 }: {
   id: string;
   repo: Repository;
@@ -209,6 +216,7 @@ export function ComplexContent({
   onHelp: (name: string) => void;
   notify: (s: string) => void;
   unit: "평" | "㎡";
+  onUnit?: (u: "평" | "㎡") => void;
 }) {
   const { width } = useWindowDimensions();
   const twoColumns = Platform.OS === "web" && width >= 768 && width < 1024;
@@ -344,6 +352,7 @@ export function ComplexContent({
         <T size={stage === "full" ? 24 : 21} bold style={{ flex: 1 }}>
           {complex.name}
         </T>
+        {onUnit && <UnitToggle unit={unit} onUnit={onUnit} />}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="관심 단지 등록"
