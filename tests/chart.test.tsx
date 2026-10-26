@@ -10,6 +10,7 @@ vi.mock("react-native-svg", () => ({
   Circle: (p: any) => <circle {...p} />,
   Line: (p: any) => <line {...p} />,
   Rect: (p: any) => <rect {...p} />,
+  Text: ({ textAnchor, ...p }: any) => <text {...p} />,
 }));
 afterEach(cleanup);
 it("null 사이 고립된 유효 월세 통계도 점으로 표시한다", () => {
@@ -27,4 +28,21 @@ it("null 사이 고립된 유효 월세 통계도 점으로 표시한다", () =>
   expect(container.textContent).toContain("월세 중위값");
   const path = container.querySelector("path")?.getAttribute("d");
   expect(path).not.toContain("L");
+});
+it("x·y축이 무엇인지와 y축 눈금 금액을 표시한다", () => {
+  const { container } = render(
+    <Chart
+      trend={[
+        { month: "2026-07", count: 5, median_price_per_pyeong: 50_000_000 },
+        { month: "2026-08", count: 5, median_price_per_pyeong: 60_000_000 },
+      ]}
+    />,
+  );
+  expect(container.textContent).toContain("↑ 평당가 (중위값)");
+  expect(container.textContent).toContain("거래 월 →");
+  const ticks = [...container.querySelectorAll("text")].map(
+    (t) => t.textContent,
+  );
+  expect(ticks).toHaveLength(3);
+  ticks.forEach((t) => expect(t).toMatch(/만$/));
 });
