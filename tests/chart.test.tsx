@@ -46,3 +46,25 @@ it("x·y축이 무엇인지와 y축 눈금 금액을 표시한다", () => {
   expect(ticks).toHaveLength(3);
   ticks.forEach((t) => expect(t).toMatch(/만$/));
 });
+it("비교선이 있으면 그래프와 같은 선 모양으로 범례를 그린다", () => {
+  const trend = [
+    { month: "2026-07", count: 5, median_price_per_pyeong: 50_000_000 },
+    { month: "2026-08", count: 5, median_price_per_pyeong: 60_000_000 },
+  ];
+  const { container } = render(
+    <Chart
+      trend={trend}
+      comparison={trend.map((t) => ({
+        ...t,
+        median_price_per_pyeong: 40_000_000,
+      }))}
+    />,
+  );
+  expect(container.textContent).toContain("이 단지");
+  expect(container.textContent).toContain("해당 지역 전체");
+  expect(container.textContent).not.toContain("┅");
+  const dashedSwatch = [...container.querySelectorAll("line")].filter(
+    (l) => l.getAttribute("stroke-dasharray") === "5 4",
+  );
+  expect(dashedSwatch).toHaveLength(1);
+});
