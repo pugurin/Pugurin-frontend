@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import type { Term } from "../api/types";
 import { C } from "../theme/tokens";
+import { TodayTermCard } from "../components/TodayTermCard";
 import {
   Btn,
   Chip,
@@ -33,12 +34,17 @@ export function GlossaryScreen({
   error,
   onRetry,
   onTerm,
+  today,
+  onToday,
 }: {
   terms: Term[];
   loading: boolean;
   error: string | null;
   onRetry: () => void;
   onTerm: (t: Term) => void;
+  // 지도 위 오늘의 용어 카드를 닫았거나 껐어도 여기서 짝 맞추기를 다시 시작한다 (#102)
+  today?: { streak: number; completed: boolean; matched: number };
+  onToday?: () => void;
 }) {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
@@ -143,6 +149,11 @@ export function GlossaryScreen({
           <StateCard loading={loading} error={error} onRetry={onRetry} />
         ) : (
           <>
+            {!q && !category && today && onToday && (
+              <View style={{ paddingHorizontal: 16, paddingTop: 14 }}>
+                <TodayTermCard {...today} onOpen={onToday} />
+              </View>
+            )}
             {!q && !category && (
               <View style={{ padding: 18, backgroundColor: C.bg }}>
                 <T bold color={C.muted} style={{ marginBottom: 12 }}>
