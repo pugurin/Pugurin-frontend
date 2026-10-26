@@ -478,7 +478,7 @@ export default function App() {
                 onTodayClose={() => {
                   setTodayClosedOn(todayKey);
                   void store("today_closed_on", todayKey);
-                  notify("오늘은 더 보이지 않아요\n더보기에서 끌 수 있어요");
+                  notify("오늘은 지도에서 숨겨요\n용어 탭에서 다시 풀 수 있어요");
                 }}
               />
             </View>
@@ -489,6 +489,8 @@ export default function App() {
                 error={termsError}
                 onRetry={() => setTermsRetry((x) => x + 1)}
                 onTerm={(term) => setRoute({ kind: "term", term, map: false })}
+                today={learning}
+                onToday={() => setRoute({ kind: "matching" })}
               />
             )}
             {tab === "more" && (

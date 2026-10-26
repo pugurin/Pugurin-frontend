@@ -10,6 +10,7 @@ import {
 import { kstDateKey, pickToday, todayLabel } from "../src/glossary/today";
 import { MapHome } from "../src/screens/MapHome";
 import { TodayTermCard } from "../src/components/TodayTermCard";
+import { GlossaryScreen } from "../src/screens/GlossaryScreen";
 import { DEFAULT_FILTERS } from "../src/state/market";
 import type { Repository } from "../src/api/repository";
 import type { Term } from "../src/api/types";
@@ -170,5 +171,38 @@ describe("오늘의 용어 카드 진행 표시", () => {
     cleanup();
     card({ matched: 5, completed: true });
     expect(screen.getByText("결과")).toBeTruthy();
+  });
+});
+
+// 지도 카드를 닫아도 용어 탭에서 짝 맞추기를 다시 시작할 수 있다 (#102)
+describe("용어 탭의 오늘의 용어 입구", () => {
+  afterEach(cleanup);
+  const glossary = (onToday = vi.fn()) => {
+    cleanup();
+    render(
+      <GlossaryScreen
+        terms={[term("1", true)]}
+        loading={false}
+        error={null}
+        onRetry={() => {}}
+        onTerm={() => {}}
+        today={{ streak: 0, completed: false, matched: 0 }}
+        onToday={onToday}
+      />,
+    );
+    return onToday;
+  };
+  it("닫기 없이 짝 맞추기를 시작한다", () => {
+    const onToday = glossary();
+    expect(screen.queryByLabelText("오늘의 용어 닫기")).toBeNull();
+    fireEvent.click(screen.getByLabelText("오늘의 용어 짝 맞추기 시작"));
+    expect(onToday).toHaveBeenCalledTimes(1);
+  });
+  it("검색 중에는 숨긴다", () => {
+    glossary();
+    fireEvent.change(screen.getByPlaceholderText("궁금한 용어를 검색하세요"), {
+      target: { value: "용어" },
+    });
+    expect(screen.queryByLabelText("오늘의 용어 짝 맞추기 시작")).toBeNull();
   });
 });

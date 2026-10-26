@@ -11,9 +11,10 @@ export function TodayTermCard({
   completed = false,
   matched = 0,
 }: {
-  term: Term;
+  term?: Term;
   onOpen: () => void;
-  onClose: () => void;
+  // 없으면 닫기(✕)를 숨긴다. 용어 탭 입구는 닫을 수 없다
+  onClose?: () => void;
   streak?: number;
   completed?: boolean;
   // 오늘 맞힌 짝 개수(0~5). 1~4면 진행 중이라 "이어서"로 보여준다
@@ -31,7 +32,7 @@ export function TodayTermCard({
         borderColor: C.greenRule,
         borderRadius: 14,
         paddingLeft: 14,
-        paddingRight: 5,
+        paddingRight: onClose ? 5 : 12,
         boxShadow: "0 2px 8px rgba(17,17,16,.1)",
       }}
     >
@@ -81,21 +82,23 @@ export function TodayTermCard({
           </T>
         </View>
       </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="오늘의 용어 닫기"
-        onPress={onClose}
-        style={{
-          width: 38,
-          height: 44,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <T size={18} color={C.light}>
-          ✕
-        </T>
-      </Pressable>
+      {onClose && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="오늘의 용어 닫기"
+          onPress={onClose}
+          style={{
+            width: 38,
+            height: 44,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <T size={18} color={C.light}>
+            ✕
+          </T>
+        </Pressable>
+      )}
     </View>
   );
 }
