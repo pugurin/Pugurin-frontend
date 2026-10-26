@@ -58,6 +58,11 @@ export function TransactionRow({
               {tx.trade_method === "direct" ? "직거래" : "중개"}
             </T>
           )}
+          {tx.is_renewal && (
+            <T size={12} color={C.muted}>
+              갱신
+            </T>
+          )}
           {tx.is_cancelled && (
             <View
               style={{

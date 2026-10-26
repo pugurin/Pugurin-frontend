@@ -18,6 +18,7 @@ import {
   SAMPLE_META,
   SAMPLE_STATS,
   TERMS,
+  TRANSACTIONS,
   sampleMarkers,
   sampleSearch,
   sampleTransactions,
@@ -65,6 +66,7 @@ export class Repository {
       ? new URLSearchParams({
           deal_type: f.deal_type,
           exclude_direct: String(f.exclude_direct),
+          ...renewals(f),
         })
       : queryForFilters(f, opts.region ? undefined : opts.bbox);
     if (opts.region) q.set("region_code", opts.region);
@@ -74,6 +76,24 @@ export class Repository {
     q.set("page_size", "20");
     return this.client.get<Transaction[]>(
       `${opts.complexId ? `/complexes/${encodeURIComponent(opts.complexId)}/transactions` : "/transactions"}?${q}`,
+      signal,
+    );
+  }
+  // 해제된 거래·갱신 계약도 조회된다
+  transaction(id: string, signal?: AbortSignal) {
+    if (this.mode === "sample") {
+      const tx = TRANSACTIONS.find((t) => t.id === id);
+      return tx
+        ? Promise.resolve<Envelope<Transaction>>({
+            data: tx,
+            meta: SAMPLE_META,
+          })
+        : Promise.reject(
+            new ApiError("거래를 찾을 수 없어요", "RESOURCE_NOT_FOUND"),
+          );
+    }
+    return this.client.get<Transaction>(
+      `/transactions/${encodeURIComponent(id)}`,
       signal,
     );
   }
@@ -90,6 +110,17 @@ export class Repository {
       ? Promise.resolve({ data: TERMS })
       : this.client.get<Term[]>("/glossary", signal);
   }
+  term(id: string, signal?: AbortSignal) {
+    if (this.mode === "sample") {
+      const term = TERMS.find((t) => t.id === id);
+      return term
+        ? Promise.resolve<Envelope<Term>>({ data: term })
+        : Promise.reject(
+            new ApiError("용어를 찾을 수 없어요", "RESOURCE_NOT_FOUND"),
+          );
+    }
+    return this.client.get<Term>(`/glossary/${encodeURIComponent(id)}`, signal);
+  }
   stats(
     f: Filters,
     id: string,
@@ -102,6 +133,7 @@ export class Repository {
       period_months:
         kind === "complex" ? String(TREND_MONTHS) : String(f.period_months),
       exclude_direct: String(f.exclude_direct),
+      ...renewals(f),
     });
     return this.mode === "sample"
       ? Promise.resolve({ data: SAMPLE_STATS, meta: SAMPLE_META })
@@ -128,6 +160,7 @@ export class Repository {
       deal_type: filters?.deal_type ?? "sale",
       period_months: String(TREND_MONTHS),
       exclude_direct: String(filters?.exclude_direct ?? false),
+      ...(filters ? renewals(filters) : {}),
     });
     return this.client.get<Analysis>(
       `/analysis/complexes/${encodeURIComponent(id)}?${q}`,
@@ -146,4 +179,21 @@ export class Repository {
           signal,
         );
   }
+  // 검색 결과·필지 마커처럼 PNU를 이미 알 때. 응답 형태는 parcelLookup과 같다
+  parcel(pnu: string, signal?: AbortSignal) {
+    return this.mode === "sample"
+      ? Promise.resolve<Envelope<Parcel | null>>({
+          data: null,
+          meta: { unavailable_reason: "source_unavailable" },
+        })
+      : this.client.get<Parcel | null>(
+          `/parcels/${encodeURIComponent(pnu)}`,
+          signal,
+        );
+  }
 }
+// 갱신 계약 포함은 전세·월세에서 켰을 때만 보낸다 (서버 기본 false)
+const renewals = (f: Filters): Record<string, string> =>
+  f.deal_type !== "sale" && f.include_renewals
+    ? { include_renewals: "true" }
+    : {};

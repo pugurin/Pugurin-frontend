@@ -33,18 +33,20 @@ export function kakaoZoom(level: number) {
   return Math.max(0, Math.min(22, 18 - level));
 }
 export function changeProperty(f: Filters, p: Property): Filters {
+  const deal_type = p === "land" ? "sale" : f.deal_type;
   return {
     property_type: p,
-    deal_type: p === "land" ? "sale" : f.deal_type,
+    deal_type,
     period_months: f.period_months,
     exclude_direct: f.exclude_direct,
+    // 갱신 계약 포함은 전세·월세에서만 의미가 있다
+    ...(deal_type !== "sale" && f.include_renewals
+      ? { include_renewals: true }
+      : {}),
   };
 }
 export function changeDeal(f: Filters, d: Deal): Filters {
-  return {
-    ...changeProperty(f, f.property_type),
-    deal_type: f.property_type === "land" ? "sale" : d,
-  };
+  return changeProperty({ ...f, deal_type: d }, f.property_type);
 }
 export function queryForFilters(f: Filters, bbox?: BBox, zoom?: number) {
   const q = new URLSearchParams();
@@ -114,6 +116,7 @@ export type Draft = {
   areaMin: string;
   areaMax: string;
   exclude: boolean;
+  renewals: boolean;
 };
 export function draftFor(f: Filters): Draft {
   return {
@@ -135,6 +138,7 @@ export function draftFor(f: Filters): Draft {
         : f.exclusive_area_pyeong_max) ?? "",
     ),
     exclude: f.exclude_direct,
+    renewals: f.include_renewals === true,
   };
 }
 // 조회 기간: 최근 1~60개월 (API period_months 범위)
@@ -156,6 +160,8 @@ export function validateDraft(
   const result = changeProperty(f, f.property_type);
   result.period_months = n;
   result.exclude_direct = d.exclude;
+  delete result.include_renewals;
+  if (result.deal_type !== "sale" && d.renewals) result.include_renewals = true;
   const pairs: [string, string, string, number][] = [];
   if (f.deal_type === "sale")
     pairs.push(["price", d.priceMin, d.priceMax, 1e8]);

@@ -156,6 +156,7 @@ export function MapHome({
     lat: number;
     lng: number;
     region?: { code: string; name: string };
+    pnu?: string;
   } | null>(null);
   const close = () => {
     pendingLand.current = null;
@@ -272,6 +273,7 @@ export function MapHome({
                 name: r.name ?? r.address ?? "선택한 지역",
               }
             : undefined,
+          pnu: r.pnu,
         };
       move({ type: "move", lat: r.lat, lng: r.lng, zoom: 15 });
     }
@@ -282,6 +284,7 @@ export function MapHome({
     lng: number,
     region?: { code: string; name: string },
     destinationBBox?: BBox,
+    pnu?: string,
   ) => {
     pendingLand.current = null;
     landRequest.current?.abort();
@@ -298,8 +301,11 @@ export function MapHome({
     };
     setSelected(selection);
     setStage("half");
-    repo
-      .parcelLookup(lat, lng, controller.signal)
+    // PNU를 알면(주소 검색·필지 마커) 좌표 대신 PNU로 조회한다
+    (pnu
+      ? repo.parcel(pnu, controller.signal)
+      : repo.parcelLookup(lat, lng, controller.signal)
+    )
       .then((r) => {
         if (controller.signal.aborted) return;
         const reason = r.meta?.unavailable_reason;
@@ -352,7 +358,7 @@ export function MapHome({
     } else if (m.kind === "complex") {
       setSelected({ kind: "complex", id: m.complex_id });
       setStage("peek");
-    } else landLookup(m.lat, m.lng);
+    } else landLookup(m.lat, m.lng, undefined, undefined, m.pnu);
   };
   const onEvent = (e: MapEvent) => {
     if (e.type === "camera") {
@@ -370,6 +376,7 @@ export function MapHome({
             pending.lng,
             pending.region,
             busanQueryBBox(e.bbox) ?? e.bbox,
+            pending.pnu,
           );
         }
       }

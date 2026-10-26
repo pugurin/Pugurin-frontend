@@ -69,6 +69,7 @@ export function FilterScreen({
                   ...changeProperty(filters, filters.property_type),
                   period_months: 12,
                   exclude_direct: false,
+                  include_renewals: undefined,
                 }),
               );
               setError("");
@@ -132,6 +133,23 @@ export function FilterScreen({
             />
           </View>
         </Section>
+        {filters.deal_type !== "sale" && (
+          <Section title="갱신 계약 포함">
+            <View style={s.between}>
+              <T size={15} color={C.muted} style={{ flex: 1 }}>
+                인상 상한(5%)이 있어 시세와 다른 갱신 계약도 함께 봐요
+              </T>
+              <Switch
+                accessibilityLabel="갱신 계약 포함"
+                value={d.renewals}
+                onValueChange={(v) => update("renewals", v)}
+                trackColor={{ false: "#7E8B99", true: C.apartment }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor="#7E8B99"
+              />
+            </View>
+          </Section>
+        )}
         {error !== "" && <T color={C.brown}>{error}</T>}
       </ScrollView>
       <View style={{ padding: 18, borderTopWidth: 1, borderColor: C.rule }}>
