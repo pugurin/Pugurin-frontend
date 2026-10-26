@@ -1,9 +1,10 @@
 import React from "react";
 import { View } from "react-native";
-import Svg, { Path, Line, Rect, Circle } from "react-native-svg";
+import Svg, { Path, Line, Rect, Circle, Text } from "react-native-svg";
 import type { Trend, Metrics } from "../api/types";
 import { C } from "../theme/tokens";
 import { T, s } from "./ui";
+import { formatPrice } from "../state/market";
 export function Chart({
   trend,
   bar = false,
@@ -27,6 +28,9 @@ export function Chart({
     max = Math.max(...values) * 1.04;
   const x = (i: number) => 12 + (i * 296) / Math.max(1, items.length - 1);
   const y = (v: number) => 118 - ((v - min) / Math.max(1, max - min)) * 95;
+  // y()의 역함수: 눈금선 높이에 해당하는 금액
+  const valueAt = (py: number) =>
+    min + ((118 - py) / 95) * Math.max(1, max - min);
   const path = (points: (Trend | undefined)[]) => {
     let d = "",
       pen = false;
@@ -49,8 +53,11 @@ export function Chart({
         : "평당가";
   return (
     <View style={{ gap: 8 }}>
+      <T size={12} color={C.muted}>
+        ↑ {label} (중위값)
+      </T>
       <Svg
-        viewBox="0 0 320 140"
+        viewBox="-40 0 360 140"
         width="100%"
         height={140}
         accessibilityLabel={`월별 ${label} 중위값 추이`}
@@ -65,6 +72,18 @@ export function Chart({
             stroke={C.rule}
             strokeWidth={1}
           />
+        ))}
+        {[25, 65, 105].map((i) => (
+          <Text
+            key={i}
+            x={2}
+            y={i + 3.5}
+            fontSize={10}
+            fill={C.light}
+            textAnchor="end"
+          >
+            {formatPrice(valueAt(i))}
+          </Text>
         ))}
         {bar ? (
           items.map(
@@ -130,6 +149,9 @@ export function Chart({
       <View style={s.between}>
         <T size={12} color={C.light}>
           {items[0]?.month.replace("-", ".")}
+        </T>
+        <T size={12} color={C.muted}>
+          거래 월 →
         </T>
         <T size={12} color={C.light}>
           {items.at(-1)?.month.replace("-", ".")}
