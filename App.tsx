@@ -14,7 +14,7 @@ import { useFonts } from "expo-font";
 import { Repository, type Mode } from "./src/api/repository";
 import { apiBase } from "./src/api/base";
 import { ApiClient } from "./src/api/client";
-import type { BBox, Filters, SearchResult, Term, Meta } from "./src/api/types";
+import type { BBox, Filters, SearchResult, Term, Meta, Parcel } from "./src/api/types";
 import { DEFAULT_FILTERS, HOME } from "./src/state/market";
 import {
   deviceId,
@@ -95,6 +95,8 @@ export default function App() {
   const [matchingRecord, setMatchingRecord] = useState<MatchingRecord | null>(
     null,
   );
+  // 지도에서 마지막으로 본 땅 (기기에 저장하지 않음). 매물 카드 번역하기 문제에 쓴다
+  const [lastParcel, setLastParcel] = useState<Parcel | null>(null);
   const [tipsEnabled, setTipsEnabled] = useState(true);
   const [tipsSettingsReady, setTipsSettingsReady] = useState(false);
   const [todayKey, setTodayKey] = useState(kstDateKey());
@@ -321,6 +323,7 @@ export default function App() {
     overlay = (
       <MatchingScreen
         terms={terms}
+        parcel={lastParcel}
         onClose={() => {
           setRoute(null);
           void loadMatchingRecord()
@@ -469,6 +472,7 @@ export default function App() {
                 todayTerm={todayTerm}
                 todayStreak={learning.streak}
                 todayCompleted={learning.completed}
+                onParcel={setLastParcel}
                 onTodayOpen={() => setRoute({ kind: "matching" })}
                 onTodayClose={() => {
                   setTodayClosedOn(todayKey);
