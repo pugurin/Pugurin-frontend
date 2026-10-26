@@ -1,5 +1,6 @@
 import type { Geometry } from "geojson";
 import type { SelectionPoint } from "./selection";
+import type { UserLocation } from "./userLocation";
 import type { BBox, Marker, Property } from "../api/types";
 export type Camera = { lat: number; lng: number; zoom: number; bbox: BBox };
 export type MapCommand =
@@ -17,6 +18,8 @@ export type MapProps = {
   selected: string | null;
   selectionPoint?: SelectionPoint;
   parcelGeometry?: Geometry | null;
+  // 위치 권한을 받아 확인한 내 위치. 없으면 표시하지 않는다
+  userLocation?: UserLocation | null;
   unit: "평" | "㎡";
   base: "normal" | "satellite";
   cadastral: boolean;
