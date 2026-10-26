@@ -19,7 +19,7 @@ import { missedTermId, randomQuizzes, type Quiz } from "../glossary/quiz";
 const GREEN = "#3f9a3a",
   DARK_GREEN = "#2f7a2c",
   WASH = "#eef7ec",
-  BROWN = "#8c6a4c";
+  BROWN = C.brown;
 export function MatchingScreen({
   terms,
   onClose,
@@ -44,6 +44,8 @@ export function MatchingScreen({
   const [quizzes, setQuizzes] = useState<Quiz[]>([]),
     [step, setStep] = useState<number | null>(null),
     [picked, setPicked] = useState<string | null>(null);
+  // 추가 문제마다 맞혔는지. 진행도 막대를 초록(맞음)·적갈색(틀림)으로 칠한다
+  const [results, setResults] = useState<boolean[]>([]);
   const current = useRef<MatchingRecord | null>(null),
     queue = useRef<Promise<void>>(Promise.resolve()),
     mounted = useRef(true),
@@ -195,12 +197,18 @@ export function MatchingScreen({
       wrongTermIds: Object.keys(session.wrongCounts),
     });
     setQuizzes(next);
+    setResults([]);
     setPicked(null);
     setStep(0);
   }
   function answer(choiceId: string) {
     if (refreshDay() || step == null || picked) return;
     setPicked(choiceId);
+    setResults((old) => {
+      const next = [...old];
+      next[step] = choiceId === quizzes[step].answerId;
+      return next;
+    });
     const missed = missedTermId(quizzes[step], choiceId);
     const latest = current.current?.session;
     if (missed && latest)
@@ -321,12 +329,17 @@ export function MatchingScreen({
               {quizzes.map((q, i) => (
                 <View
                   key={q.id}
+                  testID={`추가 진행 ${i + 1}`}
                   style={{
                     flex: 1,
                     height: 8,
                     borderRadius: 4,
                     backgroundColor:
-                      i < step! || (i === step && picked) ? GREEN : C.bg2,
+                      results[i] === undefined
+                        ? C.bg2
+                        : results[i]
+                          ? GREEN
+                          : BROWN,
                   }}
                 />
               ))}
@@ -503,7 +516,7 @@ export function MatchingScreen({
                     style={{
                       padding: 12,
                       borderRadius: 10,
-                      backgroundColor: "#f7f1eb",
+                      backgroundColor: C.brownWash,
                       gap: 4,
                     }}
                   >
@@ -549,7 +562,7 @@ export function MatchingScreen({
                 style={{
                   gap: 8,
                   padding: 12,
-                  backgroundColor: "#f7f1eb",
+                  backgroundColor: C.brownWash,
                   borderRadius: 10,
                 }}
               >
@@ -691,7 +704,7 @@ function QuizView({
           style={{
             padding: 12,
             borderRadius: 10,
-            backgroundColor: correct ? WASH : "#f7f1eb",
+            backgroundColor: correct ? WASH : C.brownWash,
             gap: 4,
           }}
         >

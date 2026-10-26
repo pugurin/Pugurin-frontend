@@ -232,6 +232,12 @@ describe("짝 맞추기 화면", () => {
     const wrong = quiz.choices.find((c) => c.id !== quiz.answerId)!;
     fireEvent.click(screen.getByLabelText(label(quiz, wrong.id)));
     expect(screen.getByText("아쉬워요. 내일 다시 나와요")).toBeTruthy();
+    // 진행도: 앞서 맞힌 칸은 초록, 틀린 칸은 적갈색, 남은 칸은 회색
+    const bar = (i: number) =>
+      getComputedStyle(screen.getByTestId(`추가 진행 ${i + 1}`)).backgroundColor;
+    for (let i = 0; i < at; i++) expect(bar(i)).toBe("rgb(63, 154, 58)");
+    expect(bar(at)).toBe("rgb(160, 82, 45)");
+    for (let i = at + 1; i < 4; i++) expect(bar(i)).toBe("rgb(242, 242, 238)");
     expect(screen.getByText(/맹지\(도로접면\) = 도로에 닿지 않은 땅/)).toBeTruthy();
     await waitFor(async () =>
       expect(
