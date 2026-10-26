@@ -14,12 +14,13 @@ export const C = {
   villa: "#B0506B",
   land: "#4F7A3A",
   landWash: "#EEF3E9",
-  brown: "#8c6a4c",
+  // 적갈색: 오류·주의, 틀린 답, 직거래 표시 등
+  brown: "#B02A22",
   green: "#3f9a3a",
   greenInk: "#2f7a2c",
   greenWash: "#ebf5e9",
   greenRule: "#b7dbb3",
-  brownWash: "#f6f0ea",
-  brownInk: "#6b5039",
+  brownWash: "#FBE8E6",
+  brownInk: "#831A14",
 };
 export const FONT = "Pretendard";
