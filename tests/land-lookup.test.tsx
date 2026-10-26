@@ -118,7 +118,7 @@ describe("토지 모드에서 땅을 누르면", () => {
     const { notify, parcelLookup } = setup("source_unavailable");
     fireEvent.click(screen.getByText("확대해서 이동"));
     fireEvent.click(screen.getByText("땅 누르기"));
-    await screen.findByText("토지 정보를 잠시 불러올 수 없어요");
+    await screen.findByText("필지 정보는 아직 제공하지 않아요");
     expect(screen.getByText("선택한 지도 영역")).toBeTruthy();
     expect(screen.queryByText("목록 보기")).toBeNull();
     expect(notify).not.toHaveBeenCalled();
@@ -148,7 +148,7 @@ describe("토지 모드에서 땅을 누르면", () => {
     const { parcelLookup, transactions } = setup("source_unavailable", null, {focus:{nonce:1,result:{type:"address",address:"우동 주소",lat:35.16,lng:129.16}}});
     expect(parcelLookup).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("확대해서 이동"));
-    await screen.findByText("토지 정보를 잠시 불러올 수 없어요");
+    await screen.findByText("필지 정보는 아직 제공하지 않아요");
     expect(transactions).toHaveBeenCalledWith(expect.anything(), {region:undefined,bbox:[129.15,35.15,129.17,35.17]},expect.anything());
   });
 
