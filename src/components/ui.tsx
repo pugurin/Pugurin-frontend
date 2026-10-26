@@ -215,6 +215,38 @@ export function Chip({
     </Pressable>
   );
 }
+// 시트 제목 줄 오른쪽의 평/㎡ 전환. 지도 레이어 팝업의 면적 단위와 같은 값을 바꾼다
+export function UnitToggle({
+  unit,
+  onUnit,
+}: {
+  unit: "평" | "㎡";
+  onUnit: (u: "평" | "㎡") => void;
+}) {
+  return (
+    <View accessibilityLabel="면적 단위" style={s.unitToggle}>
+      {(["평", "㎡"] as const).map((u) => {
+        const selected = unit === u;
+        return (
+          <Pressable
+            key={u}
+            accessibilityRole="button"
+            accessibilityLabel={u === "평" ? "평으로 보기" : "㎡로 보기"}
+            accessibilityState={{ selected }}
+            aria-pressed={selected}
+            onPress={() => onUnit(u)}
+            hitSlop={6}
+            style={[s.unitOption, selected && s.unitSelected]}
+          >
+            <T size={14} bold={selected} color={selected ? C.ink : C.muted}>
+              {u}
+            </T>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 export function Header({
   title,
   onBack,
@@ -406,6 +438,25 @@ export const s = StyleSheet.create({
     backgroundColor: C.surface,
     alignItems: "center",
     justifyContent: "center",
+  },
+  unitToggle: {
+    flexDirection: "row",
+    padding: 3,
+    borderRadius: 10,
+    backgroundColor: C.bg2,
+  },
+  unitOption: {
+    minWidth: 38,
+    height: 30,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unitSelected: {
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.rule,
   },
   header: {
     height: 52,

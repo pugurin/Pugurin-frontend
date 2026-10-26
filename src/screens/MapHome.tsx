@@ -523,6 +523,7 @@ export function MapHome({
           onHelp={onHelp}
           notify={notify}
           unit={unit}
+          onUnit={onUnit}
         />
       ) : (
         <>
@@ -555,6 +556,7 @@ export function MapHome({
             onHelp={onHelp}
             date={meta?.data_as_of}
             unit={unit}
+            onUnit={onUnit}
           />
         </>
       )}
