@@ -85,6 +85,7 @@ export function MapHome({
   onTodayClose,
   todayStreak = 0,
   todayCompleted = false,
+  todayMatched = 0,
   onParcel,
 }: {
   repo: Repository;
@@ -110,6 +111,7 @@ export function MapHome({
   todayTerm?: Term | null;
   todayStreak?: number;
   todayCompleted?: boolean;
+  todayMatched?: number;
   onTodayOpen?: (term: Term) => void;
   onTodayClose?: () => void;
   // 땅 정보를 받아 오면 알린다. 오늘의 용어 '매물 카드 번역하기'에 쓴다
@@ -533,6 +535,7 @@ export function MapHome({
                 term={todayTerm}
                 streak={todayStreak}
                 completed={todayCompleted}
+                matched={todayMatched}
                 onOpen={() => onTodayOpen?.(todayTerm)}
                 onClose={() => onTodayClose?.()}
               />
@@ -915,6 +918,7 @@ export function MapHome({
                 term={todayTerm}
                 streak={todayStreak}
                 completed={todayCompleted}
+                matched={todayMatched}
                 onOpen={() => onTodayOpen?.(todayTerm)}
                 onClose={() => onTodayClose?.()}
               />
@@ -1091,6 +1095,7 @@ export function MapHome({
                 term={todayTerm}
                 streak={todayStreak}
                 completed={todayCompleted}
+                matched={todayMatched}
                 onOpen={() => onTodayOpen?.(todayTerm)}
                 onClose={() => onTodayClose?.()}
               />

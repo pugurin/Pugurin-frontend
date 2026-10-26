@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { kstDateKey, pickToday, todayLabel } from "../src/glossary/today";
 import { MapHome } from "../src/screens/MapHome";
+import { TodayTermCard } from "../src/components/TodayTermCard";
 import { DEFAULT_FILTERS } from "../src/state/market";
 import type { Repository } from "../src/api/repository";
 import type { Term } from "../src/api/types";
@@ -145,5 +146,29 @@ describe("오늘의 용어 카드", () => {
     await waitFor(() =>
       expect(screen.queryByLabelText("오늘의 용어 닫기")).toBeNull(),
     );
+  });
+});
+describe("오늘의 용어 카드 진행 표시", () => {
+  const card = (props: { matched?: number; completed?: boolean }) =>
+    render(
+      <TodayTermCard
+        term={term("1", true)}
+        onOpen={() => {}}
+        onClose={() => {}}
+        {...props}
+      />,
+    );
+  it("진행 중이면 '이어서'와 진행 수를 보여준다", () => {
+    card({ matched: 2 });
+    expect(screen.getByLabelText("오늘의 용어 짝 맞추기 이어서")).toBeTruthy();
+    expect(screen.getByText("이어서")).toBeTruthy();
+    expect(screen.getByText("단어 5개 짝 맞추기 · 2/5")).toBeTruthy();
+  });
+  it("0/5는 '시작', 완료는 '결과'", () => {
+    card({ matched: 0 });
+    expect(screen.getByText("시작")).toBeTruthy();
+    cleanup();
+    card({ matched: 5, completed: true });
+    expect(screen.getByText("결과")).toBeTruthy();
   });
 });
