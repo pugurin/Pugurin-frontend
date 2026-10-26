@@ -30,7 +30,7 @@ const repo = {
     },
   }),
 } as unknown as Repository;
-function show(parcel: Parcel | null, repository = repo) {
+function show(parcel: Parcel | null, repository = repo, picked = false) {
   return render(
     <LandContent
       repo={repository}
@@ -38,6 +38,7 @@ function show(parcel: Parcel | null, repository = repo) {
       bbox={HOME.bbox}
       region={{ code: "2650010500", name: "수영구 남천동" }}
       parcel={parcel}
+      picked={picked}
       onRetry={() => {}}
       onList={() => {}}
       onHelp={() => {}}
@@ -47,11 +48,17 @@ function show(parcel: Parcel | null, repository = repo) {
 }
 describe("토지 상세", () => {
   it("필지 공급처가 없어도 서버 지역 통계와 월별 추이를 보여 준다", async () => {
-    show(null);
-    expect(screen.getByText("토지 정보를 잠시 불러올 수 없어요")).toBeTruthy();
+    show(null, repo, true);
+    expect(screen.getByText("필지 정보는 아직 제공하지 않아요")).toBeTruthy();
+    expect(screen.queryByText(/잠시 불러올 수 없어요/)).toBeNull();
     await waitFor(() => expect(screen.getByText("7건")).toBeTruthy());
     expect(screen.getByText("월별 토지 땅값")).toBeTruthy();
     expect(screen.getByText(/지목별 조회는 아직/)).toBeTruthy();
+  });
+  it("동을 고르면 필지가 아니라서 필지 안내 카드를 빼고 동네 거래만 보여 준다", async () => {
+    show(null);
+    expect(screen.queryByText("필지 정보는 아직 제공하지 않아요")).toBeNull();
+    await waitFor(() => expect(screen.getByText("7건")).toBeTruthy());
   });
   it("필지 기본 정보는 보존하고 없는 규제와 비율을 계산하지 않는다", async () => {
     show({

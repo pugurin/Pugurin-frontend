@@ -32,6 +32,7 @@ export function LandContent({
   bbox,
   region,
   parcel,
+  picked = false,
   loading = false,
   error,
   onRetry,
@@ -44,6 +45,8 @@ export function LandContent({
   bbox: BBox;
   region?: { code: string; name: string };
   parcel: Parcel | null;
+  // 지도에서 땅 한 곳을 골라 필지를 조회했는지. 동 마커처럼 고르지 않았으면 필지 카드를 빼요
+  picked?: boolean;
   loading?: boolean;
   error?: string | null;
   onRetry: () => void;
@@ -162,15 +165,17 @@ export function LandContent({
           </Btn>
         </View>
       ) : !parcel ? (
-        <View style={[s.card, { backgroundColor: C.bg2, gap: 6 }]}>
-          <T size={18} bold>
-            토지 정보를 잠시 불러올 수 없어요
-          </T>
-          <T size={15} color={C.muted}>
-            지목 · 공시지가 · 용도지역은 아직 볼 수 없어요. 지도는 계속 쓸 수
-            있어요.
-          </T>
-        </View>
+        picked && (
+          <View style={[s.card, { backgroundColor: C.bg2, gap: 6 }]}>
+            <T size={18} bold>
+              필지 정보는 아직 제공하지 않아요
+            </T>
+            <T size={15} color={C.muted}>
+              지목 · 공시지가 · 용도지역은 준비 중이에요. 아래 동네 토지 거래는
+              볼 수 있어요.
+            </T>
+          </View>
+        )
       ) : (
         <>
           <T size={21} bold>

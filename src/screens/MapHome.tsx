@@ -143,6 +143,7 @@ export function MapHome({
         bbox: BBox;
         region?: { code: string; name: string };
         parcel: Parcel | null;
+        picked?: boolean;
         loading: boolean;
         error?: string;
       }
@@ -305,6 +306,7 @@ export function MapHome({
       bbox: destinationBBox ?? queryBBox ?? camera.bbox,
       region,
       parcel: null,
+      picked: true,
       loading: true,
     };
     setSelected(selection);
@@ -492,6 +494,7 @@ export function MapHome({
           bbox={selected.bbox}
           region={selected.region}
           parcel={selected.parcel}
+          picked={selected.picked}
           loading={selected.loading}
           error={selected.error}
           onRetry={() =>
