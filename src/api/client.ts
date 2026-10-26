@@ -1,4 +1,7 @@
 import type { Envelope } from "./types";
+// 실데이터 수집·적재 전이면 서버가 503 DATA_NOT_READY로 답한다
+export const DATA_NOT_READY_MESSAGE =
+  "데이터를 준비 중이에요. 수집이 끝나면 거래가 표시돼요";
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -42,13 +45,18 @@ export class ApiClient {
     } catch {
       throw new ApiError("서버 응답을 읽을 수 없어요", "INVALID_RESPONSE");
     }
-    if (!response.ok)
-      throw new ApiError(
-        body.error?.message ?? "정보를 불러올 수 없어요",
+    if (!response.ok) {
+      const code =
         body.error?.code ??
-          (response.status === 404 ? "RESOURCE_NOT_FOUND" : "SERVER_ERROR"),
+        (response.status === 404 ? "RESOURCE_NOT_FOUND" : "SERVER_ERROR");
+      throw new ApiError(
+        code === "DATA_NOT_READY"
+          ? DATA_NOT_READY_MESSAGE
+          : (body.error?.message ?? "정보를 불러올 수 없어요"),
+        code,
         Number(response.headers.get("Retry-After")) || undefined,
       );
+    }
     const mode = response.headers.get("X-Data-Mode");
     if (mode) body.meta = { ...body.meta, data_mode: mode };
     const etag = response.headers.get("ETag");

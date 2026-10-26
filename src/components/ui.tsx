@@ -278,7 +278,11 @@ export function Notice({
     >
       <Icon name="info" size={18} color={C.light} />
       <T size={13} color={C.muted} style={{ flex: 1 }}>
-        {mode === "sample" ? "샘플 데이터 · " : ""}
+        {mode === "sample"
+          ? "샘플 데이터 · "
+          : mode === "none"
+            ? "데이터 준비 중 · "
+            : ""}
         {date
           ? `${date.slice(0, 10).replaceAll("-", ".")} 기준`
           : "데이터 기준일 확인 중"}{" "}

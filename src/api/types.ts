@@ -7,6 +7,8 @@ export type Filters = {
   deal_type: Deal;
   period_months: number;
   exclude_direct: boolean;
+  // 전세·월세 갱신 계약 포함 (서버 기본은 신규 계약만). 켰을 때만 true로 둔다
+  include_renewals?: boolean;
   price_min?: number;
   price_max?: number;
   deposit_min?: number;
@@ -113,6 +115,8 @@ export type Transaction = Latest & {
   trade_method: "broker" | "direct" | null;
   is_cancelled: boolean;
   cancelled_at: string | null;
+  // 전세·월세 갱신 계약. 매매는 항상 false
+  is_renewal?: boolean;
 };
 export type Term = {
   id: string;
