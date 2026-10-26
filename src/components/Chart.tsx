@@ -5,6 +5,28 @@ import type { Trend, Metrics } from "../api/types";
 import { C } from "../theme/tokens";
 import { T, s } from "./ui";
 import { formatPrice } from "../state/market";
+// 범례 견본: 그래프의 선과 같은 색·굵기·점선으로 그린다
+function Swatch({ dashed = false }: { dashed?: boolean }) {
+  return (
+    <Svg width={28} height={10}>
+      <Line
+        x1={1}
+        x2={27}
+        y1={5}
+        y2={5}
+        stroke={dashed ? C.light : C.ink}
+        strokeWidth={dashed ? 2 : 2.5}
+        strokeDasharray={dashed ? "5 4" : undefined}
+      />
+      <Circle
+        cx={14}
+        cy={5}
+        r={dashed ? 2 : 2.5}
+        fill={dashed ? C.light : C.ink}
+      />
+    </Svg>
+  );
+}
 export function Chart({
   trend,
   bar = false,
@@ -53,6 +75,20 @@ export function Chart({
         : "평당가";
   return (
     <View style={{ gap: 8 }}>
+      {comparison && (
+        <View style={{ flexDirection: "row", gap: 16, flexWrap: "wrap" }}>
+          <View style={s.row}>
+            <Swatch />
+            <T size={13}>이 단지</T>
+          </View>
+          <View style={s.row}>
+            <Swatch dashed />
+            <T size={13} color={C.muted}>
+              해당 지역 전체
+            </T>
+          </View>
+        </View>
+      )}
       <T size={12} color={C.muted}>
         ↑ {label} (중위값)
       </T>
@@ -162,11 +198,6 @@ export function Chart({
         {metric === "median_monthly_rent" ? "월 금액" : "전용 기준"} · 거래 3건
         미만인 달은 비움
       </T>
-      {comparison && (
-        <T size={12} color={C.muted}>
-          ━ 이 단지　┅ 해당 지역 전체
-        </T>
-      )}
     </View>
   );
 }
