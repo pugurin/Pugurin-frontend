@@ -15,12 +15,12 @@ export const C = {
   land: "#4F7A3A",
   landWash: "#EEF3E9",
   // 적갈색: 오류·주의, 틀린 답, 직거래 표시 등
-  brown: "#A8382A",
+  brown: "#B02A22",
   green: "#3f9a3a",
   greenInk: "#2f7a2c",
   greenWash: "#ebf5e9",
   greenRule: "#b7dbb3",
-  brownWash: "#FAEAE6",
-  brownInk: "#7E2619",
+  brownWash: "#FBE8E6",
+  brownInk: "#831A14",
 };
 export const FONT = "Pretendard";
