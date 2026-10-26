@@ -33,6 +33,12 @@ import {
   PARCEL_FILL_LAYER,
   PARCEL_LINE_LAYER,
 } from "./selection";
+import {
+  userLocationFeatures,
+  USER_LOCATION_SOURCE,
+  USER_HALO_LAYER,
+  USER_DOT_LAYER,
+} from "./userLocation";
 
 // Metro가 maplibre-gl 워커를 번들하지 못해 public/maplibre/에 복사해 둔 파일을 쓴다 (scripts/copy-maplibre-worker.mjs)
 setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
@@ -98,6 +104,21 @@ export default function MapCanvas(p: MapProps) {
     }
   };
 
+  // 내 위치는 거래 마커보다 위에 그린다
+  const syncUser = (m: MapLibre) => {
+    if (!styleReady.current) return;
+    const data = userLocationFeatures(latest.current.userLocation);
+    const source = m.getSource(USER_LOCATION_SOURCE) as
+      | GeoJSONSource
+      | undefined;
+    if (source) source.setData(data);
+    else {
+      m.addSource(USER_LOCATION_SOURCE, { type: "geojson", data });
+      m.addLayer(USER_HALO_LAYER as WebLayer);
+      m.addLayer(USER_DOT_LAYER as WebLayer);
+    }
+  };
+
   useEffect(() => {
     fetch(OPENFREEMAP_STYLE)
       .then((r) => r.json())
@@ -152,6 +173,7 @@ export default function MapCanvas(p: MapProps) {
       });
       syncSelection(m);
       syncMarkers(m);
+      syncUser(m);
     });
     m.once("load", () => {
       latest.current.onEvent({ type: "ready" });
@@ -235,6 +257,10 @@ export default function MapCanvas(p: MapProps) {
   useEffect(() => {
     if (map.current) syncSelection(map.current);
   }, [p.selectionPoint, p.parcelGeometry]);
+
+  useEffect(() => {
+    if (map.current) syncUser(map.current);
+  }, [p.userLocation]);
 
   useEffect(() => {
     const m = map.current,

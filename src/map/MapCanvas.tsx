@@ -25,6 +25,7 @@ import {
 } from "./style";
 import type { MapProps } from "./types";
 import { selectionFeatures, SELECTION_SOURCE, SELECTION_CIRCLE_LAYER, PARCEL_FILL_LAYER, PARCEL_LINE_LAYER } from "./selection";
+import { userLocationFeatures, USER_LOCATION_SOURCE, USER_HALO_LAYER, USER_DOT_LAYER } from "./userLocation";
 
 // 마커 배경(둥근 사각형). 웹은 MapCanvas.web.tsx에서 캔버스로 그린다
 const MARKER_IMAGES = {
@@ -65,6 +66,11 @@ export default function MapCanvas(p: MapProps) {
   const selection = useMemo(
     () => selectionFeatures(p.selectionPoint, p.parcelGeometry),
     [p.selectionPoint, p.parcelGeometry],
+  );
+
+  const user = useMemo(
+    () => userLocationFeatures(p.userLocation),
+    [p.userLocation],
   );
 
   useEffect(() => {
@@ -153,6 +159,10 @@ export default function MapCanvas(p: MapProps) {
       <GeoJSONSource id={MARKER_SOURCE} data={data}>
         <Layer {...MARKER_DOT_LAYER} />
         <Layer {...MARKER_LABEL_LAYER} />
+      </GeoJSONSource>
+      <GeoJSONSource id={USER_LOCATION_SOURCE} data={user}>
+        <Layer {...USER_HALO_LAYER} />
+        <Layer {...USER_DOT_LAYER} />
       </GeoJSONSource>
     </Map>
   );

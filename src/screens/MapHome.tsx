@@ -10,6 +10,12 @@ import {
   useWindowDimensions,
 } from "react-native";
 import * as Location from "expo-location";
+import {
+  initialLocationStart,
+  markLocationAsked,
+} from "../state/location";
+import { LocationAsk } from "../components/LocationAsk";
+import type { UserLocation } from "../map/userLocation";
 import type { Repository } from "../api/repository";
 import type {
   BBox,
@@ -145,6 +151,8 @@ export function MapHome({
   const [stage, setStage] = useState<SheetStage>("peek");
   const [command, setCommand] = useState<MapCommand & { nonce: number }>();
   const [locating, setLocating] = useState(false);
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+  const [askLocation, setAskLocation] = useState(false);
   const ref = useRef(0);
   const lastFilters = useRef(filters);
   const queryBBox = busanQueryBBox(camera.bbox);
@@ -408,16 +416,22 @@ export function MapHome({
     );
     setStage("full");
   }, [desktop, markers, selected, panelDismissed, isLand]);
-  const locate = async () => {
+  // quiet: 앱 시작 때 자동으로 부를 때는 실패해도 알리지 않는다
+  const locate = async (quiet = false) => {
     setLocating(true);
     try {
       const perm = await Location.requestForegroundPermissionsAsync();
       if (perm.status !== "granted") {
-        notify("위치 권한이 꺼져 있어요. 휴대폰 설정에서 켤 수 있어요");
+        if (!quiet)
+          notify("위치 권한이 꺼져 있어요. 휴대폰 설정에서 켤 수 있어요");
         return;
       }
       const loc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
+      });
+      setUserLocation({
+        lat: loc.coords.latitude,
+        lng: loc.coords.longitude,
       });
       move({
         type: "move",
@@ -426,10 +440,28 @@ export function MapHome({
         zoom: 15,
       });
     } catch {
-      notify("현재 위치를 확인할 수 없어요. 위치 설정을 확인해 주세요");
+      if (!quiet)
+        notify("현재 위치를 확인할 수 없어요. 위치 설정을 확인해 주세요");
     } finally {
       setLocating(false);
     }
+  };
+  // 첫 실행이면 위치 안내 모달, 이미 허용했으면 바로 내 위치에서 시작한다(#92)
+  useEffect(() => {
+    let alive = true;
+    void initialLocationStart().then((start) => {
+      if (!alive) return;
+      if (start === "locate") void locate(true);
+      else if (start === "ask") setAskLocation(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const answerLocation = (allow: boolean) => {
+    setAskLocation(false);
+    void markLocationAsked();
+    if (allow) void locate();
   };
   const detailSheet = selected ? (
     <Sheet
@@ -778,6 +810,7 @@ export function MapHome({
             base={base}
             cadastral={isLand || cadastral}
             initial={HOME}
+            userLocation={userLocation}
             command={command}
             onEvent={onEvent}
             onMarkerHover={(marker, point) =>
@@ -1207,6 +1240,11 @@ export function MapHome({
           </Pressable>
         </Pressable>
       </Modal>
+      <LocationAsk
+        visible={askLocation && !interactionBlocked}
+        onAllow={() => answerLocation(true)}
+        onLater={() => answerLocation(false)}
+      />
     </View>
   );
 }
