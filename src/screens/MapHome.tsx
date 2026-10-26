@@ -155,6 +155,8 @@ export function MapHome({
   const [askLocation, setAskLocation] = useState(false);
   const ref = useRef(0);
   const lastFilters = useRef(filters);
+  // 검색으로 고른 단지에 맞춰 유형 탭을 바꿀 때는 필터가 바뀌어도 단지 패널을 닫지 않는다
+  const keepSelection = useRef(false);
   const queryBBox = busanQueryBBox(camera.bbox);
   const outside = !queryBBox;
   const isLand = filters.property_type === "land";
@@ -188,7 +190,8 @@ export function MapHome({
     lastFilters.current = filters;
     if (changed) {
       setMarkers([]);
-      close();
+      if (keepSelection.current) keepSelection.current = false;
+      else close();
       setPanelDismissed(false);
     }
     if (outside) {
@@ -246,6 +249,23 @@ export function MapHome({
       setSelected({ kind: "complex", id: r.complex_id });
       setStage("peek");
       move({ type: "move", lat: r.lat, lng: r.lng, zoom: 15 });
+      // 검색 결과에는 유형이 없어 단지 정보로 확인한다. 다른 유형이면 탭을
+      // 그 유형으로 바꿔야 지도에 그 단지 마커가 보인다
+      const controller = new AbortController();
+      repo
+        .complex(r.complex_id, controller.signal)
+        .then(({ data }) => {
+          if (
+            controller.signal.aborted ||
+            data.property_type === filters.property_type
+          )
+            return;
+          keepSelection.current = true;
+          onFilters(changeProperty(filters, data.property_type));
+          notify(`${PROPERTY[data.property_type]} 탭으로 바꿨어요`);
+        })
+        .catch(() => {});
+      return () => controller.abort();
     } else if (r.type === "region") {
       close();
       if (isLand && r.region_code) {

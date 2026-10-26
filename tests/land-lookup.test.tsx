@@ -77,6 +77,7 @@ function setup(reason: UnavailableReason | null, data: unknown = null, options: 
           parcelLookup,
           transactions,
           stats: async () => ({ data: { transaction_count: 0, trend: [] } }),
+          complex: async () => ({ data: { property_type: "apartment" } }),
         } as unknown as Repository
       }
       filters={filters}
