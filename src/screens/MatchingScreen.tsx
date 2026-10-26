@@ -15,7 +15,7 @@ import {
   type MatchingRecord,
   type MatchingSession,
 } from "../glossary/matching";
-import { dailyQuizzes, missedTermId, type Quiz } from "../glossary/quiz";
+import { missedTermId, randomQuizzes, type Quiz } from "../glossary/quiz";
 const GREEN = "#3f9a3a",
   DARK_GREEN = "#2f7a2c",
   WASH = "#eef7ec",
@@ -190,7 +190,7 @@ export function MatchingScreen({
   }
   function startQuiz() {
     if (refreshDay() || !session) return;
-    const next = dailyQuizzes(session.dateKey, {
+    const next = randomQuizzes({
       parcel,
       wrongTermIds: Object.keys(session.wrongCounts),
     });

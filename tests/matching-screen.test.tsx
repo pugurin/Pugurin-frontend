@@ -16,7 +16,7 @@ import {
   loadMatchingRecord,
 } from "../src/glossary/matching";
 import { kstDateKey } from "../src/glossary/today";
-import { dailyQuizzes, translateQuiz, type Quiz } from "../src/glossary/quiz";
+import { randomQuizzes, type Quiz } from "../src/glossary/quiz";
 const label = (quiz: Quiz, id = quiz.answerId) =>
   `보기 ${quiz.choices.find((c) => c.id === id)!.text.replace(/\n/g, ", ")}`;
 const storage = vi.hoisted(() => ({
@@ -158,17 +158,19 @@ describe("짝 맞추기 화면", () => {
       fireEvent.click(screen.getByLabelText(`뜻 ${term.short_definition}`));
     }
     await waitFor(() => expect(actions.onComplete).toHaveBeenCalledWith(1));
+    // 무작위 뽑기를 고정해 화면에 나올 문제를 미리 계산한다
+    vi.spyOn(Math, "random").mockReturnValue(0.3);
     fireEvent.click(screen.getByText("다음 문제"));
-    const quizzes = dailyQuizzes(kstDateKey());
-    // 매물 카드 번역하기 → 헷갈리는 쌍 고르기를 정답으로 푼다
-    expect(screen.getByText("매물 카드 번역하기")).toBeTruthy();
-    expect(screen.getByText(quizzes[0].card!)).toBeTruthy();
-    fireEvent.click(screen.getByLabelText(label(quizzes[0])));
-    expect(screen.getByText("✓ 맞았어요")).toBeTruthy();
-    fireEvent.click(screen.getByText("다음 문제"));
-    expect(screen.getByText("헷갈리는 쌍 고르기")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText(label(quizzes[1])));
-    fireEvent.click(screen.getByText("결과 보기"));
+    const quizzes = randomQuizzes({ random: () => 0.3 });
+    expect(quizzes).toHaveLength(4);
+    // 모두 정답으로 푼다
+    quizzes.forEach((quiz, i) => {
+      expect(screen.getByText(`추가 ${i + 1}/4`)).toBeTruthy();
+      expect(screen.getByText(quiz.prompt)).toBeTruthy();
+      fireEvent.click(screen.getByLabelText(label(quiz)));
+      expect(screen.getByText("✓ 맞았어요")).toBeTruthy();
+      fireEvent.click(screen.getByText(i < 3 ? "다음 문제" : "결과 보기"));
+    });
     expect(screen.getByText("오늘의 용어 끝")).toBeTruthy();
     fireEvent.click(screen.getByLabelText(`${daily[0].term} 용어 상세 보기`));
     expect(actions.onTerm).toHaveBeenCalledWith(daily[0]);
@@ -211,11 +213,20 @@ describe("짝 맞추기 화면", () => {
     await waitFor(async () =>
       expect((await loadMatchingRecord())?.completedDates).toEqual([kstDateKey()]),
     );
+    vi.spyOn(Math, "random").mockReturnValue(0.3);
     await waitFor(() => {
       fireEvent.click(screen.getByText("다음 문제"));
-      expect(screen.getByText("매물 카드 번역하기")).toBeTruthy();
+      expect(screen.getByText("추가 1/4")).toBeTruthy();
     });
-    const quiz = translateQuiz(kstDateKey(), parcel)!;
+    // 지도에서 본 땅 카드는 꼭 들어간다. 그 문제까지 정답으로 넘긴다
+    const quizzes = randomQuizzes({ parcel, random: () => 0.3 });
+    const at = quizzes.findIndex((q) => q.kind === "translate" && !q.sample);
+    expect(at).toBeGreaterThanOrEqual(0);
+    for (const before of quizzes.slice(0, at)) {
+      fireEvent.click(screen.getByLabelText(label(before)));
+      fireEvent.click(screen.getByText("다음 문제"));
+    }
+    const quiz = quizzes[at];
     expect(screen.getByText("전 · 자연녹지 · 맹지 · 공시지가 ㎡당 38만")).toBeTruthy();
     expect(screen.queryByText(/샘플 카드예요/)).toBeNull();
     const wrong = quiz.choices.find((c) => c.id !== quiz.answerId)!;
