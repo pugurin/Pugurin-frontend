@@ -9,13 +9,17 @@ export function TodayTermCard({
   onClose,
   streak = 0,
   completed = false,
+  matched = 0,
 }: {
   term: Term;
   onOpen: () => void;
   onClose: () => void;
   streak?: number;
   completed?: boolean;
+  // 오늘 맞힌 짝 개수(0~5). 1~4면 진행 중이라 "이어서"로 보여준다
+  matched?: number;
 }) {
+  const resuming = !completed && matched > 0;
   return (
     <View
       style={{
@@ -34,7 +38,9 @@ export function TodayTermCard({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={
-          completed ? "오늘의 용어 학습 결과" : "오늘의 용어 짝 맞추기 시작"
+          completed
+            ? "오늘의 용어 학습 결과"
+            : `오늘의 용어 짝 맞추기 ${resuming ? "이어서" : "시작"}`
         }
         onPress={onOpen}
         style={{
@@ -51,7 +57,11 @@ export function TodayTermCard({
             오늘의 용어{streak ? ` · ${streak}일 연속` : ""}
           </T>
           <T bold size={17}>
-            {completed ? "오늘 다섯 단어를 익혔어요" : "단어 5개 짝 맞추기"}
+            {completed
+              ? "오늘 다섯 단어를 익혔어요"
+              : resuming
+                ? `단어 5개 짝 맞추기 · ${matched}/5`
+                : "단어 5개 짝 맞추기"}
           </T>
         </View>
         <View
@@ -67,7 +77,7 @@ export function TodayTermCard({
             color={completed ? C.greenInk : C.surface}
             style={{ fontSize: 16, lineHeight: 20 }}
           >
-            {completed ? "결과" : "시작"}
+            {completed ? "결과" : resuming ? "이어서" : "시작"}
           </T>
         </View>
       </Pressable>

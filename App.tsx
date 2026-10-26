@@ -472,6 +472,7 @@ export default function App() {
                 todayTerm={todayTerm}
                 todayStreak={learning.streak}
                 todayCompleted={learning.completed}
+                todayMatched={learning.matched}
                 onParcel={setLastParcel}
                 onTodayOpen={() => setRoute({ kind: "matching" })}
                 onTodayClose={() => {
