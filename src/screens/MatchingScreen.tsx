@@ -319,11 +319,8 @@ export function MatchingScreen({
         }}
       >
         <IconBtn name="close" label="짝 맞추기 닫기" onPress={close} />
-        {result ? (
-          <T bold style={text(20)}>
-            오늘의 용어 끝
-          </T>
-        ) : quiz ? (
+        {/* 추가 문제를 푸는 중이면 진행도를 먼저 보여준다 (용어를 다시 불러와 result가 켜져도) */}
+        {quiz ? (
           <>
             <View style={{ flex: 1, flexDirection: "row", gap: 5 }}>
               {quizzes.map((q, i) => (
@@ -348,6 +345,10 @@ export function MatchingScreen({
               추가 {step! + 1}/{quizzes.length}
             </T>
           </>
+        ) : result ? (
+          <T bold style={text(20)}>
+            오늘의 용어 끝
+          </T>
         ) : (
           session && (
             <>
