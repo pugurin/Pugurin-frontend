@@ -110,6 +110,8 @@ export function MapHome({
   } | null>(null);
   const panelWidth = width >= 1280 ? 400 : 360;
   const [panelDismissed, setPanelDismissed] = useState(false);
+  // 거래 없는 지역 안내를 닫으면 거래 있는 곳을 한 번 볼 때까지 다시 띄우지 않는다
+  const [emptyDismissed, setEmptyDismissed] = useState(false);
   const [camera, setCamera] = useState<Camera>(HOME);
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [meta, setMeta] = useState<Meta>();
@@ -163,6 +165,9 @@ export function MapHome({
     setPanelDismissed(true);
   };
   useEffect(() => () => landRequest.current?.abort(), []);
+  useEffect(() => {
+    if (markers.length > 0) setEmptyDismissed(false);
+  }, [markers.length]);
   useEffect(() => {
     if (!desktop) return;
     const escape = (event: KeyboardEvent) => {
@@ -954,44 +959,59 @@ export function MapHome({
                 }}
               />
             </View>
-          ) : !outside && camera.zoom >= 11 && markers.length === 0 ? (
+          ) : !outside &&
+            camera.zoom >= 11 &&
+            markers.length === 0 &&
+            !emptyDismissed ? (
             <View
+              pointerEvents="box-none"
               style={{
                 position: "absolute",
                 left: 24,
                 right: 24,
                 top: "24%",
-                ...s.card,
-                gap: 12,
+                alignItems: "center",
               }}
             >
-              <T size={19} bold>
-                이 조건의 거래가 없어요
-              </T>
-              {filters.period_months < MAX_PERIOD_MONTHS ? (
-                <>
-                  <T size={15} color={C.muted}>
-                    기간을 늘리면 더 많은 거래를 볼 수 있어요
+              <View
+                style={{ ...s.card, width: "100%", maxWidth: 300, gap: 10 }}
+              >
+                <View style={s.between}>
+                  <T size={18} bold style={{ flex: 1 }}>
+                    이 조건의 거래가 없어요
                   </T>
-                  <Btn
-                    secondary
-                    small
-                    onPress={() =>
-                      onFilters({
-                        ...filters,
-                        period_months: MAX_PERIOD_MONTHS,
-                      })
-                    }
-                  >
-                    기간 늘리기 (최근 {MAX_PERIOD_MONTHS}개월)
-                  </Btn>
-                </>
-              ) : (
-                <T size={15} color={C.muted}>
-                  최근 {MAX_PERIOD_MONTHS}개월 동안 이 지역에 신고된 거래가
-                  없어요
-                </T>
-              )}
+                  <IconBtn
+                    name="close"
+                    label="안내 닫기"
+                    onPress={() => setEmptyDismissed(true)}
+                    style={{ width: 30, height: 30, marginRight: -4 }}
+                  />
+                </View>
+                {filters.period_months < MAX_PERIOD_MONTHS ? (
+                  <>
+                    <T size={15} color={C.muted}>
+                      기간을 늘리면 더 많은 거래를 볼 수 있어요
+                    </T>
+                    <Btn
+                      secondary
+                      small
+                      onPress={() =>
+                        onFilters({
+                          ...filters,
+                          period_months: MAX_PERIOD_MONTHS,
+                        })
+                      }
+                    >
+                      기간 늘리기 (최근 {MAX_PERIOD_MONTHS}개월)
+                    </Btn>
+                  </>
+                ) : (
+                  <T size={15} color={C.muted}>
+                    최근 {MAX_PERIOD_MONTHS}개월 동안 이 지역에 신고된 거래가
+                    없어요
+                  </T>
+                )}
+              </View>
             </View>
           ) : null}
         </View>
