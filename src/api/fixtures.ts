@@ -61,6 +61,7 @@ export const TRANSACTIONS: Transaction[] = COMPLEXES.flatMap((c, i) =>
   Array.from({ length: 24 }, (_, j) => ({
     id: `tx-${i}-${j}`,
     complex_id: c.id,
+    complex_name: c.name,
     property_type: c.property_type,
     address: c.address,
     region_code: c.region_code,

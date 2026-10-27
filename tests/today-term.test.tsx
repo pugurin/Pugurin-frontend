@@ -5,7 +5,6 @@ import {
   fireEvent,
   render,
   screen,
-  waitFor,
 } from "@testing-library/react";
 import { kstDateKey, pickToday, todayLabel } from "../src/glossary/today";
 import { MapHome } from "../src/screens/MapHome";
@@ -76,24 +75,9 @@ describe("오늘의 용어 고르기", () => {
   });
 });
 
-function setup(todayTerm: Term | null) {
-  const onTodayOpen = vi.fn();
-  const onTodayClose = vi.fn();
+function setupMap(onToday?: () => void) {
   const markers = vi.fn(async () => ({
-    data: {
-      level: "sigungu",
-      markers: [
-        {
-          kind: "region",
-          region_code: "26350",
-          name: "해운대구",
-          lat: 35.16,
-          lng: 129.16,
-          transaction_count: 10,
-          summary: { median_price_per_pyeong: 30000000 },
-        },
-      ],
-    },
+    data: { level: "sigungu", markers: [] },
     meta: {},
   }));
   render(
@@ -114,39 +98,23 @@ function setup(todayTerm: Term | null) {
       onHelp={() => {}}
       notify={() => {}}
       onMeta={() => {}}
-      todayTerm={todayTerm}
-      onTodayOpen={onTodayOpen}
-      onTodayClose={onTodayClose}
+      onToday={onToday}
     />,
   );
-  return { onTodayOpen, onTodayClose, markers };
 }
 
-describe("오늘의 용어 카드", () => {
+describe("지도 화면의 오늘의 용어", () => {
   afterEach(cleanup);
-  it("카드를 누르면 학습 진입, ✕를 누르면 닫기", () => {
-    const { onTodayOpen, onTodayClose } = setup(term("a", true));
-    expect(screen.getByText("단어 5개 짝 맞추기")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("오늘의 용어 짝 맞추기 시작"));
-    expect(onTodayOpen).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "a" }),
-    );
-    fireEvent.click(screen.getByLabelText("오늘의 용어 닫기"));
-    expect(onTodayClose).toHaveBeenCalled();
+  it("카드는 지도에 없고, 헤더 버튼으로 짝 맞추기에 들어간다", () => {
+    const onToday = vi.fn();
+    setupMap(onToday);
+    expect(screen.queryByText(/단어 5개 짝 맞추기/)).toBeNull();
+    fireEvent.click(screen.getByLabelText("오늘의 용어"));
+    expect(onToday).toHaveBeenCalled();
   });
-  it("오늘의 용어가 없으면(꺼짐·오늘 닫음·용어 없음) 카드를 보여주지 않는다", () => {
-    setup(null);
-    expect(screen.queryByLabelText("오늘의 용어 닫기")).toBeNull();
-  });
-  it("시트가 열리면 카드를 숨긴다", async () => {
-    const { markers } = setup(term("a", true));
-    fireEvent.click(screen.getByText("부산으로 이동"));
-    await waitFor(() => expect(markers).toHaveBeenCalled());
-    await new Promise((r) => setTimeout(r, 300));
-    fireEvent.click(screen.getByText("해운대구 누르기"));
-    await waitFor(() =>
-      expect(screen.queryByLabelText("오늘의 용어 닫기")).toBeNull(),
-    );
+  it("광고 영역을 그리지 않는다", () => {
+    setupMap();
+    expect(screen.queryByText(/광고 영역/)).toBeNull();
   });
 });
 describe("오늘의 용어 카드 진행 표시", () => {

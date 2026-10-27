@@ -106,6 +106,8 @@ export type Transaction = Latest & {
   id: string;
   property_type: Property;
   complex_id: string | null;
+  // 단지 거래면 단지명. 단지가 아닌 거래(빌라·토지 등)는 null이라 주소를 대신 보여준다
+  complex_name?: string | null;
   address: string;
   region_code: string;
   lat: number;

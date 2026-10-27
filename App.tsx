@@ -14,7 +14,14 @@ import { useFonts } from "expo-font";
 import { Repository, type Mode } from "./src/api/repository";
 import { apiBase } from "./src/api/base";
 import { ApiClient } from "./src/api/client";
-import type { BBox, Filters, SearchResult, Term, Meta, Parcel } from "./src/api/types";
+import type {
+  BBox,
+  Filters,
+  SearchResult,
+  Term,
+  Meta,
+  Parcel,
+} from "./src/api/types";
 import { DEFAULT_FILTERS, HOME } from "./src/state/market";
 import {
   deviceId,
@@ -50,7 +57,7 @@ import {
   matchingStatus,
   type MatchingRecord,
 } from "./src/glossary/matching";
-import { kstDateKey, pickToday, todayLabel } from "./src/glossary/today";
+import { kstDateKey, todayLabel } from "./src/glossary/today";
 type Route =
   | { kind: "matching" }
   | { kind: "filter" }
@@ -101,7 +108,6 @@ export default function App() {
   const [tipsSettingsReady, setTipsSettingsReady] = useState(false);
   const [todayKey, setTodayKey] = useState(kstDateKey());
   const [todayEnabled, setTodayEnabled] = useState(true);
-  const [todayClosedOn, setTodayClosedOn] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -164,7 +170,6 @@ export default function App() {
     loadMatchingRecord()
       .then(setMatchingRecord)
       .catch(() => {});
-    loadStored<string>("today_closed_on", "").then(setTodayClosedOn);
     return () => clearTimeout(toastTimer.current);
   }, []);
   useEffect(() => {
@@ -270,10 +275,6 @@ export default function App() {
       sub.remove();
     };
   }, []);
-  const todayTerm =
-    todayEnabled && todayClosedOn !== todayKey
-      ? pickToday(terms, todayKey)
-      : null;
   if (initError)
     return (
       <SafeAreaView
@@ -469,17 +470,8 @@ export default function App() {
                 onHelp={onHelp}
                 notify={notify}
                 onMeta={setDataMeta}
-                todayTerm={todayTerm}
-                todayStreak={learning.streak}
-                todayCompleted={learning.completed}
-                todayMatched={learning.matched}
                 onParcel={setLastParcel}
-                onTodayOpen={() => setRoute({ kind: "matching" })}
-                onTodayClose={() => {
-                  setTodayClosedOn(todayKey);
-                  void store("today_closed_on", todayKey);
-                  notify("오늘은 지도에서 숨겨요\n용어 탭에서 다시 풀 수 있어요");
-                }}
+                onToday={() => setRoute({ kind: "matching" })}
               />
             </View>
             {tab === "glossary" && (
@@ -489,7 +481,7 @@ export default function App() {
                 error={termsError}
                 onRetry={() => setTermsRetry((x) => x + 1)}
                 onTerm={(term) => setRoute({ kind: "term", term, map: false })}
-                today={learning}
+                today={todayEnabled ? learning : undefined}
                 onToday={() => setRoute({ kind: "matching" })}
               />
             )}
