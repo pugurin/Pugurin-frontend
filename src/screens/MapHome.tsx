@@ -10,10 +10,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import * as Location from "expo-location";
-import {
-  initialLocationStart,
-  markLocationAsked,
-} from "../state/location";
+import { initialLocationStart, markLocationAsked } from "../state/location";
 import { LocationAsk } from "../components/LocationAsk";
 import type { UserLocation } from "../map/userLocation";
 import type { Repository } from "../api/repository";
@@ -25,7 +22,6 @@ import type {
   Parcel,
   RegionMarker,
   SearchResult,
-  Term,
 } from "../api/types";
 import {
   changeDeal,
@@ -42,9 +38,7 @@ import {
 } from "../state/market";
 import { C } from "../theme/tokens";
 import { Brand } from "../components/Brand";
-import { TodayTermCard } from "../components/TodayTermCard";
 import {
-  AdSlot,
   Btn,
   Chip,
   Icon,
@@ -66,6 +60,7 @@ export function MapHome({
   onFilters,
   onSearch,
   onGlossary,
+  onToday,
   interactionBlocked = false,
   onFilter,
   onList,
@@ -80,12 +75,6 @@ export function MapHome({
   onHelp,
   notify,
   onMeta,
-  todayTerm,
-  onTodayOpen,
-  onTodayClose,
-  todayStreak = 0,
-  todayCompleted = false,
-  todayMatched = 0,
   onParcel,
 }: {
   repo: Repository;
@@ -108,12 +97,8 @@ export function MapHome({
   notify: (s: string) => void;
   onMeta: (m: Meta) => void;
   // 오늘의 용어 (D01). null이면 카드를 보여주지 않는다(꺼짐·오늘 닫음·용어 없음)
-  todayTerm?: Term | null;
-  todayStreak?: number;
-  todayCompleted?: boolean;
-  todayMatched?: number;
-  onTodayOpen?: (term: Term) => void;
-  onTodayClose?: () => void;
+  // 오늘의 용어(짝 맞추기) 바로가기. 카드는 용어사전 탭에 있다
+  onToday?: () => void;
   // 땅 정보를 받아 오면 알린다. 오늘의 용어 '매물 카드 번역하기'에 쓴다
   onParcel?: (parcel: Parcel) => void;
 }) {
@@ -552,18 +537,6 @@ export function MapHome({
         />
       ) : (
         <>
-          {desktop && todayTerm && (
-            <View style={{ marginBottom: 16 }}>
-              <TodayTermCard
-                term={todayTerm}
-                streak={todayStreak}
-                completed={todayCompleted}
-                matched={todayMatched}
-                onOpen={() => onTodayOpen?.(todayTerm)}
-                onClose={() => onTodayClose?.()}
-              />
-            </View>
-          )}
           <RegionContent
             marker={selected.marker}
             filters={filters}
@@ -605,7 +578,7 @@ export function MapHome({
             },
           ]}
         >
-          <Brand size={34} wordmark />
+          <Brand size={34} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="단지·주소·동네 검색"
@@ -677,6 +650,9 @@ export function MapHome({
             </Chip>
             <IconBtn name="filter" label="상세 필터" onPress={onFilter} />
           </View>
+          {onToday && (
+            <IconBtn name="today" label="오늘의 용어" onPress={onToday} />
+          )}
           <Pressable
             accessibilityRole="button"
             onPress={onGlossary ?? (() => onHelp("용어사전"))}
@@ -716,6 +692,16 @@ export function MapHome({
                 <Icon name="search" color={C.light} />
                 <T color={C.light}>단지·주소·동네 검색</T>
               </Pressable>
+              {onToday && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="오늘의 용어"
+                  onPress={onToday}
+                  style={{ padding: 8 }}
+                >
+                  <Icon name="today" color={C.light} />
+                </Pressable>
+              )}
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="채팅"
@@ -932,21 +918,6 @@ export function MapHome({
               </Btn>
             </View>
           )}
-          {/* D01·D04: 오늘의 용어 카드. 목록 보기 위, 시트가 열리면 숨긴다 */}
-          {todayTerm && !selected && !desktop && (
-            <View
-              style={{ position: "absolute", left: 12, right: 12, bottom: 72 }}
-            >
-              <TodayTermCard
-                term={todayTerm}
-                streak={todayStreak}
-                completed={todayCompleted}
-                matched={todayMatched}
-                onOpen={() => onTodayOpen?.(todayTerm)}
-                onClose={() => onTodayClose?.()}
-              />
-            </View>
-          )}
           {loading ? (
             <View
               style={{
@@ -1074,7 +1045,9 @@ export function MapHome({
                   <ScrollView style={{ flex: 1 }}>
                     {markers
                       .filter(
-                        (marker): marker is Exclude<Marker, { kind: "parcel" }> =>
+                        (
+                          marker,
+                        ): marker is Exclude<Marker, { kind: "parcel" }> =>
                           marker.kind !== "parcel",
                       )
                       .map((marker) => (
@@ -1113,16 +1086,6 @@ export function MapHome({
                 )}
               </>
             )}
-            {todayTerm && (
-              <TodayTermCard
-                term={todayTerm}
-                streak={todayStreak}
-                completed={todayCompleted}
-                matched={todayMatched}
-                onOpen={() => onTodayOpen?.(todayTerm)}
-                onClose={() => onTodayClose?.()}
-              />
-            )}
           </View>
         )}
       </View>
@@ -1133,10 +1096,6 @@ export function MapHome({
           onPress={onDate}
         />
       )}
-      <AdSlot
-        width={desktop ? (width >= 1280 ? 728 : 468) : 320}
-        height={desktop && width >= 1280 ? 90 : desktop ? 60 : 50}
-      />
       {!desktop && detailSheet}
       <Modal
         visible={layers}

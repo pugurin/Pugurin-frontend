@@ -173,7 +173,7 @@ export function RegionContent({
                 tx={tx}
                 key={tx.id}
                 unit={unit}
-                name={tx.address}
+                name={tx.complex_name ?? tx.address}
                 onPress={
                   tx.complex_id ? () => onComplex(tx.complex_id!) : undefined
                 }

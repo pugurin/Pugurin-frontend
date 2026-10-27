@@ -106,7 +106,7 @@ export function TransactionsScreen({
             key={tx.id}
             tx={tx}
             unit={unit}
-            name={tx.address}
+            name={tx.complex_name ?? tx.address}
             onPress={
               tx.complex_id ? () => onComplex(tx.complex_id!) : undefined
             }

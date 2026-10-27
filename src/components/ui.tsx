@@ -35,6 +35,7 @@ import {
   MapPin,
   Mail,
   FileText,
+  Lightbulb,
   type LucideIcon,
 } from "lucide-react-native";
 import { C, FONT } from "../theme/tokens";
@@ -56,6 +57,7 @@ export const ICONS = {
   search: Search,
   filter: SlidersHorizontal,
   star: Star,
+  today: Lightbulb,
   close: X,
   reset: RotateCcw,
   list: List,
@@ -321,36 +323,6 @@ export function Notice({
         · 최근 30일 거래는 아직 신고되지 않았을 수 있어요
       </T>
     </Pressable>
-  );
-}
-export function AdSlot({
-  width = 320,
-  height = 50,
-}: {
-  width?: number;
-  height?: number;
-}) {
-  return (
-    <View
-      style={{
-        height,
-        width,
-        maxWidth: "95%",
-        alignSelf: "center",
-        marginHorizontal: 20,
-        marginBottom: 6,
-        borderWidth: 1,
-        borderStyle: "dashed",
-        borderColor: C.disabled,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: C.bg2,
-      }}
-    >
-      <T size={12} color={C.light}>
-        광고 영역 {width}×{height}
-      </T>
-    </View>
   );
 }
 export function StateCard({
