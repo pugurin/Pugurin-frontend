@@ -17,6 +17,8 @@ iOS 시뮬레이터 API 주소는 localhost:8000, Android 에뮬레이터는 10.
 
 웹 미리보기는 별도 터미널에서 `npm run api:dev`와 `npm run web`을 실행한다. 개발 중계는 같은 PC의 백엔드만 사용하고 127.0.0.1:8001에 바인딩한다. 배포 서버에서 사용하지 않는다.
 
+웹 배포는 Netlify가 [`netlify.toml`](./netlify.toml)대로 한다. main에 머지되면 `npm run build:web`으로 `dist/`를 만들어 올린다. 배포 웹은 같은 주소의 `/api/v1`을 부르고, Netlify가 이를 백엔드로 넘긴다(프록시). 그래서 브라우저가 백엔드를 직접 부르지 않아 CORS 설정이 필요 없다. 백엔드에 HTTPS 도메인이 생기면 `netlify.toml`의 프록시 주소만 바꾼다. `EXPO_PUBLIC_*` 값은 빌드할 때 번들에 들어가므로, VWorld 키나 약관 URL은 Netlify 사이트 설정의 환경 변수에 넣고 다시 배포한다.
+
 배경 지도는 VWorld 인증키(`EXPO_PUBLIC_VWORLD_KEY`)가 있으면 VWorld 일반·위성 지도와 지적도를, 없으면 키가 필요 없는 **OpenFreeMap**(OpenStreetMap 데이터, 지명은 한글 우선)을 쓴다. OpenFreeMap은 무료 공개 서비스라 가용성 보장이 없어 출시 전에는 VWorld로 바꾼다. 위성 지도와 지적도는 VWorld 키가 있어야 보인다. 실거래가 마커는 MapLibre 심볼 레이어로 그리며(500개에서 60fps 근처, #4), 겹치는 마커는 점으로 줄인다. 지도 줌은 MapLibre 줌 + 1을 화면·API 줌으로 쓴다.
 
 ## 구현 범위

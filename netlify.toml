@@ -1,0 +1,34 @@
+# Netlify 웹 배포 설정. main에 머지되면 Netlify가 이 파일대로 빌드·배포한다
+[build]
+  command = "npm run build:web"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  EXPO_PUBLIC_DATA_MODE = "api"
+  # 같은 주소의 /api/v1을 아래 프록시가 백엔드로 넘긴다. 브라우저는 백엔드를 직접 부르지 않아 CORS·혼합 콘텐츠 문제가 없다
+  EXPO_PUBLIC_API_URL = "/api/v1"
+
+# 백엔드에 HTTPS 도메인이 생기면 to를 그 주소로 바꾼다
+[[redirects]]
+  from = "/api/*"
+  to = "http://34.64.207.41/api/:splat"
+  status = 200
+  force = true
+
+# 화면 전환은 앱 안에서 하지만, 어떤 경로로 들어와도 앱을 띄운다
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# 빌드 파일 이름에 해시가 붙어 있어 오래 캐시해도 된다
+[[headers]]
+  for = "/_expo/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
