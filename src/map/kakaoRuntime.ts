@@ -126,11 +126,14 @@ window.pugurinKakaoMap = function (el, config, send) {
       var bw = button.offsetWidth, bh = button.offsetHeight;
       var r = { left: p.x - bw / 2, right: p.x + bw / 2, top: m.region ? p.y - bh / 2 : p.y - bh - 7, bottom: m.region ? p.y + bh / 2 : p.y };
       // 붙을 단지가 점이 아닌 상태로 그려졌으면 그 오른쪽 옆으로 옮긴다. 단지 위치에서 가로로만 띄운다
+      // 그릴 위치도 단지 위치로 잡아, 그려진 상자와 겹침 판정 사각형이 같게 한다
       var host = m.attach ? placed[m.attach] : null;
       var gap = 0;
       if (host) {
-        gap = (host.right - host.left) / 2 + 4;
-        r = { left: host.right + 4, right: host.right + 4 + bw, top: host.bottom - bh - 7, bottom: host.bottom };
+        var hr = host.rect;
+        pos = host.pos;
+        gap = (hr.right - hr.left) / 2 + 4;
+        r = { left: hr.right + 4, right: hr.right + 4 + bw, top: hr.bottom - bh - 7, bottom: hr.bottom };
       }
       var dot = m.rank > 0 && rects.some(function (a) { return r.left < a.right + 3 && r.right > a.left - 3 && r.top < a.bottom + 3 && r.bottom > a.top - 3; });
       if (dot) {
@@ -139,7 +142,7 @@ window.pugurinKakaoMap = function (el, config, send) {
         button.setAttribute('aria-label', m.auction ? '경매 물건 보기' : (m.title || '마커') + ' 확대');
       } else {
         rects.push(r);
-        if (!m.auction) placed[m.id] = r;
+        if (!m.auction) placed[m.id] = { rect: r, pos: pos };
       }
       if (host) button.style.marginLeft = gap + 'px';
       button.onclick = function () {

@@ -112,7 +112,7 @@ export function auctionItems(
   });
   const done = new Set<string>();
   const items: MarkerItem[] = [];
-  placed.forEach(({ a, lat, lng }, i) => {
+  placed.forEach(({ a, lat, lng }) => {
     const attach = a.complex_id && complexes.has(a.complex_id) ? a.complex_id : undefined;
     const members = attach ? groups.get(attach)! : [a];
     const base = { region: false, title: "", auction: true } as const;
@@ -131,7 +131,7 @@ export function auctionItems(
         amount: `⚖ ${members.length}건`,
         sub: prices.length ? `최저 ${formatPrice(Math.min(...prices))}` : "최저가 미정",
         color: isSelected ? SELECTED_COLOR : AUCTION_COLOR,
-        rank: isSelected ? 0 : 3 + 1 / (1 + i),
+        rank: isSelected ? 0 : 3,
         attach,
       });
       return;
@@ -146,9 +146,12 @@ export function auctionItems(
       amount: auctionAmount(a),
       sub: auctionSub(a, today),
       color: isSelected ? SELECTED_COLOR : AUCTION_COLOR,
-      rank: isSelected ? 0 : 3 + 1 / (1 + i),
+      rank: isSelected ? 0 : 3,
       ...(attach ? { attach } : {}),
     });
   });
-  return items;
+  // 서버가 준 순서(매각기일 가까운 순)대로 먼저 자리를 잡게 한다. 실거래(2~3) 뒤, 선택은 0
+  return items.map((m, k) =>
+    m.rank === 0 ? m : { ...m, rank: 3 + (k + 1) / (items.length + 1) },
+  );
 }

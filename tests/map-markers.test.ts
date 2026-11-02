@@ -163,7 +163,10 @@ describe("경매 마커", () => {
     const [a] = auctionItems([a1], [], "auction:a1", today);
     expect(a).toMatchObject({ color: "#111110", rank: 0 });
   });
-  it("경매는 실거래보다 뒤에 자리를 잡는다", () => {
-    expect(auctionItems([a1], [], null, today)[0].rank).toBeGreaterThan(3);
+  it("경매는 실거래보다 뒤에, 서버 순서대로 자리를 잡는다", () => {
+    const [first, second] = auctionItems([a1, a2], [], null, today);
+    expect(first.rank).toBeGreaterThan(3);
+    expect(second.rank).toBeLessThan(4);
+    expect(first.rank).toBeLessThan(second.rank);
   });
 });

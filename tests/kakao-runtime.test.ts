@@ -272,6 +272,13 @@ describe("경매 마커", () => {
     expect(button.style.marginLeft).toBe("4px");
   });
 
+  it("경매 좌표가 단지와 조금 달라도 단지 위치에 붙여 그린다", () => {
+    start("test-key", props({ auctions: [{ ...auction, lat: 35.1503, lng: 129.1404 }] }));
+    const a = auctionOverlay();
+    expect(a.options.content.className).toBe("pg-marker auction");
+    expect(a.options.position).toMatchObject({ lat: complex.lat, lng: complex.lng });
+  });
+
   it("단지 마커가 없는 경매는 자기 좌표에 가운데 정렬로 그린다", () => {
     start("test-key", props({ markers: [], auctions: [{ ...auction, complex_id: null }] }));
     const a = auctionOverlay();
