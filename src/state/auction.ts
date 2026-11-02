@@ -119,7 +119,8 @@ export function auctionSourceLine(
   const asOf = meta?.data_as_of?.slice(0, 10).replaceAll("-", ".");
   return [
     (meta?.data_mode ?? mode) === "sample" && "샘플 데이터",
-    meta?.source_attribution && `출처: ${meta.source_attribution}`,
+    meta?.source_attribution &&
+      `출처: ${[meta.source_attribution].flat().join(" · ")}`,
     asOf && `기준일 ${asOf}`,
   ]
     .filter(Boolean)

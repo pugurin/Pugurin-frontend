@@ -10,6 +10,7 @@ import type {
   Filters,
   MarkerData,
   Parcel,
+  School,
   SearchResult,
   Sort,
   Stats,
@@ -21,6 +22,8 @@ import {
   AUCTION_META,
   COMPLEXES,
   SAMPLE_META,
+  SCHOOLS,
+  SCHOOL_META,
   SAMPLE_STATS,
   TERMS,
   TRANSACTIONS,
@@ -243,6 +246,24 @@ export class Repository {
       `/auctions/${encodeURIComponent(id)}`,
       signal,
     );
+  }
+  // 화면 영역 안의 학교. 샘플 모드는 서버 대역이라 여기서 거른다
+  schools(bbox: BBox, signal?: AbortSignal): Promise<Envelope<School[]>> {
+    if (this.mode === "sample") {
+      const [w, s, e, n] = bbox;
+      const data = SCHOOLS.filter(
+        (x) =>
+          x.lng != null &&
+          x.lat != null &&
+          x.lng >= w &&
+          x.lng <= e &&
+          x.lat >= s &&
+          x.lat <= n,
+      );
+      return Promise.resolve({ data, meta: SCHOOL_META });
+    }
+    const p = new URLSearchParams({ bbox: bbox.join(",") });
+    return this.client.get<School[]>(`/schools?${p}`, signal);
   }
   // 검색 결과·필지 마커처럼 PNU를 이미 알 때. 응답 형태는 parcelLookup과 같다
   parcel(pnu: string, signal?: AbortSignal) {
