@@ -104,7 +104,11 @@ describe("경매 목록 화면", () => {
       screen.getAllByText(/감정가 5억 2,000만의 69% · 유찰 2회/),
     ).toHaveLength(2);
     expect(screen.getAllByText(/25.7평/).length).toBeGreaterThan(0);
-    expect(screen.getByText("지분")).toBeTruthy();
+    const share = screen.getByText("지분");
+    expect(getComputedStyle(share).color).toBe("rgb(138, 94, 8)");
+    expect(getComputedStyle(share.parentElement!).backgroundColor).toBe(
+      "rgb(255, 243, 214)",
+    );
     const q = lastQuery(auctions);
     expect(q).toMatchObject({
       bbox: BBOX,

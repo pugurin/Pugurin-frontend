@@ -150,7 +150,12 @@ describe("경매 시트", () => {
       "full",
     );
     expect(await screen.findByText("공매")).toBeTruthy();
-    expect(screen.getByText("지분")).toBeTruthy();
+    const share = screen.getByText("지분");
+    // 전역 제약의 노란 칩 색 (#FFF3D6 / #8A5E08)
+    expect(getComputedStyle(share).color).toBe("rgb(138, 94, 8)");
+    expect(getComputedStyle(share.parentElement!).backgroundColor).toBe(
+      "rgb(255, 243, 214)",
+    );
     expect(screen.queryByText("법원경매")).toBeNull();
     expect(screen.getByText("입찰 D-31")).toBeTruthy();
     expect(screen.getByText("입찰 기간")).toBeTruthy();
