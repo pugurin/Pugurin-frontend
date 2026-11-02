@@ -1,4 +1,4 @@
-import type { Auction } from "../api/types";
+import type { Auction, Meta } from "../api/types";
 import { formatPrice } from "./market";
 
 // 경매 마커를 그리기 시작하는 최소 줌 레벨
@@ -105,4 +105,19 @@ export function auctionSub(a: Auction, today: Date): string {
     return `감정가의 ${Math.round(a.min_price_ratio)}%`;
   }
   return dday(a, today)?.label ?? "";
+}
+
+// 출처 줄. 경매 시트와 목록이 같이 쓴다. 샘플이면 "샘플 데이터 · "를 앞에 붙인다
+export function auctionSourceLine(
+  meta: Meta | undefined,
+  mode: string,
+): string {
+  const asOf = meta?.data_as_of?.slice(0, 10).replaceAll("-", ".");
+  return [
+    (meta?.data_mode ?? mode) === "sample" && "샘플 데이터",
+    meta?.source_attribution && `출처: ${meta.source_attribution}`,
+    asOf && `기준일 ${asOf}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }

@@ -5,6 +5,7 @@ import type { Auction, AuctionDetail, AuctionResult, Meta } from "../api/types";
 import type { SheetStage } from "../components/Sheet";
 import { Btn, Section, StateCard, T, s } from "../components/ui";
 import {
+  auctionSourceLine,
   auctionTitle,
   compareLine,
   dday,
@@ -297,14 +298,7 @@ export function AuctionContent({
         notify("원문을 열 수 없어요"),
       );
   };
-  const asOf = meta?.data_as_of?.slice(0, 10).replaceAll("-", ".");
-  const sourceLine = [
-    (meta?.data_mode ?? repo.mode) === "sample" && "샘플 데이터",
-    meta?.source_attribution && `출처: ${meta.source_attribution}`,
-    asOf && `기준일 ${asOf}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const sourceLine = auctionSourceLine(meta, repo.mode);
   return (
     <>
       <View style={[s.row, { flexWrap: "wrap" }]}>

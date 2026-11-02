@@ -367,4 +367,14 @@ describe("경매 목록 화면", () => {
       ).toBeTruthy();
     });
   });
+  it("목록 하단에 시트와 같은 형식의 출처 줄을 둔다", async () => {
+    setup();
+    expect(await screen.findByText("테스트 물건 1")).toBeTruthy();
+    // AUCTION_META는 샘플 모드라 "샘플 데이터 · " 접두가 붙는다
+    expect(
+      screen.getByText(
+        "샘플 데이터 · 출처: 대법원 법원경매정보 · 기준일 2026.10.05",
+      ),
+    ).toBeTruthy();
+  });
 });

@@ -2,7 +2,7 @@ import React from "react";
 import { it, expect } from "vitest";
 import { render, fireEvent, screen, waitFor } from "@testing-library/react";
 import { GlossaryScreen } from "../src/screens/GlossaryScreen";
-import { TermsScreen } from "../src/screens/MoreScreen";
+import { MoreScreen, TermsScreen } from "../src/screens/MoreScreen";
 const terms = [
   {
     id: "far",
@@ -36,4 +36,18 @@ it("용어 목록에서 검색 결과가 없으면 안내와 추천 용어를 �
 it("약관 원문이 없으면 임의 약관을 실제 약관처럼 제시하지 않는다", () => {
   render(<TermsScreen kind="서비스 이용약관" onBack={() => {}} />);
   expect(screen.getByText("약관 원문이 아직 등록되지 않았어요")).toBeTruthy();
+});
+it("더보기 데이터 출처에 법원경매 출처를 적는다", () => {
+  render(
+    <MoreScreen
+      mode="sample"
+      onMode={() => {}}
+      onDate={() => {}}
+      onTerms={() => {}}
+      todayEnabled={false}
+      onTodayEnabled={() => {}}
+      notify={() => {}}
+    />,
+  );
+  expect(screen.getByText(/대법원 법원경매정보/)).toBeTruthy();
 });

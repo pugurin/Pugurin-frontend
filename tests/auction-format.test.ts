@@ -4,6 +4,7 @@ import {
   AUCTION_MIN_ZOOM,
   AUCTION_SERVER_SORT,
   auctionAmount,
+  auctionSourceLine,
   auctionSub,
   auctionTitle,
   compareLine,
@@ -162,5 +163,19 @@ describe("경매 문구 함수", () => {
     expect(
       auctionTitle({ ...base, title: "부산광역시 남구 대연동 샘플아파트" }),
     ).toBe("남구 대연동 샘플아파트");
+  });
+  it("출처 줄은 샘플이면 '샘플 데이터 · '를 앞에 붙이고 기준일을 날짜로 쓴다", () => {
+    const meta = {
+      source_attribution: "대법원 법원경매정보",
+      data_as_of: "2026-10-05T04:00:00+09:00",
+    };
+    expect(auctionSourceLine(meta, "api")).toBe(
+      "출처: 대법원 법원경매정보 · 기준일 2026.10.05",
+    );
+    expect(auctionSourceLine({ ...meta, data_mode: "sample" }, "api")).toBe(
+      "샘플 데이터 · 출처: 대법원 법원경매정보 · 기준일 2026.10.05",
+    );
+    expect(auctionSourceLine(undefined, "sample")).toBe("샘플 데이터");
+    expect(auctionSourceLine(undefined, "api")).toBe("");
   });
 });

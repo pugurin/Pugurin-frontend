@@ -13,6 +13,7 @@ import { Badge, SHARE_INK, SHARE_WASH, areaOf } from "./AuctionContent";
 import { Btn, Chip, Header, Section, StateCard, T, s } from "../components/ui";
 import {
   AUCTION_SERVER_SORT,
+  auctionSourceLine,
   compareLine,
   dday,
   formatWon,
@@ -255,6 +256,7 @@ export function AuctionsScreen({
     : meta || items.length
       ? `경매 물건 · 지도 화면 안 ${(meta?.total ?? items.length).toLocaleString("ko-KR")}건`
       : "경매 물건 · 지도 화면 안";
+  const sourceLine = auctionSourceLine(meta, repo.mode);
   const filtered =
     source != null || includeClosed || (serverSort && excludeShare);
   return (
@@ -345,7 +347,14 @@ export function AuctionsScreen({
           </T>
         ) : null}
       </ScrollView>
-      <View style={{ padding: 16, borderTopWidth: 1, borderColor: C.rule }}>
+      <View
+        style={{ padding: 16, gap: 10, borderTopWidth: 1, borderColor: C.rule }}
+      >
+        {sourceLine !== "" && (
+          <T size={13} color={C.muted} style={{ textAlign: "center" }}>
+            {sourceLine}
+          </T>
+        )}
         <Btn secondary icon="map" onPress={onBack}>
           지도로 보기
         </Btn>
