@@ -22,6 +22,7 @@ const repo: any = {
   }),
   transactions: async () => ({ data: [] }),
   analysis: async () => ({ data: null }),
+  auctions: async () => ({ data: [] }),
   stats: async () => ({ data: { trend: [], transaction_count: 0 } }),
 };
 const marker = {

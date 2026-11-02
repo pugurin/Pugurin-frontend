@@ -3,6 +3,7 @@ import { Pressable, View, Platform, useWindowDimensions } from "react-native";
 import type { Repository } from "../api/repository";
 import type {
   Analysis,
+  Auction,
   Complex,
   Filters,
   Meta,
@@ -33,6 +34,8 @@ import {
   UnitToggle,
   s,
 } from "../components/ui";
+import { auctionSub, dday, ddayDate, formatWon } from "../state/auction";
+import { areaOf } from "./AuctionContent";
 import { LoadingTip } from "../components/LoadingTip";
 import { Chart } from "../components/Chart";
 import { TransactionRow } from "../components/TransactionRow";
@@ -199,6 +202,64 @@ export function RegionContent({
     </>
   );
 }
+// 기일이 가장 가까운 물건. 날짜가 없는 물건은 뒤로 밀고, 같으면 서버 순서를 지킨다
+function nearestAuction(list: Auction[]): Auction {
+  const time = (a: Auction) => {
+    const d = ddayDate(a);
+    const t = d ? Date.parse(d) : NaN;
+    return Number.isNaN(t) ? Infinity : t;
+  };
+  return list.reduce((best, a) => (time(a) < time(best) ? a : best));
+}
+// 단지 시트의 경매 카드. 1건이면 그 물건, 여러 건이면 이 단지로 거른 목록으로 보낸다
+function ComplexAuctionCard({
+  list,
+  unit,
+  onPress,
+}: {
+  list: Auction[];
+  unit: "평" | "㎡";
+  onPress: () => void;
+}) {
+  const a = nearestAuction(list);
+  const today = new Date();
+  const d = dday(a, today);
+  const price = `최저가 ${a.min_price == null ? "미정" : formatWon(a.min_price)}`;
+  const detail = [
+    auctionSub(a, today),
+    areaOf(a, unit),
+    a.fail_count == null ? null : `유찰 ${a.fail_count}회`,
+  ].filter(Boolean);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{
+        marginTop: 10,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: C.brown,
+        borderRadius: 12,
+        backgroundColor: C.brownWash,
+        gap: 2,
+      }}
+    >
+      <View style={s.between}>
+        <T size={15} bold color={C.brownInk}>
+          ⚖ 이 단지 경매 {list.length}건
+        </T>
+        {d && (
+          <T size={14} bold color={d.soon ? C.brown : C.muted}>
+            입찰 {d.label}
+          </T>
+        )}
+      </View>
+      <T size={14} color={C.ink2}>
+        {[price, ...detail].join(" · ")}
+      </T>
+    </Pressable>
+  );
+}
 export function ComplexContent({
   id,
   repo,
@@ -209,6 +270,8 @@ export function ComplexContent({
   notify,
   unit,
   onUnit,
+  onAuction,
+  onAuctionList,
 }: {
   id: string;
   repo: Repository;
@@ -219,9 +282,12 @@ export function ComplexContent({
   notify: (s: string) => void;
   unit: "평" | "㎡";
   onUnit?: (u: "평" | "㎡") => void;
+  onAuction?: (id: string) => void;
+  onAuctionList?: (complexId: string, name: string) => void;
 }) {
   const { width } = useWindowDimensions();
   const twoColumns = Platform.OS === "web" && width >= 768 && width < 1024;
+  const [auctions, setAuctions] = useState<Auction[]>([]);
   const [complex, setComplex] = useState<Complex | null>(null);
   const [items, setItems] = useState<Transaction[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -303,6 +369,18 @@ export function ComplexContent({
     retry,
     analysisRetry,
   ]);
+  // 이 단지의 진행 중 경매. 오류는 카드만 숨기고 단지 시트는 막지 않는다
+  useEffect(() => {
+    setAuctions([]);
+    const abort = new AbortController();
+    repo
+      .auctions({ complexId: id }, abort.signal)
+      .then((r) => {
+        if (!abort.signal.aborted) setAuctions(r.data);
+      })
+      .catch(() => {});
+    return () => abort.abort();
+  }, [id, repo]);
   useEffect(() => {
     setComparison(null);
     if (!complex) return;
@@ -349,6 +427,17 @@ export function ComplexContent({
       : filters.deal_type === "jeonse"
         ? "median_deposit_per_pyeong"
         : "median_monthly_rent";
+  const auctionCard = auctions.length > 0 && (
+    <ComplexAuctionCard
+      list={auctions}
+      unit={unit}
+      onPress={() =>
+        auctions.length === 1
+          ? onAuction?.(auctions[0].id)
+          : onAuctionList?.(complex.id, complex.name)
+      }
+    />
+  );
   return (
     <>
       <View style={s.between}>
@@ -409,6 +498,7 @@ export function ComplexContent({
               계약
             </T>
           )}
+          {auctionCard}
           <Pressable
             accessibilityRole="button"
             onPress={() => onStage("half")}
@@ -421,6 +511,7 @@ export function ComplexContent({
         </>
       ) : (
         <>
+          {auctionCard}
           {/* 세대수는 공공데이터에 없어 실데이터에서 항상 null, 준공연도도 비어 올 수 있다 → 있는 것만 */}
           {(complex.build_year || complex.household_count) && (
             <T size={14} color={C.muted} style={{ marginVertical: 8 }}>

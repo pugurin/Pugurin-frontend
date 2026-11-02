@@ -677,6 +677,13 @@ export function MapHome({
           notify={notify}
           unit={unit}
           onUnit={onUnit}
+          onAuction={(id) => {
+            setSelected({ kind: "auction", id });
+            setStage("peek");
+          }}
+          onAuctionList={(complexId, name) =>
+            onAuctionList?.({ bbox: camera.bbox, complexId, name })
+          }
         />
       ) : (
         <>

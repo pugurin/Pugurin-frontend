@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Linking, Platform, Pressable, View } from "react-native";
 import type { Repository } from "../api/repository";
-import type { AuctionDetail, AuctionResult, Meta } from "../api/types";
+import type { Auction, AuctionDetail, AuctionResult, Meta } from "../api/types";
 import type { SheetStage } from "../components/Sheet";
 import { Btn, Section, StateCard, T, s } from "../components/ui";
 import {
@@ -40,7 +40,7 @@ function formatDateTime(v: string | null): string {
 }
 
 // 건물면적이 있으면 건물, 없으면 토지. 단위는 평/㎡ 토글을 따른다
-function areaOf(a: AuctionDetail, unit: "평" | "㎡"): string | null {
+export function areaOf(a: Auction, unit: "평" | "㎡"): string | null {
   const [m2, py] =
     a.building_area_m2 != null || a.building_area_pyeong != null
       ? [a.building_area_m2, a.building_area_pyeong]
