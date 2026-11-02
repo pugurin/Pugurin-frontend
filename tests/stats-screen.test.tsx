@@ -30,6 +30,7 @@ it("단지 평형 선택은 서버 평형별 통계로 바뀌고 실제 지역 �
     }),
     transactions: async () => ({ data: [] }),
     analysis: async () => ({ data: null }),
+    auctions: async () => ({ data: [] }),
     stats: async (_: any, id: string, kind: string) => ({
       data:
         kind === "region"
@@ -131,6 +132,7 @@ it("지도 유형과 다른 검색 단지도 실제 단지 유형으로 통계�
     }),
     transactions: async () => ({ data: [] }),
     analysis: async () => ({ data: null }),
+    auctions: async () => ({ data: [] }),
     stats,
   };
   render(

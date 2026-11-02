@@ -29,6 +29,7 @@ function setup(propertyType: Property) {
   const repo = {
     mode: "api",
     markers: vi.fn(async () => ({ data: { markers: [] }, meta: {} })),
+    auctions: async () => ({ data: [], meta: {} }),
     complex: vi.fn(async () => ({
       data: { id: "c1", property_type: propertyType },
     })),

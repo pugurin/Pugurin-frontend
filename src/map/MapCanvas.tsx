@@ -30,7 +30,7 @@ export default function MapCanvas(p: MapProps) {
     );
   };
 
-  useEffect(() => post(markerState(p)), [p.markers, p.property, p.unit, p.selected]);
+  useEffect(() => post(markerState(p)), [p.markers, p.auctions, p.property, p.unit, p.selected]);
   useEffect(() => post(layerState(p)), [p.base, p.cadastral]);
   useEffect(
     () => post(shapeState(p)),

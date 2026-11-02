@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { webRuntime } from "../src/map/kakaoRuntime";
 import { fullState } from "../src/map/bridge";
 import type { MapProps } from "../src/map/types";
-import type { ComplexMarker } from "../src/api/types";
+import type { Auction, ComplexMarker } from "../src/api/types";
 
 // 카카오 SDK 대역. 런타임이 부르는 API만 흉내 낸다
 function fakeKakao() {
@@ -217,6 +217,95 @@ describe("카카오 지도 런타임", () => {
     ready();
     expect(fake.kakao.lastMap.level).toBe(3);
     expect(fake.kakao.lastMap.center).toMatchObject({ lat: 35.3, lng: 129.3 });
+  });
+});
+
+const auction: Auction = {
+  id: "a1",
+  source: "court",
+  case_no: "2026타경1234",
+  court_name: null,
+  title: null,
+  usage: "아파트",
+  property_group: "apartment",
+  address: "부산광역시 해운대구 우동 1",
+  lat: 35.15,
+  lng: 129.14,
+  location_precise: true,
+  complex_id: "c1",
+  appraisal_price: 520000000,
+  min_price: 360000000,
+  min_price_ratio: 69,
+  deposit: null,
+  fail_count: null,
+  sale_date: "2026-11-14",
+  bid_start_at: null,
+  bid_end_at: null,
+  land_area_m2: null,
+  land_area_pyeong: null,
+  building_area_m2: null,
+  building_area_pyeong: null,
+  is_share: false,
+  status: null,
+  is_closed: false,
+};
+
+describe("경매 마커", () => {
+  const live = () => fake.shapes.filter((s) => s.map && s.options.content?.classList?.contains("pg-marker"));
+  // 점으로 줄어든 경매는 auction 클래스가 빠지므로 접근성 이름으로도 찾는다
+  const auctionOverlay = () =>
+    live().find(
+      (s) => s.options.content.classList.contains("auction") || s.options.content.getAttribute("aria-label") === "경매 물건 보기",
+    )!;
+
+  it("단지 마커와 attach가 같은 경매는 단지 옆에 점이 아닌 마커로 붙는다", () => {
+    start("test-key", props({ auctions: [auction] }));
+    expect(live()).toHaveLength(2);
+    const a = auctionOverlay();
+    const button: HTMLButtonElement = a.options.content;
+    expect(button.className).toBe("pg-marker auction");
+    expect(button.textContent).toContain("⚖ 3.6억");
+    const c = live().find((s) => !s.options.content.classList.contains("auction"))!;
+    expect(c.options.content.classList.contains("dot")).toBe(false);
+    expect(a.options).toMatchObject({ xAnchor: 0, yAnchor: 1, position: { lat: 35.15, lng: 129.14 } });
+    // 단지 사각형 오른쪽 끝(폭 0 가정) + 4px
+    expect(button.style.marginLeft).toBe("4px");
+  });
+
+  it("경매 좌표가 단지와 조금 달라도 단지 위치에 붙여 그린다", () => {
+    start("test-key", props({ auctions: [{ ...auction, lat: 35.1503, lng: 129.1404 }] }));
+    const a = auctionOverlay();
+    expect(a.options.content.className).toBe("pg-marker auction");
+    expect(a.options.position).toMatchObject({ lat: complex.lat, lng: complex.lng });
+  });
+
+  it("단지 마커가 없는 경매는 자기 좌표에 가운데 정렬로 그린다", () => {
+    start("test-key", props({ markers: [], auctions: [{ ...auction, complex_id: null }] }));
+    const a = auctionOverlay();
+    expect(a.options.content.className).toBe("pg-marker auction");
+    expect(a.options).toMatchObject({ xAnchor: 0.5, yAnchor: 1 });
+    expect(a.options.content.style.marginLeft).toBe("");
+  });
+
+  it("단지와 이어지지 않은 경매가 같은 자리에 겹치면 점으로 줄어든다", () => {
+    start("test-key", props({ auctions: [{ ...auction, complex_id: null }] }));
+    expect(auctionOverlay().options.content.className).toBe("pg-marker dot");
+  });
+
+  it("점으로 줄어든 경매를 누르면 확대하지 않고 marker를 보낸다", () => {
+    const { events, map } = start("test-key", props({ auctions: [{ ...auction, complex_id: null }] }));
+    const setLevel = vi.spyOn(map, "setLevel");
+    auctionOverlay().options.content.click();
+    expect(setLevel).not.toHaveBeenCalled();
+    expect(events.filter((e) => e.type === "marker")).toEqual([{ type: "marker", id: "auction:a1" }]);
+  });
+
+  it("점으로 줄어든 실거래는 지금처럼 확대한다", () => {
+    const { events, map } = start("test-key", props({ markers: [complex, { ...complex, complex_id: "c2", transaction_count: 1 }] }));
+    const setLevel = vi.spyOn(map, "setLevel");
+    live().find((s) => s.options.content.classList.contains("dot"))!.options.content.click();
+    expect(setLevel).toHaveBeenCalledWith(6, expect.anything());
+    expect(events.some((e) => e.type === "marker")).toBe(false);
   });
 });
 

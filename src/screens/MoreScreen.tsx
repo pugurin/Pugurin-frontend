@@ -130,7 +130,7 @@ export function MoreScreen({
         <Section title="데이터 출처">
           <T size={14} color={C.muted}>
             국토교통부 실거래가 (공공데이터포털){"\n"}카카오맵 지도·로드뷰{"\n"}
-            부산광역시 도시계획 조례
+            부산광역시 도시계획 조례{"\n"}대법원 법원경매정보
           </T>
         </Section>
         <View style={s.between}>

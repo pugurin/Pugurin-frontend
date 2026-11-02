@@ -30,7 +30,13 @@ it("부산 밖으로 이동해도 지도를 가리는 부산 지원 팝업이 �
   const markers = vi.fn(async () => ({ data: { markers: [] }, meta: {} }));
   render(
     <MapHome
-      repo={{ mode: "api", markers } as unknown as Repository}
+      repo={
+        {
+          mode: "api",
+          markers,
+          auctions: async () => ({ data: [], meta: {} }),
+        } as unknown as Repository
+      }
       filters={DEFAULT_FILTERS}
       onFilters={() => {}}
       onSearch={() => {}}

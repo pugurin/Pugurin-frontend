@@ -1,6 +1,9 @@
 import { ApiClient, ApiError } from "./client";
 import type {
   Analysis,
+  Auction,
+  AuctionDetail,
+  AuctionQuery,
   BBox,
   Complex,
   Envelope,
@@ -14,6 +17,8 @@ import type {
   Transaction,
 } from "./types";
 import {
+  AUCTIONS,
+  AUCTION_META,
   COMPLEXES,
   SAMPLE_META,
   SAMPLE_STATS,
@@ -178,6 +183,66 @@ export class Repository {
           `/parcels/lookup?lat=${lat}&lng=${lng}`,
           signal,
         );
+  }
+  // 경매·공매 목록. 샘플 모드는 서버 대역이라 여기서 거른다
+  auctions(
+    q: AuctionQuery,
+    signal?: AbortSignal,
+  ): Promise<Envelope<Auction[]>> {
+    if (this.mode === "sample") {
+      const [w, s, e, n] = q.bbox ?? [-180, -90, 180, 90];
+      const data = AUCTIONS.filter(
+        (a) =>
+          (!q.bbox ||
+            (a.lng != null &&
+              a.lat != null &&
+              a.lng >= w &&
+              a.lng <= e &&
+              a.lat >= s &&
+              a.lat <= n)) &&
+          (!q.complexId || a.complex_id === q.complexId) &&
+          (!q.source || a.source === q.source) &&
+          (!q.groups?.length || q.groups.includes(a.property_group)) &&
+          (!q.excludeShare || !a.is_share) &&
+          (q.includeClosed || !a.is_closed),
+      );
+      return Promise.resolve({
+        data,
+        meta: {
+          ...AUCTION_META,
+          page: 1,
+          page_size: q.pageSize ?? 100,
+          total: data.length,
+          total_pages: 1,
+        },
+      });
+    }
+    const p = new URLSearchParams();
+    if (q.bbox) p.set("bbox", q.bbox.join(","));
+    if (q.complexId) p.set("complex_id", q.complexId);
+    if (q.source) p.set("source", q.source);
+    if (q.groups?.length) p.set("property_group", q.groups.join(","));
+    if (q.includeClosed != null)
+      p.set("include_closed", String(q.includeClosed));
+    if (q.page != null) p.set("page", String(q.page));
+    if (q.pageSize != null) p.set("page_size", String(q.pageSize));
+    if (q.sort) p.set("sort", q.sort);
+    if (q.excludeShare != null) p.set("exclude_share", String(q.excludeShare));
+    return this.client.get<Auction[]>(`/auctions?${p}`, signal);
+  }
+  auction(id: string, signal?: AbortSignal): Promise<Envelope<AuctionDetail>> {
+    if (this.mode === "sample") {
+      const found = AUCTIONS.find((a) => a.id === id);
+      return found
+        ? Promise.resolve({ data: found, meta: AUCTION_META })
+        : Promise.reject(
+            new ApiError("경매 물건을 찾을 수 없어요", "RESOURCE_NOT_FOUND"),
+          );
+    }
+    return this.client.get<AuctionDetail>(
+      `/auctions/${encodeURIComponent(id)}`,
+      signal,
+    );
   }
   // 검색 결과·필지 마커처럼 PNU를 이미 알 때. 응답 형태는 parcelLookup과 같다
   parcel(pnu: string, signal?: AbortSignal) {

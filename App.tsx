@@ -32,7 +32,7 @@ import {
 } from "./src/state/storage";
 import { C } from "./src/theme/tokens";
 import { Icon, StateCard, T, s } from "./src/components/ui";
-import { MapHome, type Focus } from "./src/screens/MapHome";
+import { MapHome, type AuctionFocus, type Focus } from "./src/screens/MapHome";
 import { FilterScreen } from "./src/screens/FilterScreen";
 import { WebSearch } from "./src/components/WebSearch";
 import { SearchScreen } from "./src/screens/SearchScreen";
@@ -48,6 +48,7 @@ import {
   type TermKind,
 } from "./src/screens/MoreScreen";
 import { TransactionsScreen } from "./src/screens/TransactionsScreen";
+import { AuctionsScreen } from "./src/screens/AuctionsScreen";
 import { Brand } from "./src/components/Brand";
 import { LoadingTip } from "./src/components/LoadingTip";
 import { LearningProvider } from "./src/glossary/LearningContext";
@@ -71,7 +72,9 @@ type Route =
     }
   | { kind: "terms"; name: TermKind }
   | { kind: "date" }
-  | { kind: "transactions"; bbox: BBox; region?: string; name?: string };
+  | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
+  // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
+  | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };
 export default function App() {
   const [fonts] = useFonts({
     Pretendard: require("./assets/fonts/Pretendard-Regular.otf"),
@@ -86,11 +89,15 @@ export default function App() {
   const [tab, setTab] = useState<"map" | "glossary" | "more">("map");
   const [route, setRoute] = useState<Route | null>(null);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  // 지도 경매 탭
+  const [auction, setAuction] = useState(false);
   const [unit, setUnit] = useState<"평" | "㎡">("평");
   const [base, setBase] = useState<"normal" | "satellite">("normal");
   const [cad, setCad] = useState(false);
   const [recent, setRecent] = useState<Recent[]>([]);
   const [focus, setFocus] = useState<Focus>();
+  // 경매 목록에서 고른 줄. 지도가 그 경매로 이동해 시트를 연다
+  const [auctionFocus, setAuctionFocus] = useState<AuctionFocus | null>(null);
   const [terms, setTerms] = useState<Term[]>([]);
   const [termsLoading, setTermsLoading] = useState(true);
   const [termsError, setTermsError] = useState<string | null>(null);
@@ -406,6 +413,28 @@ export default function App() {
         unit={unit}
       />
     );
+  if (route?.kind === "auctions")
+    overlay = (
+      <AuctionsScreen
+        repo={repo}
+        bbox={route.bbox}
+        property={filters.property_type}
+        complexId={route.complexId}
+        name={route.name}
+        unit={unit}
+        onBack={() => setRoute(null)}
+        onAuction={(a) => {
+          setAuctionFocus({
+            id: a.id,
+            lat: a.lat,
+            lng: a.lng,
+            nonce: Date.now(),
+          });
+          setTab("map");
+          setRoute(null);
+        }}
+      />
+    );
   return (
     <LearningProvider
       value={{
@@ -467,11 +496,17 @@ export default function App() {
                   void store("cad", c);
                 }}
                 focus={focus}
+                focusAuction={auctionFocus}
                 onHelp={onHelp}
                 notify={notify}
                 onMeta={setDataMeta}
                 onParcel={setLastParcel}
                 onToday={() => setRoute({ kind: "matching" })}
+                auction={auction}
+                onAuction={setAuction}
+                onAuctionList={(args) =>
+                  setRoute({ kind: "auctions", ...args })
+                }
               />
             </View>
             {tab === "glossary" && (
@@ -494,6 +529,7 @@ export default function App() {
                 }
                 onMode={(m) => {
                   setFocus(undefined);
+                  setAuctionFocus(null);
                   setDataMeta(undefined);
                   setMode(m);
                   notify(
