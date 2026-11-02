@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Modal, View } from "react-native";
+import { ActivityIndicator, Modal, SafeAreaView, View } from "react-native";
 import { C } from "../theme/tokens";
 import { IconBtn, T } from "../components/ui";
 import type { RoadviewStatus } from "../map/kakaoRuntime";
@@ -31,7 +31,8 @@ export function RoadviewModal({
         : null;
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: C.bg }}>
+      {/* 전체 화면 모달이라 상태 표시줄·다이내믹 아일랜드 아래부터 그린다 */}
+      <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
         <View
           style={{
             flexDirection: "row",
@@ -70,7 +71,7 @@ export function RoadviewModal({
             </View>
           )}
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
