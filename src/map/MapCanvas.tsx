@@ -1,169 +1,73 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
+import { WebView } from "react-native-webview";
+import { KAKAO_APP_URL, KAKAO_KEY, kakaoMapDocument } from "./kakaoRuntime";
 import {
-  Camera,
-  GeoJSONSource,
-  Images,
-  Layer,
-  Map,
-  type CameraRef,
-  type MapRef,
-  type StyleSpecification,
-} from "@maplibre/maplibre-react-native";
-import type { BBox } from "../api/types";
-import {
-  baseStyle,
-  fromMapZoom,
-  koreanLabels,
-  MARKER_DOT_LAYER,
-  MARKER_LABEL_LAYER,
-  MARKER_SOURCE,
-  markerFeatures,
-  MAX_ZOOM,
-  MIN_ZOOM,
-  OPENFREEMAP_STYLE,
-  toMapZoom,
-} from "./style";
+  fullState,
+  handleRuntimeMessage,
+  layerState,
+  markerState,
+  shapeState,
+  type RuntimeMessage,
+} from "./bridge";
 import type { MapProps } from "./types";
-import { selectionFeatures, SELECTION_SOURCE, SELECTION_CIRCLE_LAYER, PARCEL_FILL_LAYER, PARCEL_LINE_LAYER } from "./selection";
-import { userLocationFeatures, USER_LOCATION_SOURCE, USER_HALO_LAYER, USER_DOT_LAYER } from "./userLocation";
 
-// 마커 배경(둥근 사각형). 웹은 MapCanvas.web.tsx에서 캔버스로 그린다
-const MARKER_IMAGES = {
-  "box-apartment": require("../../assets/map/box-apartment.png"),
-  "box-officetel": require("../../assets/map/box-officetel.png"),
-  "box-villa": require("../../assets/map/box-villa.png"),
-  "box-land": require("../../assets/map/box-land.png"),
-  "box-selected": require("../../assets/map/box-selected.png"),
-} as const;
-
-
-// 실거래가 지도 (iOS/Android). MapLibre RN으로 VWorld 또는 OpenFreeMap 배경 위에 마커를 그린다
+// 실거래가 지도 (iOS/Android). 카카오 지도 SDK는 웹 전용이라 WebView 안에서 같은 런타임을 실행한다
 export default function MapCanvas(p: MapProps) {
-  const map = useRef<MapRef>(null);
-  const camera = useRef<CameraRef>(null);
-  const zoom = useRef(toMapZoom(p.initial.zoom));
-  const loaded = useRef(false);
-  const [freeStyle, setFreeStyle] = useState<StyleSpecification | null>(null);
+  const web = useRef<WebView>(null);
+  const booted = useRef(false);
+  const latest = useRef(p);
+  latest.current = p;
+  // 처음 위치로만 문서를 만든다. 이후 이동은 명령으로 보낸다
+  const html = useMemo(
+    () => kakaoMapDocument({ key: KAKAO_KEY, ...p.initial }),
+    [],
+  );
 
+  const post = (m: object) => {
+    if (!booted.current) return;
+    web.current?.injectJavaScript(
+      `window.pugurinReceive&&window.pugurinReceive(${JSON.stringify(m)});true;`,
+    );
+  };
+
+  useEffect(() => post(markerState(p)), [p.markers, p.property, p.unit, p.selected]);
+  useEffect(() => post(layerState(p)), [p.base, p.cadastral]);
+  useEffect(
+    () => post(shapeState(p)),
+    [p.selectionPoint, p.parcelGeometry, p.userLocation],
+  );
   useEffect(() => {
-    fetch(OPENFREEMAP_STYLE)
-      .then((r) => r.json())
-      .then((s: StyleSpecification) => setFreeStyle(koreanLabels(s)))
-      .catch(() =>
-        p.onEvent({ type: "error", message: "지도를 불러올 수 없어요" }),
-      );
-  }, []);
-
-  const style = useMemo(
-    () => baseStyle(p.base, p.cadastral, freeStyle),
-    [p.base, p.cadastral, freeStyle],
-  );
-  const data = useMemo(
-    () => markerFeatures(p.markers, p.property, p.unit, p.selected),
-    [p.markers, p.property, p.unit, p.selected],
-  );
-
-  const selection = useMemo(
-    () => selectionFeatures(p.selectionPoint, p.parcelGeometry),
-    [p.selectionPoint, p.parcelGeometry],
-  );
-
-  const user = useMemo(
-    () => userLocationFeatures(p.userLocation),
-    [p.userLocation],
-  );
-
-  useEffect(() => {
-    const c = p.command;
-    if (!c || !camera.current) return;
-    if (c.type === "zoom") {
-      const next = Math.round(zoom.current) + Math.sign(c.delta);
-      camera.current.zoomTo(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, next)), {
-        duration: 260,
-      });
-    } else if (c.bbox) {
-      camera.current.fitBounds(c.bbox, { duration: 360 });
-    } else if (c.lat != null && c.lng != null) {
-      camera.current.easeTo({
-        center: [c.lng, c.lat],
-        ...(c.zoom != null && { zoom: toMapZoom(c.zoom) }),
-        duration: 360,
-      });
-    } else if (c.zoom != null) {
-      camera.current.zoomTo(toMapZoom(c.zoom), { duration: 360 });
-    }
+    if (p.command) post(p.command);
   }, [p.command]);
 
   return (
-    <Map
-      ref={map}
+    <WebView
+      ref={web}
       style={{ flex: 1 }}
-      mapStyle={style}
-      touchRotate={false}
-      touchPitch={false}
-      logo={false}
-      // 출처 표시(OSM 저작권)는 가려지면 안 된다. 왼쪽 아래는 목록 보기, 오른쪽은 지도 버튼 자리라 비어 있는 왼쪽 위에 둔다(#77)
-      attributionPosition={{ top: 8, left: 8 }}
-      onDidFinishLoadingStyle={() => {
-        if (loaded.current) return;
-        loaded.current = true;
-        p.onEvent({ type: "ready" });
+      originWhitelist={["*"]}
+      // 카카오 SDK는 문서 주소로 도메인을 확인한다. 등록한 https 주소를 문서 주소로 쓴다
+      source={{ html, baseUrl: KAKAO_APP_URL }}
+      scrollEnabled={false}
+      bounces={false}
+      overScrollMode="never"
+      setSupportMultipleWindows={false}
+      onMessage={(e) => {
+        let m: RuntimeMessage;
+        try {
+          m = JSON.parse(e.nativeEvent.data);
+        } catch {
+          return;
+        }
+        if (m.type === "boot") {
+          booted.current = true;
+          post(fullState(latest.current));
+          return;
+        }
+        handleRuntimeMessage(m, latest.current);
       }}
-      onDidFailLoadingMap={() =>
-        p.onEvent({ type: "error", message: "지도를 불러올 수 없어요" })
+      onError={() =>
+        latest.current.onEvent({ type: "error", message: "지도를 불러올 수 없어요" })
       }
-      onRegionDidChange={(e) => {
-        const { center, zoom: z, bounds } = e.nativeEvent;
-        zoom.current = z;
-        p.onEvent({
-          type: "camera",
-          lng: center[0],
-          lat: center[1],
-          zoom: fromMapZoom(z),
-          bbox: bounds as BBox,
-        });
-      }}
-      onPress={async (e) => {
-        // 글자 박스를 먼저, 없으면 점을 찾는다(겹친 마커 중 실제로 누른 것을 고르기 위해)
-        const { point, lngLat } = e.nativeEvent;
-        let hit = await map.current?.queryRenderedFeatures(point, {
-          layers: [MARKER_LABEL_LAYER.id],
-        });
-        if (!hit?.length)
-          hit = await map.current?.queryRenderedFeatures(point, {
-            layers: [MARKER_DOT_LAYER.id],
-          });
-        const id = hit?.[0]?.properties?.id;
-        p.onEvent(
-          id
-            ? { type: "marker", id: String(id) }
-            : { type: "mapClick", lng: lngLat[0], lat: lngLat[1] },
-        );
-      }}
-    >
-      <Camera
-        ref={camera}
-        minZoom={MIN_ZOOM}
-        maxZoom={MAX_ZOOM}
-        initialViewState={{
-          center: [p.initial.lng, p.initial.lat],
-          zoom: toMapZoom(p.initial.zoom),
-        }}
-      />
-      <Images images={MARKER_IMAGES} />
-      <GeoJSONSource id={SELECTION_SOURCE} data={selection}>
-        <Layer {...PARCEL_FILL_LAYER} />
-        <Layer {...PARCEL_LINE_LAYER} />
-        <Layer {...SELECTION_CIRCLE_LAYER} />
-      </GeoJSONSource>
-      <GeoJSONSource id={MARKER_SOURCE} data={data}>
-        <Layer {...MARKER_DOT_LAYER} />
-        <Layer {...MARKER_LABEL_LAYER} />
-      </GeoJSONSource>
-      <GeoJSONSource id={USER_LOCATION_SOURCE} data={user}>
-        <Layer {...USER_HALO_LAYER} />
-        <Layer {...USER_DOT_LAYER} />
-      </GeoJSONSource>
-    </Map>
+    />
   );
 }

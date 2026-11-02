@@ -1,285 +1,61 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
+import { KAKAO_KEY, webRuntime } from "./kakaoRuntime";
 import {
-  setWorkerUrl,
-  Map as MapLibre,
-  type GeoJSONSource,
-  type LayerSpecification as WebLayer,
-  type StyleSpecification as WebStyle,
-} from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
-import type { StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
-import type { BBox } from "../api/types";
-import {
-  baseStyle,
-  fromMapZoom,
-  koreanLabels,
-  MARKER_COLOR,
-  MARKER_DOT_LAYER,
-  MARKER_LABEL_LAYER,
-  MARKER_SOURCE,
-  markerFeatures,
-  MAX_ZOOM,
-  MIN_ZOOM,
-  OPENFREEMAP_STYLE,
-  SELECTED_COLOR,
-  toMapZoom,
-} from "./style";
+  fullState,
+  handleRuntimeMessage,
+  layerState,
+  markerState,
+  shapeState,
+} from "./bridge";
 import type { MapProps } from "./types";
-import { hoverLayers, markerHover } from "./hover";
-import {
-  selectionFeatures,
-  SELECTION_SOURCE,
-  SELECTION_CIRCLE_LAYER,
-  PARCEL_FILL_LAYER,
-  PARCEL_LINE_LAYER,
-} from "./selection";
-import {
-  userLocationFeatures,
-  USER_LOCATION_SOURCE,
-  USER_HALO_LAYER,
-  USER_DOT_LAYER,
-} from "./userLocation";
 
-// Metro가 maplibre-gl 워커를 번들하지 못해 public/maplibre/에 복사해 둔 파일을 쓴다 (scripts/copy-maplibre-worker.mjs)
-setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
-
-// 마커 배경(둥근 사각형)을 캔버스로 그린다. 앱은 assets/map/box-*.png를 쓴다
-const BOX = 48,
-  RADIUS = 16;
-function boxImage(color: string) {
-  const size = BOX,
-    r = RADIUS;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.roundRect(0, 0, size, size, r);
-  ctx.fill();
-  return ctx.getImageData(0, 0, size, size);
-}
-
-// 실거래가 지도 (웹). maplibre-gl로 앱과 같은 스타일·마커 레이어를 그린다
+// 실거래가 지도 (웹). 카카오 지도 런타임을 이 div에서 바로 실행한다
 export default function MapCanvas(p: MapProps) {
   const el = useRef<HTMLDivElement>(null);
-  const map = useRef<MapLibre | null>(null);
+  const receive = useRef<((m: unknown) => void) | null>(null);
   const latest = useRef(p);
   latest.current = p;
-  const [freeStyle, setFreeStyle] = useState<StyleSpecification | null>(null);
-
-  // isStyleLoaded()는 타일까지 다 받아야 true라서, style.load 기준으로 직접 표시한다
-  const styleReady = useRef(false);
-  // 마커 소스·레이어를 현재 props로 맞춘다. 스타일을 바꾸는 중에는 건드리지 않고 style.load 때 다시 부른다
-  const syncMarkers = (m: MapLibre) => {
-    if (!styleReady.current) return;
-    const { markers, property, unit, selected } = latest.current;
-    const data = markerFeatures(markers, property, unit, selected);
-    const source = m.getSource(MARKER_SOURCE) as GeoJSONSource | undefined;
-    if (source) source.setData(data);
-    else {
-      m.addSource(MARKER_SOURCE, { type: "geojson", data });
-      m.addLayer(MARKER_DOT_LAYER as WebLayer);
-      m.addLayer(MARKER_LABEL_LAYER as WebLayer);
-    }
-  };
-
-  // 선택 전용 소스만 갱신하고 기존 거래 마커는 유지한다.
-  const syncSelection = (m: MapLibre) => {
-    if (!styleReady.current) return;
-    const { selectionPoint, parcelGeometry } = latest.current;
-    const data = selectionFeatures(selectionPoint, parcelGeometry);
-    const source = m.getSource(SELECTION_SOURCE) as GeoJSONSource | undefined;
-    if (source) source.setData(data);
-    else {
-      m.addSource(SELECTION_SOURCE, { type: "geojson", data });
-      const before = m.getLayer(MARKER_DOT_LAYER.id)
-        ? MARKER_DOT_LAYER.id
-        : undefined;
-      for (const layer of [
-        PARCEL_FILL_LAYER,
-        PARCEL_LINE_LAYER,
-        SELECTION_CIRCLE_LAYER,
-      ])
-        m.addLayer(layer as WebLayer, before);
-    }
-  };
-
-  // 내 위치는 거래 마커보다 위에 그린다
-  const syncUser = (m: MapLibre) => {
-    if (!styleReady.current) return;
-    const data = userLocationFeatures(latest.current.userLocation);
-    const source = m.getSource(USER_LOCATION_SOURCE) as
-      | GeoJSONSource
-      | undefined;
-    if (source) source.setData(data);
-    else {
-      m.addSource(USER_LOCATION_SOURCE, { type: "geojson", data });
-      m.addLayer(USER_HALO_LAYER as WebLayer);
-      m.addLayer(USER_DOT_LAYER as WebLayer);
-    }
-  };
 
   useEffect(() => {
-    fetch(OPENFREEMAP_STYLE)
-      .then((r) => r.json())
-      .then((s: StyleSpecification) => setFreeStyle(koreanLabels(s)))
-      .catch(() =>
-        latest.current.onEvent({
-          type: "error",
-          message: "지도를 불러올 수 없어요",
-        }),
-      );
-  }, []);
-
-  useEffect(() => {
-    const m = new MapLibre({
-      container: el.current!,
-      style: baseStyle(p.base, p.cadastral, null) as WebStyle,
-      center: [p.initial.lng, p.initial.lat],
-      zoom: toMapZoom(p.initial.zoom),
-      minZoom: MIN_ZOOM,
-      maxZoom: MAX_ZOOM,
-      dragRotate: false,
-      pitchWithRotate: false,
-      attributionControl: { compact: true },
-    });
-    m.touchZoomRotate.disableRotation();
-    map.current = m;
-    const resize = new ResizeObserver(() => m.resize());
+    const start = webRuntime().map;
+    const r = start(
+      el.current!,
+      { key: KAKAO_KEY, ...latest.current.initial },
+      (m) => handleRuntimeMessage(m, latest.current),
+    );
+    receive.current = r;
+    r(fullState(latest.current));
+    const resize = new ResizeObserver(() => r({ type: "resize" }));
     resize.observe(el.current!);
-    const emit = () => {
-      const c = m.getCenter(),
-        b = m.getBounds();
-      latest.current.onEvent({
-        type: "camera",
-        lat: c.lat,
-        lng: c.lng,
-        zoom: fromMapZoom(m.getZoom()),
-        bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()] as BBox,
-      });
-    };
-    // 스타일이 바뀔 때마다 마커 이미지·소스·레이어를 다시 얹는다
-    m.on("style.load", () => {
-      styleReady.current = true;
-      const colors = { ...MARKER_COLOR, selected: SELECTED_COLOR };
-      Object.entries(colors).forEach(([k, c]) => {
-        if (!m.hasImage(`box-${k}`))
-          m.addImage(`box-${k}`, boxImage(c), {
-            pixelRatio: 2,
-            // 모서리는 그대로 두고 가운데만 늘린다(9-slice)
-            stretchX: [[RADIUS, BOX - RADIUS]],
-            stretchY: [[RADIUS, BOX - RADIUS]],
-          });
-      });
-      syncSelection(m);
-      syncMarkers(m);
-      syncUser(m);
-    });
-    m.once("load", () => {
-      latest.current.onEvent({ type: "ready" });
-      emit();
-    });
-    m.on("moveend", emit);
-    const clearHover = () => latest.current.onMarkerHover?.(null);
-    const hover = (e: { point: { x: number; y: number } }) => {
-      const callback = latest.current.onMarkerHover;
-      if (!callback) return;
-      const finePointer =
-        window.matchMedia?.("(pointer: fine)").matches ?? false;
-      if (!styleReady.current || window.innerWidth < 1024 || !finePointer) {
-        callback(null);
-        return;
-      }
-      const layers = hoverLayers((id) => Boolean(m.getLayer(id)));
-      const hits = layers.length
-        ? m.queryRenderedFeatures([e.point.x, e.point.y], { layers })
-        : [];
-      const marker = markerHover(
-        latest.current.markers,
-        hits,
-        window.innerWidth,
-        finePointer,
-      );
-      callback(marker, marker ? { x: e.point.x, y: e.point.y } : undefined);
-    };
-    m.on("mousemove", hover);
-    m.on("mouseout", clearHover);
-    m.on("movestart", clearHover);
-    m.on("click", (e) => {
-      clearHover();
-      const hit = m.getLayer(MARKER_DOT_LAYER.id)
-        ? m.queryRenderedFeatures(e.point, {
-            layers: [MARKER_LABEL_LAYER.id, MARKER_DOT_LAYER.id],
-          })
-        : [];
-      const id = hit[0]?.properties?.id;
-      latest.current.onEvent(
-        id
-          ? { type: "marker", id: String(id) }
-          : { type: "mapClick", lat: e.lngLat.lat, lng: e.lngLat.lng },
-      );
-    });
-    // 처음 지도를 띄우지 못한 경우만 화면에 알린다(타일 하나가 실패한 것은 무시)
-    m.on("error", (e) => {
-      if (!m.loaded() && !m.isStyleLoaded())
-        latest.current.onEvent({
-          type: "error",
-          message: "지도를 불러올 수 없어요",
-        });
-      console.warn("[map]", e.error?.message);
-    });
     return () => {
       resize.disconnect();
-      m.off("mousemove", hover);
-      m.off("mouseout", clearHover);
-      m.off("movestart", clearHover);
-      m.remove();
+      r({ type: "destroy" });
+      receive.current = null;
     };
   }, []);
 
   useEffect(() => {
-    // diff로 바꾸면 마커 레이어가 지워진 채 style.load가 오지 않아서, 항상 새로 만든다
-    styleReady.current = false;
-    latest.current.onMarkerHover?.(null);
-    map.current?.setStyle(
-      baseStyle(p.base, p.cadastral, freeStyle) as WebStyle,
-      {
-        diff: false,
-      },
-    );
-  }, [p.base, p.cadastral, freeStyle]);
-
-  useEffect(() => {
-    if (map.current) syncMarkers(map.current);
-    latest.current.onMarkerHover?.(null);
+    receive.current?.(markerState(p));
+    p.onMarkerHover?.(null);
   }, [p.markers, p.property, p.unit, p.selected]);
 
   useEffect(() => {
-    if (map.current) syncSelection(map.current);
-  }, [p.selectionPoint, p.parcelGeometry]);
+    receive.current?.(layerState(p));
+  }, [p.base, p.cadastral]);
 
   useEffect(() => {
-    if (map.current) syncUser(map.current);
-  }, [p.userLocation]);
+    receive.current?.(shapeState(p));
+  }, [p.selectionPoint, p.parcelGeometry, p.userLocation]);
 
   useEffect(() => {
-    const m = map.current,
-      c = p.command;
-    if (!m || !c) return;
-    if (c.type === "zoom") {
-      const next = Math.round(m.getZoom()) + Math.sign(c.delta);
-      m.zoomTo(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, next)), { duration: 260 });
-    } else if (c.bbox) {
-      m.fitBounds(c.bbox, { duration: 360 });
-    } else {
-      m.easeTo({
-        ...(c.lat != null &&
-          c.lng != null && { center: [c.lng, c.lat] as [number, number] }),
-        ...(c.zoom != null && { zoom: toMapZoom(c.zoom) }),
-        duration: 360,
-      });
-    }
+    if (p.command) receive.current?.(p.command);
   }, [p.command]);
 
-  return <div ref={el} style={{ width: "100%", height: "100%" }} />;
+  // 카카오가 내부 레이어에 큰 z-index를 써서, 지도 위 버튼을 가리지 않게 쌓임 맥락을 따로 만든다
+  return (
+    <div
+      ref={el}
+      style={{ width: "100%", height: "100%", position: "relative", isolation: "isolate" }}
+    />
+  );
 }

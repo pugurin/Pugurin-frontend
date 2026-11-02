@@ -26,8 +26,7 @@
           "locationWhenInUsePermission": "현재 위치 주변의 실거래가를 보여드리기 위해 위치를 사용합니다."
         }
       ],
-      "expo-font",
-      "@maplibre/maplibre-react-native"
+      "expo-font"
     ],
     "icon": "./assets/brand/icon.png"
   }

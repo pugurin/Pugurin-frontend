@@ -37,6 +37,8 @@ import { LoadingTip } from "../components/LoadingTip";
 import { Chart } from "../components/Chart";
 import { TransactionRow } from "../components/TransactionRow";
 import type { SheetStage } from "../components/Sheet";
+import { HAS_KAKAO } from "../map/kakaoRuntime";
+import { RoadviewModal } from "../roadview/RoadviewModal";
 export function RegionContent({
   marker,
   filters,
@@ -236,6 +238,7 @@ export function ComplexContent({
   const [area, setArea] = useState<number | undefined>();
   const [page, setPage] = useState(1);
   const [retry, setRetry] = useState(0);
+  const [roadview, setRoadview] = useState(false);
   useEffect(() => {
     const a = new AbortController();
     setLoading(true);
@@ -368,10 +371,24 @@ export function ComplexContent({
           <Icon name="star" color={C.light} />
         </Pressable>
       </View>
-      <T size={14} color={C.muted}>
-        {PROPERTY[complex.property_type]} ·{" "}
-        {complex.address.replace("부산광역시 ", "")}
-      </T>
+      <View style={[s.row, { gap: 8 }]}>
+        <T size={14} color={C.muted} style={{ flex: 1 }}>
+          {PROPERTY[complex.property_type]} ·{" "}
+          {complex.address.replace("부산광역시 ", "")}
+        </T>
+        {HAS_KAKAO && (
+          <Btn small secondary icon="pin" onPress={() => setRoadview(true)}>
+            로드뷰
+          </Btn>
+        )}
+      </View>
+      <RoadviewModal
+        visible={roadview}
+        title={complex.name}
+        lat={complex.lat}
+        lng={complex.lng}
+        onClose={() => setRoadview(false)}
+      />
       {stage === "peek" ? (
         <>
           <T size={28} bold style={{ marginTop: 12 }}>

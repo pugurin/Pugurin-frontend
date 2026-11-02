@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Marker } from "../src/api/types";
-import { markerHover, hoverLayers } from "../src/map/hover";
-import { MARKER_DOT_LAYER, MARKER_LABEL_LAYER } from "../src/map/style";
+import { markerHover } from "../src/map/hover";
 import { markerId } from "../src/state/market";
 const marker: Marker = {
   kind: "region",
@@ -36,15 +35,5 @@ describe("큰 화면의 마커 미리보기", () => {
     expect(
       markerHover([], [{ properties: { id: markerId(marker) } }], 1400, true),
     ).toBeNull();
-  });
-  it("지도 스타일에 존재하는 거래 마커 레이어만 조회한다", () => {
-    expect(hoverLayers((id) => id === MARKER_DOT_LAYER.id)).toEqual([
-      MARKER_DOT_LAYER.id,
-    ]);
-    expect(hoverLayers(() => true)).toEqual([
-      MARKER_LABEL_LAYER.id,
-      MARKER_DOT_LAYER.id,
-    ]);
-    expect(hoverLayers(() => false)).toEqual([]);
   });
 });
