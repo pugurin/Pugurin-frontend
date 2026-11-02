@@ -77,8 +77,8 @@ function paths(coords) {
 
 window.pugurinKakaoMap = function (el, config, send) {
   var map = null, destroyed = false, overlays = [], shapes = [], pending = null, markerClick = 0;
-  var state = { items: [], base: 'normal', cadastral: false, selection: null, user: null };
-  var cadastralOn = false;
+  var state = { items: [], base: 'normal', cadastral: false, roadview: false, selection: null, user: null };
+  var overlaysOn = {};
   addStyle();
 
   var toLevel = function (zoom) { return Math.max(1, Math.min(14, Math.round(18 - zoom))); };
@@ -193,11 +193,16 @@ window.pugurinKakaoMap = function (el, config, send) {
   function applyLayers() {
     var type = state.base === 'satellite' ? kakao.maps.MapTypeId.HYBRID : kakao.maps.MapTypeId.ROADMAP;
     if (map.getMapTypeId() !== type) map.setMapTypeId(type);
-    if (cadastralOn !== !!state.cadastral) {
-      if (state.cadastral) map.addOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
-      else map.removeOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
-      cadastralOn = !!state.cadastral;
-    }
+    overlay('USE_DISTRICT', state.cadastral);
+    // 로드뷰가 있는 길을 파란 선으로 그린다
+    overlay('ROADVIEW', state.roadview);
+  }
+
+  function overlay(name, on) {
+    if (!!overlaysOn[name] === !!on) return;
+    if (on) map.addOverlayMapTypeId(kakao.maps.MapTypeId[name]);
+    else map.removeOverlayMapTypeId(kakao.maps.MapTypeId[name]);
+    overlaysOn[name] = !!on;
   }
 
   function move(c) {
