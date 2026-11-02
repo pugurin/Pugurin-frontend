@@ -13,10 +13,11 @@ import { busanQueryBBox, DEFAULT_FILTERS } from "../src/state/market";
 import { ApiError } from "../src/api/client";
 import type { Repository } from "../src/api/repository";
 import type { Filters } from "../src/api/types";
+const viewport = vi.hoisted(() => ({ width: 390 }));
 vi.mock("react-native", async () => ({
   ...(await vi.importActual("react-native")),
   useWindowDimensions: () => ({
-    width: 390,
+    width: viewport.width,
     height: 800,
     scale: 1,
     fontScale: 1,
@@ -60,7 +61,10 @@ vi.mock("../src/map/MapCanvas", () => ({
     );
   },
 }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  viewport.width = 390;
+});
 const complex = {
   kind: "complex",
   complex_id: "c1",
@@ -101,9 +105,10 @@ function setup({
   const onAuction = vi.fn();
   const onAuctionList = vi.fn();
   const onFilters = vi.fn();
-  render(
+  const repo = { mode: "api", markers, auctions } as unknown as Repository;
+  const draw = (on = auction) => (
     <MapHome
-      repo={{ mode: "api", markers, auctions } as unknown as Repository}
+      repo={repo}
       filters={filters}
       onFilters={onFilters}
       onSearch={() => {}}
@@ -119,18 +124,32 @@ function setup({
       onHelp={() => {}}
       notify={() => {}}
       onMeta={() => {}}
-      auction={auction}
+      auction={on}
       onAuction={onAuction}
       onAuctionList={onAuctionList}
-    />,
+    />
   );
+  const { rerender } = render(draw());
+  // 부모(App)가 경매 탭 상태를 바꾼 것처럼 다시 그린다
+  const switchAuction = async (on: boolean) => {
+    rerender(draw(on));
+    await act(() => wait(300));
+  };
   const moveTo = async (zoom = 14) => {
     map.zoom = zoom;
     fireEvent.click(screen.getByText("지도 이동"));
     // 실거래·경매 요청 디바운스(220ms)가 지나도록 기다린다
     await act(() => wait(300));
   };
-  return { markers, auctions, onAuction, onAuctionList, onFilters, moveTo };
+  return {
+    markers,
+    auctions,
+    onAuction,
+    onAuctionList,
+    onFilters,
+    moveTo,
+    switchAuction,
+  };
 }
 describe("경매 탭과 지도", () => {
   it("매매·줌 14 이상이면 같은 물건 탭의 경매를 함께 부르고 마커로 넘긴다", async () => {
@@ -194,10 +213,13 @@ describe("경매 탭과 지도", () => {
     const a = setup({ auction: true, auctionsImpl: notFound });
     await a.moveTo(14);
     await screen.findByText("경매 정보를 준비 중이에요");
+    // 오류 카드가 아닌 일반 안내라 다시 시도 버튼이 없다
+    expect(screen.queryByText("다시 시도")).toBeNull();
     cleanup();
     const b = setup({ auction: true, auctionsImpl: notReady });
     await b.moveTo(14);
     await screen.findByText("경매 정보를 준비 중이에요");
+    expect(screen.queryByText("다시 시도")).toBeNull();
     cleanup();
     const c = setup({ auctionsImpl: notFound });
     await c.moveTo(14);
@@ -214,6 +236,57 @@ describe("경매 탭과 지도", () => {
     });
     await moveTo(14);
     await screen.findByText("서버에 연결할 수 없어요");
+    expect(screen.getByText("다시 시도")).toBeTruthy();
+  });
+  it("경매 탭에서 경매가 0건이면 '이 화면 안에 진행 중인 경매가 없어요'를 띄운다", async () => {
+    const { auctions, moveTo } = setup({
+      auction: true,
+      auctionsImpl: async () => ({ data: [], meta: {} }),
+    });
+    await moveTo(14);
+    expect(auctions).toHaveBeenCalled();
+    await screen.findByText("이 화면 안에 진행 중인 경매가 없어요");
+    expect(screen.queryByText("이 조건의 거래가 없어요")).toBeNull();
+  });
+  it("매매에서 경매가 0건이어도 경매 0건 안내는 띄우지 않는다", async () => {
+    const { auctions, moveTo } = setup({
+      auctionsImpl: async () => ({ data: [], meta: {} }),
+    });
+    await moveTo(14);
+    expect(auctions).toHaveBeenCalled();
+    expect(
+      screen.queryByText("이 화면 안에 진행 중인 경매가 없어요"),
+    ).toBeNull();
+  });
+  it("매매에서 경매 탭으로 바꾸면 경매를 다시 불러 지도에 남긴다", async () => {
+    const { auctions, markers, moveTo, switchAuction } = setup();
+    await moveTo(14);
+    await waitFor(() => expect(map.props.auctions).toEqual([sample]));
+    const before = auctions.mock.calls.length;
+    await switchAuction(true);
+    expect(auctions.mock.calls.length).toBeGreaterThan(before);
+    await waitFor(() => expect(map.props.auctions).toEqual([sample]));
+    expect(map.props.markers).toEqual([]);
+    expect(
+      screen.queryByText("이 화면 안에 진행 중인 경매가 없어요"),
+    ).toBeNull();
+    // 경매 → 매매로 돌아오면 실거래와 경매를 다시 함께 그린다
+    const trades = markers.mock.calls.length;
+    const again = auctions.mock.calls.length;
+    await switchAuction(false);
+    await waitFor(() =>
+      expect(markers.mock.calls.length).toBeGreaterThan(trades),
+    );
+    expect(auctions.mock.calls.length).toBeGreaterThan(again);
+    await waitFor(() => expect(map.props.markers).toEqual([complex]));
+    await waitFor(() => expect(map.props.auctions).toEqual([sample]));
+  });
+  it("넓은 화면에서 거래유형 칩이 숨는 폭이어도 경매 칩은 보인다", () => {
+    viewport.width = 1100;
+    const { onAuction } = setup();
+    expect(screen.queryByRole("button", { name: "전세" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "경매" }));
+    expect(onAuction).toHaveBeenCalledWith(true);
   });
   it("토지 탭에서도 경매 칩을 고를 수 있다", async () => {
     const { auctions, onAuction, moveTo } = setup({

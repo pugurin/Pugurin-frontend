@@ -130,8 +130,11 @@ export function MapHome({
   const [camera, setCamera] = useState<Camera>(HOME);
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [auctions, setAuctions] = useState<Auction[]>([]);
-  // 경매 탭에서만 보여 주는 경매 요청 오류
+  // 마지막 경매 요청이 성공했는지. 0건 안내에 쓴다
+  const [auctionsReady, setAuctionsReady] = useState(false);
+  // 경매 탭에서만 보여 주는 경매 요청 오류. 준비 중(404·503)은 따로 둔다
   const [auctionError, setAuctionError] = useState<string | null>(null);
+  const [auctionNotReady, setAuctionNotReady] = useState(false);
   const [meta, setMeta] = useState<Meta>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -219,6 +222,7 @@ export function MapHome({
     if (changed) {
       setMarkers([]);
       setAuctions([]);
+      setAuctionsReady(false);
       if (keepSelection.current) keepSelection.current = false;
       else close();
       setPanelDismissed(false);
@@ -271,40 +275,46 @@ export function MapHome({
       clearTimeout(loadingTimer);
     };
   }, [repo, filters, camera, outside, retry, auction]);
-  // 경매 요청. 매매(가격·면적 필터 없음)이거나 경매 탭일 때, 단지 마커가 나오는 줌에서만 부른다
+  // 경매 요청. 매매(가격·면적 필터 없음)이거나 경매 탭일 때, 단지 마커가 나오는 줌에서만 부른다.
+  // 매매↔경매를 바꾸면 위 effect가 경매 목록을 비우므로 auction이 바뀔 때도 다시 부른다
   useEffect(() => {
     if (!showAuctions) {
       setAuctions([]);
+      setAuctionsReady(false);
       setAuctionError(null);
+      setAuctionNotReady(false);
       return;
     }
     const controller = new AbortController();
     const timer = setTimeout(
       () =>
-        // 동기 오류도 아래 catch에서 받도록 then 안에서 부른다
-        Promise.resolve()
-          .then(() =>
-            repo.auctions(
-              {
-                bbox: queryBBox!,
-                groups: [filters.property_type],
-                pageSize: 500,
-              },
-              controller.signal,
-            ),
+        repo
+          .auctions(
+            {
+              bbox: queryBBox!,
+              groups: [filters.property_type],
+              pageSize: 500,
+            },
+            controller.signal,
           )
           .then((r) => {
             if (controller.signal.aborted) return;
             setAuctions(r.data);
+            setAuctionsReady(true);
             setAuctionError(null);
+            setAuctionNotReady(false);
           })
           .catch((e) => {
             if (controller.signal.aborted) return;
             setAuctions([]);
+            setAuctionsReady(false);
             // 404(API 미배포)·503(수집 전)은 준비 중으로 안내한다. 매매에서는 화면에 띄우지 않는다
+            const notReady =
+              e?.code === "RESOURCE_NOT_FOUND" || e?.code === "DATA_NOT_READY";
+            setAuctionNotReady(notReady);
             setAuctionError(
-              e?.code === "RESOURCE_NOT_FOUND" || e?.code === "DATA_NOT_READY"
-                ? "경매 정보를 준비 중이에요"
+              notReady
+                ? null
                 : (e?.message ?? "경매 정보를 잠시 불러올 수 없어요"),
             );
           }),
@@ -314,7 +324,7 @@ export function MapHome({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [repo, filters, camera, showAuctions, retry]);
+  }, [repo, filters, camera, showAuctions, auction, retry]);
   useEffect(() => {
     if (!focus) return;
     close();
@@ -590,6 +600,17 @@ export function MapHome({
     auction
       ? onAuctionList?.({ bbox: camera.bbox })
       : onList({ bbox: camera.bbox });
+  // 경매 탭 안내. 준비 중도 오류 카드가 아닌 일반 안내로 띄운다(다시 시도 없음)
+  const auctionNotice =
+    !auction || outside
+      ? null
+      : !auctionZoom
+        ? "확대하면 경매 물건이 보여요"
+        : auctionNotReady
+          ? "경매 정보를 준비 중이에요"
+          : auctionsReady && auctions.length === 0
+            ? "이 화면 안에 진행 중인 경매가 없어요"
+            : null;
   const detailSheet = selected ? (
     <Sheet
       key={
@@ -770,11 +791,10 @@ export function MapHome({
                   {DEAL[key]}
                 </Chip>
               ))}
-            {width >= 1280 && (
-              <Chip selected={auction} onPress={() => onAuction?.(true)}>
-                경매
-              </Chip>
-            )}
+            {/* 경매 칩은 DEAL 칩이 숨는 폭에서도 보여야 경매 탭을 고를 수 있다 */}
+            <Chip selected={auction} onPress={() => onAuction?.(true)}>
+              경매
+            </Chip>
             {!auction && (
               <Chip onPress={() => setPeriod(true)}>
                 최근 {filters.period_months}개월 ▾
@@ -1097,8 +1117,7 @@ export function MapHome({
               />
             </View>
           ) : auction ? (
-            !outside &&
-            !auctionZoom && (
+            auctionNotice && (
               <View
                 pointerEvents="box-none"
                 style={{
@@ -1111,7 +1130,7 @@ export function MapHome({
               >
                 <View style={{ ...s.card, maxWidth: 300 }}>
                   <T size={16} bold>
-                    확대하면 경매 물건이 보여요
+                    {auctionNotice}
                   </T>
                 </View>
               </View>

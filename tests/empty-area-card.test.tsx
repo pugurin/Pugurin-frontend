@@ -53,7 +53,13 @@ function setup(period_months = DEFAULT_FILTERS.period_months) {
   }));
   render(
     <MapHome
-      repo={{ mode: "api", markers } as unknown as Repository}
+      repo={
+        {
+          mode: "api",
+          markers,
+          auctions: async () => ({ data: [], meta: {} }),
+        } as unknown as Repository
+      }
       filters={{ ...DEFAULT_FILTERS, period_months }}
       onFilters={() => {}}
       onSearch={() => {}}

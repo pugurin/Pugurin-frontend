@@ -69,6 +69,7 @@ function setup(width: number) {
         {
           mode: "api",
           markers: async () => ({ data: { markers }, meta: {} }),
+          auctions: async () => ({ data: [], meta: {} }),
         } as unknown as Repository
       }
       filters={DEFAULT_FILTERS}

@@ -74,6 +74,7 @@ function setup(reason: UnavailableReason | null, data: unknown = null, options: 
         {
           mode: "api",
           markers,
+          auctions: async () => ({ data: [], meta: {} }),
           parcelLookup,
           transactions,
           stats: async () => ({ data: { transaction_count: 0, trend: [] } }),
