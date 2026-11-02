@@ -13,6 +13,8 @@ import * as Location from "expo-location";
 import { initialLocationStart, markLocationAsked } from "../state/location";
 import { LocationAsk } from "../components/LocationAsk";
 import type { UserLocation } from "../map/userLocation";
+import { HAS_KAKAO } from "../map/kakaoRuntime";
+import { RoadviewModal } from "../roadview/RoadviewModal";
 import type { Repository } from "../api/repository";
 import type {
   BBox,
@@ -121,6 +123,9 @@ export function MapHome({
   const [mapError, setMapError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [layers, setLayers] = useState(false);
+  // 로드뷰 모드: 켠 동안 지도를 누르면 그 자리의 로드뷰를 연다
+  const [roadview, setRoadview] = useState(false);
+  const [roadviewAt, setRoadviewAt] = useState<{ lat: number; lng: number } | null>(null);
   const [period, setPeriod] = useState(false);
   const [selected, setSelected] = useState<
     | { kind: "complex"; id: string }
@@ -408,7 +413,8 @@ export function MapHome({
       if (m) markerPress(m);
     }
     if (e.type === "mapClick") {
-      if (!isLand) close();
+      if (roadview) setRoadviewAt({ lat: e.lat, lng: e.lng });
+      else if (!isLand) close();
       else if (camera.zoom < 14)
         notify("조금 더 확대하면 땅을 하나씩 골라 볼 수 있어요");
       else landLookup(e.lat, e.lng);
@@ -835,6 +841,7 @@ export function MapHome({
             }
             base={base}
             cadastral={isLand || cadastral}
+            roadview={roadview}
             initial={HOME}
             userLocation={userLocation}
             command={command}
@@ -884,6 +891,20 @@ export function MapHome({
                 onPress={() => setLayers(true)}
               />
             </View>
+            {HAS_KAKAO && (
+              <View style={float}>
+                <IconBtn
+                  name="roadview"
+                  label="로드뷰 모드"
+                  active={roadview}
+                  onPress={() => {
+                    if (!roadview)
+                      notify("파란 길을 누르면 그 자리 로드뷰를 볼 수 있어요");
+                    setRoadview(!roadview);
+                  }}
+                />
+              </View>
+            )}
             <View style={float}>
               <IconBtn
                 name="plus"
@@ -1117,6 +1138,15 @@ export function MapHome({
         />
       )}
       {!desktop && detailSheet}
+      {roadviewAt && (
+        <RoadviewModal
+          visible
+          title="선택한 위치"
+          lat={roadviewAt.lat}
+          lng={roadviewAt.lng}
+          onClose={() => setRoadviewAt(null)}
+        />
+      )}
       <Modal
         visible={layers}
         transparent
