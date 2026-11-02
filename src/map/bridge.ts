@@ -19,6 +19,7 @@ export const layerState = (p: MapProps) => ({
   type: "state" as const,
   base: p.base,
   cadastral: p.cadastral,
+  roadview: !!p.roadview,
 });
 export const shapeState = (p: MapProps) => ({
   type: "state" as const,

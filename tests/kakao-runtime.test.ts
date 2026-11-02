@@ -68,7 +68,7 @@ function fakeKakao() {
       CustomOverlay: Shape,
       Polygon: Shape,
       Polyline: Shape,
-      MapTypeId: { ROADMAP: "ROADMAP", HYBRID: "HYBRID", USE_DISTRICT: "USE_DISTRICT" },
+      MapTypeId: { ROADMAP: "ROADMAP", HYBRID: "HYBRID", USE_DISTRICT: "USE_DISTRICT", ROADVIEW: "ROADVIEW" },
       event: { addListener: (target: unknown, name: string, fn: () => void) => listeners.push({ target, name, fn }) },
       load: (cb: () => void) => cb(),
       RoadviewClient: class {
@@ -172,6 +172,14 @@ describe("카카오 지도 런타임", () => {
     receive({ type: "state", base: "normal", cadastral: false });
     expect(map.type).toBe("ROADMAP");
     expect(map.overlays).toEqual([]);
+  });
+
+  it("로드뷰 모드에서는 로드뷰가 있는 길 레이어를 지적도와 따로 켜고 끈다", () => {
+    const { receive, map } = start();
+    receive({ type: "state", cadastral: true, roadview: true });
+    expect(map.overlays).toEqual(["USE_DISTRICT", "ROADVIEW"]);
+    receive({ type: "state", cadastral: true, roadview: false });
+    expect(map.overlays).toEqual(["USE_DISTRICT"]);
   });
 
   it("필지 경계는 녹색 다각형, 내 위치는 파란 점으로 그린다", () => {
