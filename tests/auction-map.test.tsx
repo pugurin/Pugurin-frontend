@@ -316,6 +316,16 @@ describe("경매 탭과 지도", () => {
     fireEvent.click(screen.getByRole("button", { name: "경매" }));
     expect(onAuction).toHaveBeenCalledWith(true);
   });
+  it("데스크톱 경매 탭에서 지역 패널은 실거래 문구 대신 경매 목록 버튼을 보인다", async () => {
+    viewport.width = 1280;
+    const { onAuctionList, moveTo } = setup({ auction: true, list: [] });
+    await moveTo(14);
+    const panel = screen.getByLabelText("지역 요약 패널");
+    expect(panel.textContent).toContain("경매 물건 · 아파트");
+    expect(panel.textContent).not.toMatch(/실거래|거래가 없어요|기간 늘리기|최근 \d+개월/);
+    fireEvent.click(screen.getByRole("button", { name: "경매 목록 보기" }));
+    expect(onAuctionList).toHaveBeenLastCalledWith({ bbox: bboxFor(map.moves) });
+  });
   it("토지 탭에서도 경매 칩을 고를 수 있다", async () => {
     const { auctions, onAuction, moveTo } = setup({
       filters: { ...DEFAULT_FILTERS, property_type: "land" },

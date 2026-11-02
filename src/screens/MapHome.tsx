@@ -1248,7 +1248,9 @@ export function MapHome({
           >
             <View style={s.between}>
               <T size={23} bold>
-                부산 실거래
+                {auction
+                  ? `경매 물건 · ${PROPERTY[filters.property_type]}`
+                  : "부산 실거래"}
               </T>
               <IconBtn
                 name="close"
@@ -1256,11 +1258,23 @@ export function MapHome({
                 onPress={() => setPanelDismissed(true)}
               />
             </View>
-            <T color={C.muted}>
-              {PROPERTY[filters.property_type]} · {DEAL[filters.deal_type]} ·
-              최근 {filters.period_months}개월
-            </T>
-            {loading ? (
+            {/* 경매 탭에는 실거래 요약 대신 경매 목록으로 가는 버튼만 둔다 */}
+            {auction ? (
+              <Btn
+                secondary
+                small
+                icon="list"
+                onPress={() => onAuctionList?.({ bbox: camera.bbox })}
+              >
+                경매 목록 보기
+              </Btn>
+            ) : (
+              <T color={C.muted}>
+                {PROPERTY[filters.property_type]} · {DEAL[filters.deal_type]} ·
+                최근 {filters.period_months}개월
+              </T>
+            )}
+            {auction ? null : loading ? (
               <StateCard loading />
             ) : error ? (
               <StateCard
