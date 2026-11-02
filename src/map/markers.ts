@@ -1,6 +1,7 @@
 // 지도 마커 글자·색. 카카오 지도 런타임(kakaoRuntime.ts)에는 여기서 만든 MarkerItem만 넘긴다
-import type { Marker, Property } from "../api/types";
-import { markerId } from "../state/market";
+import type { Auction, Marker, Property } from "../api/types";
+import { auctionAmount, auctionSub } from "../state/auction";
+import { formatPrice, markerId } from "../state/market";
 import type { MapProps } from "./types";
 
 export const MARKER_COLOR: Record<Property, string> = {
@@ -10,6 +11,7 @@ export const MARKER_COLOR: Record<Property, string> = {
   land: "#4F7A3A",
 };
 export const SELECTED_COLOR = "#111110";
+export const AUCTION_COLOR = "#B02A22";
 
 function price(v?: number | null) {
   if (v == null) return "정보 없음";
@@ -60,6 +62,10 @@ export type MarkerItem = {
   color: string;
   // 작을수록 먼저 자리를 잡는다. 선택 > 구·동 > 거래 건수 순 (겹치면 뒤의 것이 점으로)
   rank: number;
+  // 경매 마커는 흰 바탕 변형으로 그린다
+  auction?: boolean;
+  // 옆에 붙을 단지 마커 id. 그 단지가 점이 아니게 그려졌을 때만 옆에 놓는다
+  attach?: string;
 };
 
 export function markerItems(
@@ -82,4 +88,67 @@ export function markerItems(
       rank: isSelected ? 0 : m.kind === "region" ? 1 : 2 + 1 / (1 + count),
     };
   });
+}
+
+// 경매 마커. 좌표 없는 물건은 지도에 그리지 않는다.
+// 단지 마커가 있는 단지의 경매는 그 옆에 붙이고, 같은 단지 여러 건은 하나("auction-group:{complex_id}")로 합친다
+export function auctionItems(
+  auctions: Auction[],
+  markers: Marker[],
+  selected: string | null,
+  today: Date,
+): MarkerItem[] {
+  const complexes = new Map<string, Marker>();
+  markers.forEach((m) => {
+    if (m.kind === "complex") complexes.set(markerId(m), m);
+  });
+  const placed = auctions.flatMap((a) =>
+    a.lat == null || a.lng == null ? [] : [{ a, lat: a.lat, lng: a.lng }],
+  );
+  const groups = new Map<string, Auction[]>();
+  placed.forEach(({ a }) => {
+    if (a.complex_id && complexes.has(a.complex_id))
+      groups.set(a.complex_id, [...(groups.get(a.complex_id) ?? []), a]);
+  });
+  const done = new Set<string>();
+  const items: MarkerItem[] = [];
+  placed.forEach(({ a, lat, lng }, i) => {
+    const attach = a.complex_id && complexes.has(a.complex_id) ? a.complex_id : undefined;
+    const members = attach ? groups.get(attach)! : [a];
+    const base = { region: false, title: "", auction: true } as const;
+    if (members.length > 1 && attach) {
+      if (done.has(attach)) return;
+      done.add(attach);
+      const c = complexes.get(attach)!;
+      const id = `auction-group:${attach}`;
+      const isSelected = id === selected;
+      const prices = members.flatMap((m) => (m.min_price == null ? [] : [m.min_price]));
+      items.push({
+        ...base,
+        id,
+        lat: c.lat,
+        lng: c.lng,
+        amount: `⚖ ${members.length}건`,
+        sub: prices.length ? `최저 ${formatPrice(Math.min(...prices))}` : "최저가 미정",
+        color: isSelected ? SELECTED_COLOR : AUCTION_COLOR,
+        rank: isSelected ? 0 : 3 + 1 / (1 + i),
+        attach,
+      });
+      return;
+    }
+    const id = `auction:${a.id}`;
+    const isSelected = id === selected;
+    items.push({
+      ...base,
+      id,
+      lat,
+      lng,
+      amount: auctionAmount(a),
+      sub: auctionSub(a, today),
+      color: isSelected ? SELECTED_COLOR : AUCTION_COLOR,
+      rank: isSelected ? 0 : 3 + 1 / (1 + i),
+      ...(attach ? { attach } : {}),
+    });
+  });
+  return items;
 }
