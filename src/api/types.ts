@@ -35,6 +35,9 @@ export type Meta = {
   total_pages?: number;
   data_mode?: string;
   method?: string;
+  // 경매·공매 응답의 출처. 화면에 표시해야 한다
+  source_attribution?: string;
+  source_url?: string;
 };
 export type Envelope<T> = { data: T; meta?: Meta };
 export type Latest = {
@@ -194,4 +197,70 @@ export type Parcel = {
       }[]
     | null;
   glossary?: Record<string, string>;
+};
+export type AuctionSource = "court" | "public";
+export type AuctionGroup =
+  "apartment" | "officetel" | "villa" | "land" | "other";
+export type Auction = {
+  id: string;
+  source: AuctionSource;
+  case_no: string;
+  court_name: string | null;
+  title: string | null;
+  usage: string | null;
+  property_group: AuctionGroup;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  location_precise: boolean;
+  complex_id: string | null;
+  appraisal_price: number | null;
+  min_price: number | null;
+  min_price_ratio: number | null;
+  deposit: number | null;
+  fail_count: number | null;
+  sale_date: string | null;
+  bid_start_at: string | null;
+  bid_end_at: string | null;
+  land_area_m2: number | null;
+  land_area_pyeong: number | null;
+  building_area_m2: number | null;
+  building_area_pyeong: number | null;
+  is_share: boolean;
+  status: string | null;
+  is_closed: boolean;
+  // 백엔드 추가 예정. 없을 수 있다
+  recent_trade_price?: number | null;
+  recent_trade_date?: string | null;
+  recent_trade_area_m2?: number | null;
+  recent_trade_count?: number | null;
+};
+export type AuctionSchedule = {
+  date: string | null;
+  kind: string | null;
+  min_price: number | null;
+  result: string | null;
+  sale_price: number | null;
+};
+export type AuctionResult = {
+  date: string | null;
+  result: string | null;
+  bidders: number | null;
+  top_price: number | null;
+};
+export type AuctionDetail = Auction & {
+  schedule: AuctionSchedule[];
+  results: AuctionResult[];
+};
+export type AuctionQuery = {
+  bbox?: BBox;
+  complexId?: string;
+  source?: AuctionSource;
+  groups?: AuctionGroup[];
+  includeClosed?: boolean;
+  page?: number;
+  pageSize?: number;
+  sort?:
+    "sale_date" | "min_price_ratio" | "min_price" | "recent_trade_discount";
+  excludeShare?: boolean;
 };
