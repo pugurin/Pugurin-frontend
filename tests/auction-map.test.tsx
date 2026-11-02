@@ -256,6 +256,26 @@ describe("경매 탭과 지도", () => {
     await screen.findByText("이 화면 안에 진행 중인 경매가 없어요");
     expect(screen.queryByText("이 조건의 거래가 없어요")).toBeNull();
   });
+  it("경매 탭에서 새 요청이 진행 중이면 이전 0건 안내를 지우고 '경매 불러오는 중…'을 띄운다", async () => {
+    let calls = 0;
+    const { moveTo } = setup({
+      auction: true,
+      auctionsImpl: () =>
+        ++calls === 1
+          ? Promise.resolve({ data: [], meta: {} })
+          : new Promise(() => {}),
+    });
+    await moveTo(14);
+    await screen.findByText("이 화면 안에 진행 중인 경매가 없어요");
+    expect(screen.queryByText("경매 불러오는 중…")).toBeNull();
+    await moveTo(14);
+    expect(calls).toBe(2);
+    expect(
+      screen.queryByText("이 화면 안에 진행 중인 경매가 없어요"),
+    ).toBeNull();
+    expect(screen.getByText("경매 불러오는 중…")).toBeTruthy();
+    expect(screen.queryByText("실거래가 불러오는 중…")).toBeNull();
+  });
   it("매매에서 경매가 0건이어도 경매 0건 안내는 띄우지 않는다", async () => {
     const { auctions, moveTo } = setup({
       auctionsImpl: async () => ({ data: [], meta: {} }),

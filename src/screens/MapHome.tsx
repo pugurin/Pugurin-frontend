@@ -145,6 +145,8 @@ export function MapHome({
   // 경매 탭에서만 보여 주는 경매 요청 오류. 준비 중(404·503)은 따로 둔다
   const [auctionError, setAuctionError] = useState<string | null>(null);
   const [auctionNotReady, setAuctionNotReady] = useState(false);
+  // 경매 요청이 진행 중인지. 경매 탭에서 로딩 알약에 쓴다
+  const [auctionLoading, setAuctionLoading] = useState(false);
   const [meta, setMeta] = useState<Meta>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -293,43 +295,47 @@ export function MapHome({
       setAuctionsReady(false);
       setAuctionError(null);
       setAuctionNotReady(false);
+      setAuctionLoading(false);
       return;
     }
     const controller = new AbortController();
-    const timer = setTimeout(
-      () =>
-        repo
-          .auctions(
-            {
-              bbox: queryBBox!,
-              groups: [filters.property_type],
-              pageSize: 500,
-            },
-            controller.signal,
-          )
-          .then((r) => {
-            if (controller.signal.aborted) return;
-            setAuctions(r.data);
-            setAuctionsReady(true);
-            setAuctionError(null);
-            setAuctionNotReady(false);
-          })
-          .catch((e) => {
-            if (controller.signal.aborted) return;
-            setAuctions([]);
-            setAuctionsReady(false);
-            // 404(API 미배포)·503(수집 전)은 준비 중으로 안내한다. 매매에서는 화면에 띄우지 않는다
-            const notReady =
-              e?.code === "RESOURCE_NOT_FOUND" || e?.code === "DATA_NOT_READY";
-            setAuctionNotReady(notReady);
-            setAuctionError(
-              notReady
-                ? null
-                : (e?.message ?? "경매 정보를 잠시 불러올 수 없어요"),
-            );
-          }),
-      220,
-    );
+    const timer = setTimeout(() => {
+      // 새 요청을 보내는 동안에는 이전 결과의 0건 안내를 지우고 로딩을 띄운다
+      setAuctionsReady(false);
+      setAuctionLoading(true);
+      repo
+        .auctions(
+          {
+            bbox: queryBBox!,
+            groups: [filters.property_type],
+            pageSize: 500,
+          },
+          controller.signal,
+        )
+        .then((r) => {
+          if (controller.signal.aborted) return;
+          setAuctionLoading(false);
+          setAuctions(r.data);
+          setAuctionsReady(true);
+          setAuctionError(null);
+          setAuctionNotReady(false);
+        })
+        .catch((e) => {
+          if (controller.signal.aborted) return;
+          setAuctionLoading(false);
+          setAuctions([]);
+          setAuctionsReady(false);
+          // 404(API 미배포)·503(수집 전)은 준비 중으로 안내한다. 매매에서는 화면에 띄우지 않는다
+          const notReady =
+            e?.code === "RESOURCE_NOT_FOUND" || e?.code === "DATA_NOT_READY";
+          setAuctionNotReady(notReady);
+          setAuctionError(
+            notReady
+              ? null
+              : (e?.message ?? "경매 정보를 잠시 불러올 수 없어요"),
+          );
+        });
+    }, 220);
     return () => {
       controller.abort();
       clearTimeout(timer);
@@ -1110,7 +1116,7 @@ export function MapHome({
               </Btn>
             </View>
           )}
-          {loading ? (
+          {loading || (auction && auctionLoading) ? (
             <View
               style={{
                 position: "absolute",
@@ -1125,7 +1131,9 @@ export function MapHome({
               }}
             >
               <ActivityIndicator size="small" />
-              <T size={14}>실거래가 불러오는 중…</T>
+              <T size={14}>
+                {auction ? "경매 불러오는 중…" : "실거래가 불러오는 중…"}
+              </T>
             </View>
           ) : error || mapError || (auction && auctionError) ? (
             <View
