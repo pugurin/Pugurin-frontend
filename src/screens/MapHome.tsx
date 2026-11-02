@@ -15,6 +15,7 @@ import { LocationAsk } from "../components/LocationAsk";
 import type { UserLocation } from "../map/userLocation";
 import type { Repository } from "../api/repository";
 import type {
+  Auction,
   BBox,
   Filters,
   Marker,
@@ -36,6 +37,7 @@ import {
   nextPeriod,
   PROPERTY,
 } from "../state/market";
+import { AUCTION_MIN_ZOOM } from "../state/auction";
 import { C } from "../theme/tokens";
 import { Brand } from "../components/Brand";
 import {
@@ -53,6 +55,7 @@ import MapCanvas from "../map/MapCanvas";
 import type { Camera, MapCommand, MapEvent } from "../map/types";
 import { ComplexContent, RegionContent } from "./MarketSheets";
 import { LandContent } from "./LandContent";
+import { AuctionContent } from "./AuctionContent";
 export type Focus = { result: SearchResult; nonce: number };
 export function MapHome({
   repo,
@@ -76,6 +79,9 @@ export function MapHome({
   notify,
   onMeta,
   onParcel,
+  auction = false,
+  onAuction,
+  onAuctionList,
 }: {
   repo: Repository;
   filters: Filters;
@@ -101,6 +107,15 @@ export function MapHome({
   onToday?: () => void;
   // 땅 정보를 받아 오면 알린다. 오늘의 용어 '매물 카드 번역하기'에 쓴다
   onParcel?: (parcel: Parcel) => void;
+  // 경매 탭. 켜면 실거래 마커 대신 경매 마커만 그린다
+  auction?: boolean;
+  onAuction?: (on: boolean) => void;
+  // 경매 목록 화면을 연다. 단지 묶음 마커를 누르면 그 단지로 거른다
+  onAuctionList?: (args: {
+    bbox: BBox;
+    complexId?: string;
+    name?: string;
+  }) => void;
 }) {
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === "web" && width >= 1024;
@@ -114,6 +129,9 @@ export function MapHome({
   const [emptyDismissed, setEmptyDismissed] = useState(false);
   const [camera, setCamera] = useState<Camera>(HOME);
   const [markers, setMarkers] = useState<Marker[]>([]);
+  const [auctions, setAuctions] = useState<Auction[]>([]);
+  // 경매 탭에서만 보여 주는 경매 요청 오류
+  const [auctionError, setAuctionError] = useState<string | null>(null);
   const [meta, setMeta] = useState<Meta>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +142,7 @@ export function MapHome({
   const [period, setPeriod] = useState(false);
   const [selected, setSelected] = useState<
     | { kind: "complex"; id: string }
+    | { kind: "auction"; id: string }
     | { kind: "region"; marker: RegionMarker }
     | {
         kind: "land";
@@ -145,11 +164,25 @@ export function MapHome({
   const [askLocation, setAskLocation] = useState(false);
   const ref = useRef(0);
   const lastFilters = useRef(filters);
+  const lastAuction = useRef(auction);
   // 검색으로 고른 단지에 맞춰 유형 탭을 바꿀 때는 필터가 바뀌어도 단지 패널을 닫지 않는다
   const keepSelection = useRef(false);
   const queryBBox = busanQueryBBox(camera.bbox);
   const outside = !queryBBox;
   const isLand = filters.property_type === "land";
+  // 경매에는 가격·면적 필터가 적용되지 않으므로, 매매에 이 필터가 걸려 있으면 경매를 그리지 않는다
+  const rangeFiltered = [
+    filters.price_min,
+    filters.price_max,
+    filters.exclusive_area_pyeong_min,
+    filters.exclusive_area_pyeong_max,
+    filters.land_area_pyeong_min,
+    filters.land_area_pyeong_max,
+  ].some((v) => v !== undefined);
+  const auctionZoom = !outside && camera.zoom >= AUCTION_MIN_ZOOM;
+  const showAuctions =
+    auctionZoom &&
+    (auction || (filters.deal_type === "sale" && !rangeFiltered));
   const move = (c: MapCommand) => setCommand({ ...c, nonce: ++ref.current });
   const landRequest = useRef<AbortController | null>(null);
   const pendingLand = useRef<{
@@ -179,15 +212,19 @@ export function MapHome({
   }, [desktop, interactionBlocked, layers, period]);
   useEffect(() => {
     const controller = new AbortController();
-    const changed = lastFilters.current !== filters;
+    const changed =
+      lastFilters.current !== filters || lastAuction.current !== auction;
     lastFilters.current = filters;
+    lastAuction.current = auction;
     if (changed) {
       setMarkers([]);
+      setAuctions([]);
       if (keepSelection.current) keepSelection.current = false;
       else close();
       setPanelDismissed(false);
     }
-    if (outside) {
+    // 경매 탭에서는 실거래 마커를 부르지 않는다
+    if (outside || auction) {
       setLoading(false);
       setMarkers([]);
       setError(null);
@@ -233,7 +270,51 @@ export function MapHome({
       clearTimeout(timer);
       clearTimeout(loadingTimer);
     };
-  }, [repo, filters, camera, outside, retry]);
+  }, [repo, filters, camera, outside, retry, auction]);
+  // 경매 요청. 매매(가격·면적 필터 없음)이거나 경매 탭일 때, 단지 마커가 나오는 줌에서만 부른다
+  useEffect(() => {
+    if (!showAuctions) {
+      setAuctions([]);
+      setAuctionError(null);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () =>
+        // 동기 오류도 아래 catch에서 받도록 then 안에서 부른다
+        Promise.resolve()
+          .then(() =>
+            repo.auctions(
+              {
+                bbox: queryBBox!,
+                groups: [filters.property_type],
+                pageSize: 500,
+              },
+              controller.signal,
+            ),
+          )
+          .then((r) => {
+            if (controller.signal.aborted) return;
+            setAuctions(r.data);
+            setAuctionError(null);
+          })
+          .catch((e) => {
+            if (controller.signal.aborted) return;
+            setAuctions([]);
+            // 404(API 미배포)·503(수집 전)은 준비 중으로 안내한다. 매매에서는 화면에 띄우지 않는다
+            setAuctionError(
+              e?.code === "RESOURCE_NOT_FOUND" || e?.code === "DATA_NOT_READY"
+                ? "경매 정보를 준비 중이에요"
+                : (e?.message ?? "경매 정보를 잠시 불러올 수 없어요"),
+            );
+          }),
+      220,
+    );
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [repo, filters, camera, showAuctions, retry]);
   useEffect(() => {
     if (!focus) return;
     close();
@@ -404,8 +485,26 @@ export function MapHome({
       }
     }
     if (e.type === "marker") {
-      const m = markers.find((m) => markerId(m) === e.id);
-      if (m) markerPress(m);
+      if (e.id.startsWith("auction:")) {
+        pendingLand.current = null;
+        landRequest.current?.abort();
+        setSelected({ kind: "auction", id: e.id.slice("auction:".length) });
+        setStage("peek");
+      } else if (e.id.startsWith("auction-group:")) {
+        // 한 단지에 경매가 여러 건이면 그 단지로 거른 경매 목록을 연다
+        const complexId = e.id.slice("auction-group:".length);
+        const c = markers.find(
+          (m) => m.kind === "complex" && m.complex_id === complexId,
+        );
+        onAuctionList?.({
+          bbox: camera.bbox,
+          complexId,
+          name: c?.kind === "complex" ? c.name : undefined,
+        });
+      } else {
+        const m = markers.find((m) => markerId(m) === e.id);
+        if (m) markerPress(m);
+      }
     }
     if (e.type === "mapClick") {
       if (!isLand) close();
@@ -484,14 +583,23 @@ export function MapHome({
     void markLocationAsked();
     if (allow) void locate();
   };
+  // 경매 탭에서는 필터·목록 버튼이 경매 목록을 연다. 경매 필터 시트는 목록 화면에 있다
+  const openFilter = () =>
+    auction ? onAuctionList?.({ bbox: camera.bbox }) : onFilter();
+  const openList = () =>
+    auction
+      ? onAuctionList?.({ bbox: camera.bbox })
+      : onList({ bbox: camera.bbox });
   const detailSheet = selected ? (
     <Sheet
       key={
         selected.kind === "complex"
           ? `complex:${selected.id}`
-          : selected.kind === "land"
-            ? `land:${selected.lat},${selected.lng}`
-            : `region:${selected.marker.region_code}`
+          : selected.kind === "auction"
+            ? `auction:${selected.id}`
+            : selected.kind === "land"
+              ? `land:${selected.lat},${selected.lng}`
+              : `region:${selected.marker.region_code}`
       }
       stage={desktop ? "full" : stage}
       onStage={desktop ? () => {} : setStage}
@@ -526,6 +634,15 @@ export function MapHome({
           }
           onHelp={onHelp}
           unit={unit}
+        />
+      ) : selected.kind === "auction" ? (
+        <AuctionContent
+          id={selected.id}
+          repo={repo}
+          stage={desktop ? "full" : stage}
+          onStage={setStage}
+          unit={unit}
+          notify={notify}
         />
       ) : selected.kind === "complex" ? (
         <ComplexContent
@@ -643,17 +760,27 @@ export function MapHome({
               (Object.keys(DEAL) as (keyof typeof DEAL)[]).map((key) => (
                 <Chip
                   key={key}
-                  selected={filters.deal_type === key}
+                  selected={!auction && filters.deal_type === key}
                   disabled={isLand && key !== "sale"}
-                  onPress={() => onFilters(changeDeal(filters, key))}
+                  onPress={() => {
+                    onAuction?.(false);
+                    onFilters(changeDeal(filters, key));
+                  }}
                 >
                   {DEAL[key]}
                 </Chip>
               ))}
-            <Chip onPress={() => setPeriod(true)}>
-              최근 {filters.period_months}개월 ▾
-            </Chip>
-            <IconBtn name="filter" label="상세 필터" onPress={onFilter} />
+            {width >= 1280 && (
+              <Chip selected={auction} onPress={() => onAuction?.(true)}>
+                경매
+              </Chip>
+            )}
+            {!auction && (
+              <Chip onPress={() => setPeriod(true)}>
+                최근 {filters.period_months}개월 ▾
+              </Chip>
+            )}
+            <IconBtn name="filter" label="상세 필터" onPress={openFilter} />
           </View>
           {onToday && (
             <IconBtn name="today" label="오늘의 용어" onPress={onToday} />
@@ -776,21 +903,29 @@ export function MapHome({
               {(Object.keys(DEAL) as (keyof typeof DEAL)[]).map((k) => (
                 <Chip
                   key={k}
-                  selected={filters.deal_type === k}
+                  selected={!auction && filters.deal_type === k}
                   disabled={isLand && k !== "sale"}
                   onPress={() => {
                     if (isLand && k !== "sale")
                       notify("토지는 매매 거래만 볼 수 있어요");
-                    else onFilters(changeDeal(filters, k));
+                    else {
+                      onAuction?.(false);
+                      onFilters(changeDeal(filters, k));
+                    }
                   }}
                 >
                   {DEAL[k]}
                 </Chip>
               ))}
-              <Chip onPress={() => setPeriod(true)}>
-                최근 {filters.period_months}개월 ▾
+              <Chip selected={auction} onPress={() => onAuction?.(true)}>
+                경매
               </Chip>
-              <Chip onPress={onFilter}>☷ 필터</Chip>
+              {!auction && (
+                <Chip onPress={() => setPeriod(true)}>
+                  최근 {filters.period_months}개월 ▾
+                </Chip>
+              )}
+              <Chip onPress={openFilter}>☷ 필터</Chip>
             </ScrollView>
           </View>
         </>
@@ -821,7 +956,14 @@ export function MapHome({
             key={mapRetry}
             markers={markers}
             property={filters.property_type}
-            selected={selected?.kind === "complex" ? selected.id : null}
+            auctions={auctions}
+            selected={
+              selected?.kind === "complex"
+                ? selected.id
+                : selected?.kind === "auction"
+                  ? `auction:${selected.id}`
+                  : null
+            }
             unit={unit}
             selectionPoint={
               selected?.kind === "land"
@@ -913,12 +1055,7 @@ export function MapHome({
           </View>
           {!selected && (
             <View style={{ position: "absolute", left: 12, bottom: 16 }}>
-              <Btn
-                secondary
-                small
-                icon="list"
-                onPress={() => onList({ bbox: camera.bbox })}
-              >
+              <Btn secondary small icon="list" onPress={openList}>
                 목록 보기
               </Btn>
             </View>
@@ -940,7 +1077,7 @@ export function MapHome({
               <ActivityIndicator size="small" />
               <T size={14}>실거래가 불러오는 중…</T>
             </View>
-          ) : error || mapError ? (
+          ) : error || mapError || (auction && auctionError) ? (
             <View
               style={{
                 position: "absolute",
@@ -951,7 +1088,7 @@ export function MapHome({
               }}
             >
               <StateCard
-                error={error ?? mapError}
+                error={error ?? mapError ?? auctionError}
                 onRetry={() => {
                   if (mapError) setMapRetry((x) => x + 1);
                   setMapError(null);
@@ -959,6 +1096,26 @@ export function MapHome({
                 }}
               />
             </View>
+          ) : auction ? (
+            !outside &&
+            !auctionZoom && (
+              <View
+                pointerEvents="box-none"
+                style={{
+                  position: "absolute",
+                  left: 24,
+                  right: 24,
+                  top: "24%",
+                  alignItems: "center",
+                }}
+              >
+                <View style={{ ...s.card, maxWidth: 300 }}>
+                  <T size={16} bold>
+                    확대하면 경매 물건이 보여요
+                  </T>
+                </View>
+              </View>
+            )
           ) : !outside &&
             camera.zoom >= 11 &&
             markers.length === 0 &&

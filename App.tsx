@@ -71,7 +71,9 @@ type Route =
     }
   | { kind: "terms"; name: TermKind }
   | { kind: "date" }
-  | { kind: "transactions"; bbox: BBox; region?: string; name?: string };
+  | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
+  // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
+  | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };
 export default function App() {
   const [fonts] = useFonts({
     Pretendard: require("./assets/fonts/Pretendard-Regular.otf"),
@@ -86,6 +88,8 @@ export default function App() {
   const [tab, setTab] = useState<"map" | "glossary" | "more">("map");
   const [route, setRoute] = useState<Route | null>(null);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  // 지도 경매 탭
+  const [auction, setAuction] = useState(false);
   const [unit, setUnit] = useState<"평" | "㎡">("평");
   const [base, setBase] = useState<"normal" | "satellite">("normal");
   const [cad, setCad] = useState(false);
@@ -472,6 +476,11 @@ export default function App() {
                 onMeta={setDataMeta}
                 onParcel={setLastParcel}
                 onToday={() => setRoute({ kind: "matching" })}
+                auction={auction}
+                onAuction={setAuction}
+                onAuctionList={(args) =>
+                  setRoute({ kind: "auctions", ...args })
+                }
               />
             </View>
             {tab === "glossary" && (
