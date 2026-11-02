@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { auctionItems, markerItems, markerLines } from "../src/map/markers";
-import type { Auction, ComplexMarker, RegionMarker } from "../src/api/types";
+import { auctionItems, markerItems, markerLines, schoolItems } from "../src/map/markers";
+import type { Auction, ComplexMarker, RegionMarker, School } from "../src/api/types";
 
 const region: RegionMarker = {
   kind: "region",
@@ -186,5 +186,52 @@ describe("경매 마커", () => {
     expect(first.rank).toBeGreaterThan(3);
     expect(second.rank).toBeLessThan(4);
     expect(first.rank).toBeLessThan(second.rank);
+  });
+});
+
+const hs: School = {
+  id: "h1",
+  name: "해운대여자고등학교",
+  kind: "고등학교",
+  level: "high",
+  foundation: "공립",
+  coed: "여",
+  address: "부산광역시 해운대구 우동 1",
+  lat: 35.16,
+  lng: 129.15,
+  tel: null,
+  homepage: null,
+  opened_on: null,
+  distance_m: null,
+};
+const es: School = { ...hs, id: "e1", name: "우동초등학교", kind: "초등학교", level: "elementary" };
+
+describe("학교 마커", () => {
+  it("학교는 줄인 이름과 레벨 색으로, 좌표 없는 학교는 빼고 만든다", () => {
+    const items = schoolItems([hs, { ...es, lat: null, lng: null }], null);
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: "school:h1",
+        school: "high",
+        amount: "해운대여고",
+        title: "",
+        sub: "",
+        region: false,
+        color: "#5B3FA0",
+        rank: 5,
+      }),
+    ]);
+  });
+  it("런타임이 그릴 수 있게 도형 글자와 모양을 함께 싣는다", () => {
+    expect(schoolItems([hs, es], null).map((i) => [i.badge, i.shape])).toEqual([
+      ["고", "diamond"],
+      ["초", "circle"],
+    ]);
+  });
+  it("선택된 학교는 rank 0이고 색은 그대로다", () => {
+    expect(schoolItems([hs], "school:h1")[0]).toMatchObject({
+      rank: 0,
+      color: "#5B3FA0",
+    });
   });
 });

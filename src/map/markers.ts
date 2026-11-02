@@ -1,7 +1,8 @@
 // 지도 마커 글자·색. 카카오 지도 런타임(kakaoRuntime.ts)에는 여기서 만든 MarkerItem만 넘긴다
-import type { Auction, Marker, Property } from "../api/types";
+import type { Auction, Marker, Property, School, SchoolLevel } from "../api/types";
 import { auctionAmount, auctionSub } from "../state/auction";
 import { formatPrice, markerId } from "../state/market";
+import { SCHOOL_LEVEL, schoolShortName, type SchoolShape } from "../state/school";
 import type { MapProps } from "./types";
 
 export const MARKER_COLOR: Record<Property, string> = {
@@ -66,6 +67,11 @@ export type MarkerItem = {
   auction?: boolean;
   // 옆에 붙을 단지 마커 id. 그 단지가 점이 아니게 그려졌을 때만 옆에 놓는다
   attach?: string;
+  // 학교 마커의 학교급. 꼬리 없는 흰 칸에 도형 배지와 줄인 이름으로 그린다
+  school?: SchoolLevel;
+  // 학교 도형 안 글자와 도형 모양. 런타임 문자열은 SCHOOL_LEVEL을 import할 수 없어 항목에 실어 보낸다
+  badge?: string;
+  shape?: SchoolShape;
 };
 
 export function markerItems(
@@ -159,4 +165,30 @@ export function auctionItems(
   return items.map((m, k) =>
     m.rank === 0 ? m : { ...m, rank: 3 + (k + 1) / (items.length + 1) },
   );
+}
+
+// 학교 마커. 좌표 없는 학교는 지도에 그리지 않는다.
+// 선택해도 색은 학교급 색 그대로 두고 rank만 0으로 올린다. 런타임은 학교를 경매보다도 뒤에 자리 잡게 한다
+export function schoolItems(schools: School[], selected: string | null): MarkerItem[] {
+  return schools.flatMap((s) => {
+    if (s.lat == null || s.lng == null) return [];
+    const id = `school:${s.id}`;
+    const level = SCHOOL_LEVEL[s.level];
+    return [
+      {
+        id,
+        lat: s.lat,
+        lng: s.lng,
+        region: false,
+        title: "",
+        amount: schoolShortName(s.name),
+        sub: "",
+        color: level.color,
+        rank: id === selected ? 0 : level.rank,
+        school: s.level,
+        badge: level.badge,
+        shape: level.shape,
+      },
+    ];
+  });
 }

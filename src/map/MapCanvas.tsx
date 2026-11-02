@@ -32,7 +32,7 @@ export default function MapCanvas(p: MapProps) {
 
   useEffect(
     () => post(markerState(p)),
-    [p.markers, p.auctions, p.property, p.unit, p.selected],
+    [p.markers, p.auctions, p.schools, p.property, p.unit, p.selected],
   );
   useEffect(() => post(layerState(p)), [p.base, p.cadastral, p.roadview]);
   useEffect(
