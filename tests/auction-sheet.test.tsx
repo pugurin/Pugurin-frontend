@@ -233,6 +233,20 @@ describe("경매 시트", () => {
     vi.unstubAllGlobals();
   });
 
+  it("원문 주소가 없어도 사건번호 복사 버튼은 따로 보인다", async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    try {
+      const { source_url: _, ...noUrl } = AUCTION_META;
+      show(repoOf(base, noUrl), "full");
+      fireEvent.click(await screen.findByText("사건번호 복사"));
+      expect(writeText).toHaveBeenCalledWith("2026타경1234");
+      expect(screen.queryByText("법원경매정보 열기 ↗")).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("클립보드를 쓸 수 없으면 복사 버튼을 두지 않는다", async () => {
     show(repoOf(base), "full");
     await screen.findByText("진행 이력");

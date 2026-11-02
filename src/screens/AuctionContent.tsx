@@ -416,21 +416,26 @@ export function AuctionContent({
               전에 법원 문서를 꼭 확인하세요.
             </T>
           </View>
-          {meta?.source_url && (
+          {/* 사건번호 복사는 원문 주소와 상관없이 웹·클립보드만 되면 둔다 */}
+          {(meta?.source_url || canCopy) && (
             <View style={{ gap: 8, paddingVertical: 12 }}>
               <View style={s.row}>
-                <Btn style={{ flex: 1 }} onPress={openSource}>
-                  법원경매정보 열기 ↗
-                </Btn>
+                {meta?.source_url && (
+                  <Btn style={{ flex: 1 }} onPress={openSource}>
+                    법원경매정보 열기 ↗
+                  </Btn>
+                )}
                 {canCopy && (
                   <Btn secondary onPress={copyCaseNo}>
                     사건번호 복사
                   </Btn>
                 )}
               </View>
-              <T size={13} color={C.muted}>
-                사건번호로 검색하면 원문을 볼 수 있어요
-              </T>
+              {meta?.source_url && (
+                <T size={13} color={C.muted}>
+                  사건번호로 검색하면 원문을 볼 수 있어요
+                </T>
+              )}
             </View>
           )}
           {sourceLine !== "" && (
