@@ -30,8 +30,11 @@ export default function MapCanvas(p: MapProps) {
     );
   };
 
-  useEffect(() => post(markerState(p)), [p.markers, p.auctions, p.property, p.unit, p.selected]);
-  useEffect(() => post(layerState(p)), [p.base, p.cadastral]);
+  useEffect(
+    () => post(markerState(p)),
+    [p.markers, p.auctions, p.property, p.unit, p.selected],
+  );
+  useEffect(() => post(layerState(p)), [p.base, p.cadastral, p.roadview]);
   useEffect(
     () => post(shapeState(p)),
     [p.selectionPoint, p.parcelGeometry, p.userLocation],
@@ -66,7 +69,10 @@ export default function MapCanvas(p: MapProps) {
         handleRuntimeMessage(m, latest.current);
       }}
       onError={() =>
-        latest.current.onEvent({ type: "error", message: "지도를 불러올 수 없어요" })
+        latest.current.onEvent({
+          type: "error",
+          message: "지도를 불러올 수 없어요",
+        })
       }
     />
   );

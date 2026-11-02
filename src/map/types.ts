@@ -25,6 +25,8 @@ export type MapProps = {
   unit: "평" | "㎡";
   base: "normal" | "satellite";
   cadastral: boolean;
+  // 로드뷰 모드. 로드뷰가 있는 길을 파란 선으로 보여 준다
+  roadview?: boolean;
   initial: Camera;
   command?: MapCommand & { nonce: number };
   onEvent: (e: MapEvent) => void;

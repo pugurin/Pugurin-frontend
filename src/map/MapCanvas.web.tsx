@@ -41,7 +41,7 @@ export default function MapCanvas(p: MapProps) {
 
   useEffect(() => {
     receive.current?.(layerState(p));
-  }, [p.base, p.cadastral]);
+  }, [p.base, p.cadastral, p.roadview]);
 
   useEffect(() => {
     receive.current?.(shapeState(p));

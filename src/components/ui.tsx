@@ -36,6 +36,7 @@ import {
   Mail,
   FileText,
   Lightbulb,
+  PersonStanding,
   type LucideIcon,
 } from "lucide-react-native";
 import { C, FONT } from "../theme/tokens";
@@ -66,6 +67,7 @@ export const ICONS = {
   pin: MapPin,
   mail: Mail,
   file: FileText,
+  roadview: PersonStanding,
 };
 export type IconName = keyof typeof ICONS;
 export function Icon({
@@ -161,25 +163,30 @@ export function IconBtn({
   onPress,
   label,
   style,
+  active,
 }: {
   name: IconName;
   onPress: () => void;
   label: string;
   style?: StyleProp<ViewStyle>;
+  // 켜고 끄는 버튼이면 켜진 상태를 채운 배경으로 보여 준다
+  active?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={active === undefined ? undefined : { selected: active }}
       hitSlop={5}
       onPress={onPress}
       style={({ pressed }) => [
         s.iconBtn,
         pressed && { backgroundColor: C.bg2 },
+        active && { backgroundColor: C.ink },
         style,
       ]}
     >
-      <Icon name={name} />
+      <Icon name={name} color={active ? C.surface : C.ink} />
     </Pressable>
   );
 }
