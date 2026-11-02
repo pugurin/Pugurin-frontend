@@ -132,10 +132,28 @@ describe("경매 마커", () => {
     const [item] = auctionItems([a1], [complexMarker("c1")], null, today);
     expect(item).toMatchObject({ id: "auction:a1", attach: "c1", amount: "⚖ 3.6억" });
   });
-  it("단지 마커가 없으면 단지가 같아도 건별로 자기 좌표에 둔다", () => {
-    const items = auctionItems([a1, { ...a1, id: "a3" }], [complexMarker("c9")], null, today);
-    expect(items.map((i) => i.id)).toEqual(["auction:a1", "auction:a3"]);
+  it("단지 마커가 없고 그 단지 경매가 1건이면 자기 좌표에 둔다", () => {
+    const items = auctionItems([a1, a2], [complexMarker("c9")], null, today);
+    expect(items.map((i) => i.id)).toEqual(["auction:a1", "auction:a2"]);
     expect(items.every((i) => i.attach === undefined)).toBe(true);
+    expect(items[0]).toMatchObject({ lat: 35.15, lng: 129.14 });
+  });
+  it("경매 탭(단지 마커 없음)에서도 같은 단지 여러 건은 첫 물건 좌표에 하나로 합친다", () => {
+    const items = auctionItems(
+      [a1, a2, { ...a1, id: "a3", lat: 35.16, lng: 129.15, min_price: 300000000 }],
+      [],
+      null,
+      today,
+    );
+    expect(items.map((i) => i.id)).toEqual(["auction-group:c1", "auction:a2"]);
+    expect(items[0]).toMatchObject({
+      auction: true,
+      amount: "⚖ 2건",
+      sub: "최저 3억",
+      lat: 35.15,
+      lng: 129.14,
+    });
+    expect(items[0].attach).toBeUndefined();
   });
   it("단지 마커가 있으면 그 옆에 붙이고, 같은 단지 여러 건은 하나로 합친다", () => {
     const items = auctionItems(

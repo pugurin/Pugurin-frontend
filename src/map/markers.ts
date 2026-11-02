@@ -91,7 +91,8 @@ export function markerItems(
 }
 
 // 경매 마커. 좌표 없는 물건은 지도에 그리지 않는다.
-// 단지 마커가 있는 단지의 경매는 그 옆에 붙이고, 같은 단지 여러 건은 하나("auction-group:{complex_id}")로 합친다
+// 같은 단지 여러 건은 하나("auction-group:{complex_id}")로 합친다. 단지 마커가 있으면 그 옆에 붙이고,
+// 없으면(경매 탭이나 거래 없는 단지) 첫 물건 좌표에 둔다
 export function auctionItems(
   auctions: Auction[],
   markers: Marker[],
@@ -105,34 +106,38 @@ export function auctionItems(
   const placed = auctions.flatMap((a) =>
     a.lat == null || a.lng == null ? [] : [{ a, lat: a.lat, lng: a.lng }],
   );
-  const groups = new Map<string, Auction[]>();
-  placed.forEach(({ a }) => {
-    if (a.complex_id && complexes.has(a.complex_id))
-      groups.set(a.complex_id, [...(groups.get(a.complex_id) ?? []), a]);
+  // 단지별 물건 목록. 첫 물건 좌표는 단지 마커가 없을 때 묶음 자리로 쓴다
+  const groups = new Map<string, { lat: number; lng: number; members: Auction[] }>();
+  placed.forEach(({ a, lat, lng }) => {
+    if (!a.complex_id) return;
+    const g = groups.get(a.complex_id);
+    if (g) g.members.push(a);
+    else groups.set(a.complex_id, { lat, lng, members: [a] });
   });
   const done = new Set<string>();
   const items: MarkerItem[] = [];
   placed.forEach(({ a, lat, lng }) => {
     const attach = a.complex_id && complexes.has(a.complex_id) ? a.complex_id : undefined;
-    const members = attach ? groups.get(attach)! : [a];
+    const group = a.complex_id ? groups.get(a.complex_id)!.members : [a];
     const base = { region: false, title: "", auction: true } as const;
-    if (members.length > 1 && attach) {
-      if (done.has(attach)) return;
-      done.add(attach);
-      const c = complexes.get(attach)!;
-      const id = `auction-group:${attach}`;
+    if (group.length > 1 && a.complex_id) {
+      const cid = a.complex_id;
+      if (done.has(cid)) return;
+      done.add(cid);
+      const at = attach ? complexes.get(attach)! : groups.get(cid)!;
+      const id = `auction-group:${cid}`;
       const isSelected = id === selected;
-      const prices = members.flatMap((m) => (m.min_price == null ? [] : [m.min_price]));
+      const prices = group.flatMap((m) => (m.min_price == null ? [] : [m.min_price]));
       items.push({
         ...base,
         id,
-        lat: c.lat,
-        lng: c.lng,
-        amount: `⚖ ${members.length}건`,
+        lat: at.lat,
+        lng: at.lng,
+        amount: `⚖ ${group.length}건`,
         sub: prices.length ? `최저 ${formatPrice(Math.min(...prices))}` : "최저가 미정",
         color: isSelected ? SELECTED_COLOR : AUCTION_COLOR,
         rank: isSelected ? 0 : 3,
-        attach,
+        ...(attach ? { attach } : {}),
       });
       return;
     }

@@ -340,6 +340,26 @@ describe("경매 탭과 지도", () => {
     await waitFor(() => expect(auctions).toHaveBeenCalledTimes(2));
     expect((auctions.mock.calls[0][1] as AbortSignal).aborted).toBe(true);
   });
+  it("경매 탭(실거래 마커 없음)에서 같은 단지 2건은 묶음 마커로 넘기고, 누르면 그 단지 경매 목록을 연다", async () => {
+    const { onAuctionList, moveTo } = setup({
+      auction: true,
+      list: [],
+      auctionsImpl: async () => ({
+        data: [sample, { ...sample, id: "A2", lat: 35.161, lng: 129.161 }],
+        meta: {},
+      }),
+    });
+    await moveTo(15);
+    await waitFor(() => expect(map.props.auctions).toHaveLength(2));
+    expect(map.props.markers).toEqual([]);
+    // 지도에 실제로 그리는 묶음 항목은 map-markers 테스트가 본다. 여기서는 누른 뒤 흐름만 본다
+    act(() => map.props.onEvent({ type: "marker", id: "auction-group:c1" }));
+    expect(onAuctionList).toHaveBeenLastCalledWith({
+      bbox: bboxFor(map.moves),
+      complexId: "c1",
+      name: undefined,
+    });
+  });
   it("경매 마커를 누르면 경매 시트, 묶음 마커를 누르면 단지 경매 목록을 연다", async () => {
     const { onAuctionList, moveTo, auctionDetail } = setup();
     await moveTo(15);

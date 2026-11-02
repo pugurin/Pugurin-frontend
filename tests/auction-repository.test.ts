@@ -55,7 +55,8 @@ describe("경매 Repository", () => {
   it("샘플 모드는 bbox 안 샘플과 상세를 돌려준다", async () => {
     const sample = new Repository("sample", new ApiClient("http://x", "d"));
     const list = await sample.auctions({ complexId: COMPLEXES[0].id });
-    expect(list.data.length).toBeGreaterThan(0);
+    // 같은 단지 여러 건(묶음 마커)을 샘플에서도 볼 수 있게 2건을 둔다
+    expect(list.data).toHaveLength(2);
     expect(list.meta?.source_attribution).toBe("대법원 법원경매정보");
     expect(
       (await sample.auction(list.data[0].id)).data.schedule.length,
@@ -64,7 +65,7 @@ describe("경매 Repository", () => {
   it("샘플 모드는 bbox·출처·그룹·지분으로 거른다", async () => {
     const sample = new Repository("sample", new ApiClient("http://x", "d"));
     const all = await sample.auctions({});
-    expect(all.data.length).toBe(3);
+    expect(all.data.length).toBe(4);
     const far = await sample.auctions({ bbox: [128.0, 34.0, 128.1, 34.1] });
     expect(far.data).toEqual([]);
     const pub = await sample.auctions({ source: "public" });
