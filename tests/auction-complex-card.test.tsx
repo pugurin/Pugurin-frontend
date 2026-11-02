@@ -117,6 +117,21 @@ describe("단지 시트의 경매 카드", () => {
     expect(onAuction).not.toHaveBeenCalled();
   });
 
+  it("보조 문구가 D-day뿐이면 헤더와 겹치지 않게 빼고 면적·유찰만 남긴다", async () => {
+    const repo = makeRepo(
+      ok([{ ...base, recent_trade_price: null, min_price_ratio: null }]),
+    );
+    renderComplex(repo);
+    const card = await screen.findByRole("button", {
+      name: /이 단지 경매 1건/,
+    });
+    expect(card.textContent).toContain("입찰 D-12");
+    expect(card.textContent!.match(/D-12/g)).toHaveLength(1);
+    expect(
+      screen.getByText("최저가 3억 6,000만 · 25.7평 · 유찰 2회"),
+    ).toBeTruthy();
+  });
+
   it("기일 비교는 한국 날짜로 해서, 같은 날이면 서버 순서를 지킨다", async () => {
     // 공매 마감 11-14 01:00(KST)은 UTC로는 11-13이지만 한국 날짜로는 법원경매 11-14와 같은 날이다
     const court = { ...base, id: "court:4", min_price: 360000000 };

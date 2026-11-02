@@ -322,9 +322,13 @@ describe("경매 탭과 지도", () => {
     await moveTo(14);
     const panel = screen.getByLabelText("지역 요약 패널");
     expect(panel.textContent).toContain("경매 물건 · 아파트");
-    expect(panel.textContent).not.toMatch(/실거래|거래가 없어요|기간 늘리기|최근 \d+개월/);
+    expect(panel.textContent).not.toMatch(
+      /실거래|거래가 없어요|기간 늘리기|최근 \d+개월/,
+    );
     fireEvent.click(screen.getByRole("button", { name: "경매 목록 보기" }));
-    expect(onAuctionList).toHaveBeenLastCalledWith({ bbox: bboxFor(map.moves) });
+    expect(onAuctionList).toHaveBeenLastCalledWith({
+      bbox: bboxFor(map.moves),
+    });
   });
   it("토지 탭에서도 경매 칩을 고를 수 있다", async () => {
     const { auctions, onAuction, moveTo } = setup({

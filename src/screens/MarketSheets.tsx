@@ -222,8 +222,10 @@ function ComplexAuctionCard({
   const today = new Date();
   const d = dday(a, today);
   const price = `최저가 ${a.min_price == null ? "미정" : formatWon(a.min_price)}`;
+  // auctionSub가 D-day를 돌려주면 헤더 "입찰 D-N"과 겹치므로 뺀다
+  const sub = auctionSub(a, today);
   const detail = [
-    auctionSub(a, today),
+    sub === d?.label ? null : sub,
     areaOf(a, unit),
     a.fail_count == null ? null : `유찰 ${a.fail_count}회`,
   ].filter(Boolean);
