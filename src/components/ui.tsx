@@ -95,6 +95,7 @@ export function T({
   style?: any;
   numberOfLines?: number;
   accessibilityRole?: "header";
+  selectable?: boolean;
 }) {
   return (
     <Text

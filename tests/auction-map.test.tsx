@@ -105,7 +105,14 @@ function setup({
   const onAuction = vi.fn();
   const onAuctionList = vi.fn();
   const onFilters = vi.fn();
-  const repo = { mode: "api", markers, auctions } as unknown as Repository;
+  // 시트는 상세를 불러오다 멈춘 상태로 둔다. 시트 내용은 auction-sheet 테스트가 본다
+  const auctionDetail = vi.fn(() => new Promise<never>(() => {}));
+  const repo = {
+    mode: "api",
+    markers,
+    auctions,
+    auction: auctionDetail,
+  } as unknown as Repository;
   const draw = (on = auction) => (
     <MapHome
       repo={repo}
@@ -144,6 +151,7 @@ function setup({
   return {
     markers,
     auctions,
+    auctionDetail,
     onAuction,
     onAuctionList,
     onFilters,
@@ -333,11 +341,12 @@ describe("경매 탭과 지도", () => {
     expect((auctions.mock.calls[0][1] as AbortSignal).aborted).toBe(true);
   });
   it("경매 마커를 누르면 경매 시트, 묶음 마커를 누르면 단지 경매 목록을 연다", async () => {
-    const { onAuctionList, moveTo } = setup();
+    const { onAuctionList, moveTo, auctionDetail } = setup();
     await moveTo(15);
     await waitFor(() => expect(map.props.markers).toEqual([complex]));
     act(() => map.props.onEvent({ type: "marker", id: "auction:A1" }));
-    await screen.findByText("경매 정보를 불러오는 중…");
+    await waitFor(() => expect(auctionDetail).toHaveBeenCalled());
+    expect(auctionDetail.mock.calls[0][0]).toBe("A1");
     expect(map.props.selected).toBe("auction:A1");
     act(() => map.props.onEvent({ type: "marker", id: "auction-group:c1" }));
     expect(onAuctionList).toHaveBeenCalledWith({
