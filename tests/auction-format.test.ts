@@ -48,7 +48,7 @@ const base: Auction = {
 describe("경매 문구 함수", () => {
   it("상수", () => {
     expect(AUCTION_MIN_ZOOM).toBe(14);
-    expect(AUCTION_SERVER_SORT).toBe(false);
+    expect(AUCTION_SERVER_SORT).toBe(true);
   });
 
   it("formatWon은 만 단위로 반올림해 억·만을 이어 쓴다", () => {

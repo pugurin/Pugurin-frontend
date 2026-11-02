@@ -57,6 +57,13 @@ import { ComplexContent, RegionContent } from "./MarketSheets";
 import { LandContent } from "./LandContent";
 import { AuctionContent } from "./AuctionContent";
 export type Focus = { result: SearchResult; nonce: number };
+// 경매 목록에서 고른 줄. 좌표가 없으면 지도는 그대로 두고 시트만 연다
+export type AuctionFocus = {
+  id: string;
+  lat: number | null;
+  lng: number | null;
+  nonce: number;
+};
 export function MapHome({
   repo,
   filters,
@@ -82,6 +89,7 @@ export function MapHome({
   auction = false,
   onAuction,
   onAuctionList,
+  focusAuction,
 }: {
   repo: Repository;
   filters: Filters;
@@ -116,6 +124,8 @@ export function MapHome({
     complexId?: string;
     name?: string;
   }) => void;
+  // 경매 목록 줄을 누르면 App이 넘긴다. nonce가 바뀔 때마다 그 경매로 이동해 시트를 연다
+  focusAuction?: AuctionFocus | null;
 }) {
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === "web" && width >= 1024;
@@ -390,6 +400,19 @@ export function MapHome({
       move({ type: "move", lat: r.lat, lng: r.lng, zoom: 15 });
     }
   }, [focus]);
+  useEffect(() => {
+    if (!focusAuction) return;
+    close();
+    setSelected({ kind: "auction", id: focusAuction.id });
+    setStage("peek");
+    if (focusAuction.lat != null && focusAuction.lng != null)
+      move({
+        type: "move",
+        lat: focusAuction.lat,
+        lng: focusAuction.lng,
+        zoom: Math.max(camera.zoom, AUCTION_MIN_ZOOM),
+      });
+  }, [focusAuction]);
   // 공급처가 없으면 동 단위 토지 거래(A), 필지를 받으면 필지 상세(B)를 연다.
   const landLookup = (
     lat: number,

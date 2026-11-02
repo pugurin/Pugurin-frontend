@@ -3,8 +3,8 @@ import { formatPrice } from "./market";
 
 // 경매 마커를 그리기 시작하는 최소 줌 레벨
 export const AUCTION_MIN_ZOOM = 14;
-// 서버가 sort 쿼리를 지원하면 true로 바꾼다. 그 전에는 정렬 칩을 숨긴다
-export const AUCTION_SERVER_SORT = false;
+// 서버가 sort·exclude_share 쿼리를 지원한다. false로 바꾸면 경매 목록의 정렬 칩과 지분 빼기를 숨긴다
+export const AUCTION_SERVER_SORT = true;
 
 const DAY_MS = 86400000;
 const KST_OFFSET_MS = 9 * 3600000;

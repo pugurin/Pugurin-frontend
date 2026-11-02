@@ -15,8 +15,8 @@ import { C } from "../theme/tokens";
 
 const KST_OFFSET_MS = 9 * 3600000;
 // 노란 칩(지분 물건). 디자인 토큰에 노랑이 없어 여기서만 쓴다
-const SHARE_WASH = "#FFF3C4";
-const SHARE_INK = "#7A5A00";
+export const SHARE_WASH = "#FFF3C4";
+export const SHARE_INK = "#7A5A00";
 
 // 날짜 문자열을 한국 시간 "YYYY-MM-DD"와 "HH:mm"으로 쪼갠다. 날짜만 오면 시각은 null
 function kstParts(
@@ -49,7 +49,7 @@ export function areaOf(a: Auction, unit: "평" | "㎡"): string | null {
   return v == null ? null : `${v}${unit}`;
 }
 
-function Badge({
+export function Badge({
   children,
   bg = C.bg2,
   ink = C.ink2,
