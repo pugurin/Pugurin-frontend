@@ -700,15 +700,21 @@ export function MapHome({
           : auctionsReady && auctions.length === 0
             ? "이 화면 안에 진행 중인 경매가 없어요"
             : null;
-  // 경매 안내가 실제로 그려지는지(로딩·오류 카드가 아닐 때). 학교 안내를 그 아래로 내린다
-  const auctionNoticeShown =
-    auction &&
-    !!auctionNotice &&
-    !loading &&
-    !auctionLoading &&
-    !error &&
-    !mapError &&
-    !auctionError;
+  // 지도 가운데 안내 상태. 로딩 알약 → 오류 카드 → 안내 묶음(경매 안내·빈 지역 카드·학교 준비 중) 순이다
+  const busy = loading || (auction && auctionLoading);
+  const errorShown =
+    !busy && !!(error || mapError || (auction && auctionError));
+  const auctionCard = !busy && !errorShown && auction && !!auctionNotice;
+  const emptyCard =
+    !busy &&
+    !errorShown &&
+    !auction &&
+    !outside &&
+    camera.zoom >= 11 &&
+    markers.length === 0 &&
+    !emptyDismissed;
+  // 학교 준비 중 안내. 오류 카드가 떠 있을 때는 숨긴다
+  const schoolNotice = schools && schoolNotReady && !errorShown;
   // 학교 범례. 켜져 있고 줌 14 이상이며 준비 중이 아닐 때만. 기타는 화면 안에 있을 때만 더한다
   const schoolLegend =
     schools && !outside && camera.zoom >= SCHOOL_MIN_ZOOM && !schoolNotReady
@@ -1214,7 +1220,7 @@ export function MapHome({
               </Btn>
             </View>
           )}
-          {loading || (auction && auctionLoading) ? (
+          {busy ? (
             <View
               style={{
                 position: "absolute",
@@ -1233,7 +1239,7 @@ export function MapHome({
                 {auction ? "경매 불러오는 중…" : "실거래가 불러오는 중…"}
               </T>
             </View>
-          ) : error || mapError || (auction && auctionError) ? (
+          ) : errorShown ? (
             <View
               style={{
                 position: "absolute",
@@ -1252,30 +1258,12 @@ export function MapHome({
                 }}
               />
             </View>
-          ) : auction ? (
-            auctionNotice && (
-              <View
-                pointerEvents="box-none"
-                style={{
-                  position: "absolute",
-                  left: 24,
-                  right: 24,
-                  top: "24%",
-                  alignItems: "center",
-                }}
-              >
-                <View style={{ ...s.card, maxWidth: 300 }}>
-                  <T size={16} bold>
-                    {auctionNotice}
-                  </T>
-                </View>
-              </View>
-            )
-          ) : !outside &&
-            camera.zoom >= 11 &&
-            markers.length === 0 &&
-            !emptyDismissed ? (
+          ) : null}
+          {/* 지도 가운데 안내는 한 세로 묶음에 쌓아 서로 겹치지 않게 한다.
+              경매 안내나 빈 지역 카드가 먼저, 학교 준비 중 안내가 그 아래다 */}
+          {!errorShown && (auctionCard || emptyCard || schoolNotice) && (
             <View
+              testID="map-notices"
               pointerEvents="box-none"
               style={{
                 position: "absolute",
@@ -1283,66 +1271,68 @@ export function MapHome({
                 right: 24,
                 top: "24%",
                 alignItems: "center",
+                gap: 8,
               }}
             >
-              <View
-                style={{ ...s.card, width: "100%", maxWidth: 300, gap: 10 }}
-              >
-                <View style={s.between}>
-                  <T size={18} bold style={{ flex: 1 }}>
-                    이 조건의 거래가 없어요
+              {auctionCard && (
+                <View style={{ ...s.card, maxWidth: 300 }}>
+                  <T size={16} bold>
+                    {auctionNotice}
                   </T>
-                  <IconBtn
-                    name="close"
-                    label="안내 닫기"
-                    onPress={() => setEmptyDismissed(true)}
-                    style={{ width: 30, height: 30, marginRight: -4 }}
-                  />
                 </View>
-                {filters.period_months < MAX_PERIOD_MONTHS ? (
-                  <>
-                    <T size={15} color={C.muted}>
-                      기간을 늘리면 더 많은 거래를 볼 수 있어요
+              )}
+              {emptyCard && (
+                <View
+                  style={{ ...s.card, width: "100%", maxWidth: 300, gap: 10 }}
+                >
+                  <View style={s.between}>
+                    <T size={18} bold style={{ flex: 1 }}>
+                      이 조건의 거래가 없어요
                     </T>
-                    <Btn
-                      secondary
-                      small
-                      onPress={() =>
-                        onFilters({
-                          ...filters,
-                          period_months: MAX_PERIOD_MONTHS,
-                        })
-                      }
-                    >
-                      기간 늘리기 (최근 {MAX_PERIOD_MONTHS}개월)
-                    </Btn>
-                  </>
-                ) : (
-                  <T size={15} color={C.muted}>
-                    최근 {MAX_PERIOD_MONTHS}개월 동안 이 지역에 신고된 거래가
-                    없어요
+                    <IconBtn
+                      name="close"
+                      label="안내 닫기"
+                      onPress={() => setEmptyDismissed(true)}
+                      style={{ width: 30, height: 30, marginRight: -4 }}
+                    />
+                  </View>
+                  {filters.period_months < MAX_PERIOD_MONTHS ? (
+                    <>
+                      <T size={15} color={C.muted}>
+                        기간을 늘리면 더 많은 거래를 볼 수 있어요
+                      </T>
+                      <Btn
+                        secondary
+                        small
+                        onPress={() =>
+                          onFilters({
+                            ...filters,
+                            period_months: MAX_PERIOD_MONTHS,
+                          })
+                        }
+                      >
+                        기간 늘리기 (최근 {MAX_PERIOD_MONTHS}개월)
+                      </Btn>
+                    </>
+                  ) : (
+                    <T size={15} color={C.muted}>
+                      최근 {MAX_PERIOD_MONTHS}개월 동안 이 지역에 신고된 거래가
+                      없어요
+                    </T>
+                  )}
+                </View>
+              )}
+              {schoolNotice && (
+                <View
+                  testID="school-notice"
+                  pointerEvents="none"
+                  style={{ ...s.card, maxWidth: 300 }}
+                >
+                  <T size={16} bold>
+                    학교 정보를 준비 중이에요
                   </T>
-                )}
-              </View>
-            </View>
-          ) : null}
-          {schools && schoolNotReady && (
-            <View
-              testID="school-notice"
-              pointerEvents="box-none"
-              style={{
-                position: "absolute",
-                left: 24,
-                right: 24,
-                top: auctionNoticeShown ? "32%" : "24%",
-                alignItems: "center",
-              }}
-            >
-              <View style={{ ...s.card, maxWidth: 300 }}>
-                <T size={16} bold>
-                  학교 정보를 준비 중이에요
-                </T>
-              </View>
+                </View>
+              )}
             </View>
           )}
           {schoolLegend && (

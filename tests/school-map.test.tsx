@@ -79,18 +79,23 @@ function setup({
   schools = true,
   schoolsImpl,
   auctionsImpl,
+  markersImpl,
 }: {
   filters?: Filters;
   auction?: boolean;
   schools?: boolean;
   schoolsImpl?: (...args: any[]) => Promise<any>;
   auctionsImpl?: (...args: any[]) => Promise<any>;
+  markersImpl?: (...args: any[]) => Promise<any>;
 } = {}) {
   map.zoom = 14;
-  const markers = vi.fn(async () => ({
-    data: { markers: [complex] },
-    meta: {},
-  }));
+  const markers = vi.fn(
+    markersImpl ??
+      (async () => ({
+        data: { markers: [complex] },
+        meta: {},
+      })),
+  );
   const auctions = vi.fn(
     auctionsImpl ?? (async () => ({ data: [], meta: {} })),
   );
@@ -152,6 +157,24 @@ function setup({
     moveTo,
     switchSchools,
   };
+}
+// 지도 가운데 안내 묶음(top 24%) 하나 안에서 위에서부터 이 순서로 쌓였는지 본다
+function expectStacked(...texts: string[]) {
+  const nodes = texts.map((t) => screen.getByText(t));
+  const box = nodes[0].closest("[data-testid='map-notices']")!;
+  expect(box).toBeTruthy();
+  expect(getComputedStyle(box).top).toBe("24%");
+  for (const n of nodes) expect(box.contains(n)).toBe(true);
+  for (let i = 1; i < nodes.length; i++)
+    expect(
+      nodes[i - 1].compareDocumentPosition(nodes[i]) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  // 학교 안내는 % 위치를 따로 갖지 않고 묶음 안에서 흐름대로 놓인다
+  const school = screen
+    .getByText("학교 정보를 준비 중이에요")
+    .closest("[data-testid='school-notice']")!;
+  expect(getComputedStyle(school).position).not.toBe("absolute");
 }
 const notFound = async () => {
   throw new ApiError("없음", "RESOURCE_NOT_FOUND");
@@ -241,7 +264,7 @@ describe("학교 레이어와 지도", () => {
       expect(screen.queryByLabelText("학교 범례")).toBeNull();
       cleanup();
     }
-    // 경매 탭 안내가 보이면 그 아래(32%)에 둔다
+    // 경매 탭 안내가 보이면 같은 묶음 안에서 그 아래에 쌓는다
     const both = setup({
       auction: true,
       schoolsImpl: notReady,
@@ -249,17 +272,39 @@ describe("학교 레이어와 지도", () => {
     });
     await both.moveTo(14);
     await screen.findByText("경매 정보를 준비 중이에요");
-    const notice = await screen.findByText("학교 정보를 준비 중이에요");
-    expect(
-      getComputedStyle(notice.closest("[data-testid='school-notice']")!).top,
-    ).toBe("32%");
+    await screen.findByText("학교 정보를 준비 중이에요");
+    expectStacked("경매 정보를 준비 중이에요", "학교 정보를 준비 중이에요");
     cleanup();
+    // 혼자면 묶음 맨 위(24%)다
     const alone = setup({ schoolsImpl: notReady });
     await alone.moveTo(14);
-    const n2 = await screen.findByText("학교 정보를 준비 중이에요");
+    await screen.findByText("학교 정보를 준비 중이에요");
+    expectStacked("학교 정보를 준비 중이에요");
+  });
+  it("빈 지역 카드와 학교 준비 중 안내가 함께 뜨면 겹치지 않게 카드 아래에 쌓는다", async () => {
+    const { moveTo } = setup({
+      schoolsImpl: notReady,
+      markersImpl: async () => ({ data: { markers: [] }, meta: {} }),
+    });
+    await moveTo(14);
+    await screen.findByText("이 조건의 거래가 없어요");
+    await screen.findByText("학교 정보를 준비 중이에요");
+    expectStacked("이 조건의 거래가 없어요", "학교 정보를 준비 중이에요");
+    // 학교 안내는 지도 누르기를 막지 않는다
     expect(
-      getComputedStyle(n2.closest("[data-testid='school-notice']")!).top,
-    ).toBe("24%");
+      getComputedStyle(screen.getByTestId("school-notice")).pointerEvents,
+    ).toBe("none");
+  });
+  it("오류 카드가 떠 있으면 학교 준비 중 안내를 숨긴다", async () => {
+    const { moveTo } = setup({
+      schoolsImpl: notReady,
+      markersImpl: async () => {
+        throw new ApiError("실거래 정보를 잠시 불러올 수 없어요", "INTERNAL");
+      },
+    });
+    await moveTo(14);
+    await screen.findByText("다시 시도");
+    expect(screen.queryByText("학교 정보를 준비 중이에요")).toBeNull();
   });
   it("켜져 있고 줌 14 이상이면 범례(초·중·고·특수)를 띄운다", async () => {
     const on = setup();
