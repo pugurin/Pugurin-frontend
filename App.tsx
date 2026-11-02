@@ -94,6 +94,8 @@ export default function App() {
   const [unit, setUnit] = useState<"평" | "㎡">("평");
   const [base, setBase] = useState<"normal" | "satellite">("normal");
   const [cad, setCad] = useState(false);
+  // 지도 학교 레이어. 처음엔 꺼짐이고 켠 상태를 저장한다
+  const [schools, setSchools] = useState(false);
   const [recent, setRecent] = useState<Recent[]>([]);
   const [focus, setFocus] = useState<Focus>();
   // 경매 목록에서 고른 줄. 지도가 그 경매로 이동해 시트를 연다
@@ -169,6 +171,7 @@ export default function App() {
     loadStored<"평" | "㎡">("unit", "평").then(setUnit);
     loadStored<"normal" | "satellite">("base", "normal").then(setBase);
     loadStored<boolean>("cad", false).then(setCad);
+    loadStored<boolean>("schools", false).then(setSchools);
     loadStored<boolean>("today_enabled", true).then(setTodayEnabled);
     loadStored<boolean>("tips_enabled", true).then((value) => {
       setTipsEnabled(value);
@@ -494,6 +497,11 @@ export default function App() {
                 onCadastral={(c) => {
                   setCad(c);
                   void store("cad", c);
+                }}
+                schools={schools}
+                onSchools={(on) => {
+                  setSchools(on);
+                  void store("schools", on);
                 }}
                 focus={focus}
                 focusAuction={auctionFocus}
