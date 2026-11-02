@@ -33,14 +33,18 @@ function kstDay(s: string): number | null {
   return Number.isNaN(t) ? null : Math.floor((t + KST_OFFSET_MS) / DAY_MS);
 }
 
+// 기일(ddayDate)의 한국 날짜 일 번호. 기일끼리 견줄 때 쓴다. 날짜가 없거나 못 읽으면 null
+export function ddayKey(a: Auction): number | null {
+  const d = ddayDate(a);
+  return d ? kstDay(d) : null;
+}
+
 export function dday(
   a: Auction,
   today: Date,
 ): { label: string; soon: boolean } | null {
   if (a.is_closed) return null;
-  const d = ddayDate(a);
-  if (!d) return null;
-  const target = kstDay(d);
+  const target = ddayKey(a);
   if (target == null) return null;
   const diff = target - Math.floor((today.getTime() + KST_OFFSET_MS) / DAY_MS);
   if (diff < 0) return null;

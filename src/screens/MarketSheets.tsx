@@ -34,7 +34,7 @@ import {
   UnitToggle,
   s,
 } from "../components/ui";
-import { auctionSub, dday, ddayDate, formatWon } from "../state/auction";
+import { auctionSub, dday, ddayKey, formatWon } from "../state/auction";
 import { areaOf } from "./AuctionContent";
 import { LoadingTip } from "../components/LoadingTip";
 import { Chart } from "../components/Chart";
@@ -204,11 +204,8 @@ export function RegionContent({
 }
 // 기일이 가장 가까운 물건. 날짜가 없는 물건은 뒤로 밀고, 같으면 서버 순서를 지킨다
 function nearestAuction(list: Auction[]): Auction {
-  const time = (a: Auction) => {
-    const d = ddayDate(a);
-    const t = d ? Date.parse(d) : NaN;
-    return Number.isNaN(t) ? Infinity : t;
-  };
+  // 한국 날짜 기준으로 견준다. 같은 날이면 앞선(서버 순서) 물건을 둔다
+  const time = (a: Auction) => ddayKey(a) ?? Infinity;
   return list.reduce((best, a) => (time(a) < time(best) ? a : best));
 }
 // 단지 시트의 경매 카드. 1건이면 그 물건, 여러 건이면 이 단지로 거른 목록으로 보낸다

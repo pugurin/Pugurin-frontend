@@ -117,6 +117,24 @@ describe("단지 시트의 경매 카드", () => {
     expect(onAuction).not.toHaveBeenCalled();
   });
 
+  it("기일 비교는 한국 날짜로 해서, 같은 날이면 서버 순서를 지킨다", async () => {
+    // 공매 마감 11-14 01:00(KST)은 UTC로는 11-13이지만 한국 날짜로는 법원경매 11-14와 같은 날이다
+    const court = { ...base, id: "court:4", min_price: 360000000 };
+    const pub = {
+      ...base,
+      id: "public:5",
+      source: "public" as const,
+      bid_end_at: "2026-11-14T01:00:00+09:00",
+      min_price: 100000000,
+    };
+    const repo = makeRepo(ok([court, pub]));
+    renderComplex(repo);
+    const card = await screen.findByRole("button", {
+      name: /이 단지 경매 2건/,
+    });
+    expect(card.textContent).toContain("최저가 3억 6,000만");
+  });
+
   it("최저가가 없으면 '최저가 미정', 실거래 비교가 없으면 감정가 비율로 대신한다", async () => {
     const repo = makeRepo(
       ok([{ ...base, min_price: null, recent_trade_price: null }]),

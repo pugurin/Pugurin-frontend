@@ -10,6 +10,7 @@ import {
   compareLine,
   dday,
   ddayDate,
+  ddayKey,
   formatWon,
   ratioLine,
 } from "../src/state/auction";
@@ -177,5 +178,25 @@ describe("경매 문구 함수", () => {
     );
     expect(auctionSourceLine(undefined, "sample")).toBe("샘플 데이터");
     expect(auctionSourceLine(undefined, "api")).toBe("");
+  });
+  it("ddayKey는 기일을 한국 날짜 일 번호로 돌려준다", () => {
+    const court = ddayKey({ ...base, sale_date: "2026-11-14" });
+    expect(court).not.toBeNull();
+    expect(
+      ddayKey({
+        ...base,
+        source: "public",
+        bid_end_at: "2026-11-14T01:00:00+09:00",
+      }),
+    ).toBe(court);
+    expect(
+      ddayKey({
+        ...base,
+        source: "public",
+        bid_end_at: "2026-11-13T23:59:00+09:00",
+      }),
+    ).toBe(court! - 1);
+    expect(ddayKey({ ...base, sale_date: null })).toBeNull();
+    expect(ddayKey({ ...base, sale_date: "엉터리" })).toBeNull();
   });
 });
