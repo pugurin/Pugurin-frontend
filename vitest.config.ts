@@ -5,6 +5,7 @@ export default defineConfig({
     alias: {
       "react-native": "react-native-web",
       "lucide-react-native": "lucide-react",
+      "react-native-webview": "/tests/stubs/react-native-webview.tsx",
     },
   },
 });

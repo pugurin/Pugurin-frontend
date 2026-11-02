@@ -20,8 +20,6 @@ import {
 } from "../src/state/location";
 import {
   userLocationFeatures,
-  USER_DOT_LAYER,
-  USER_HALO_LAYER,
 } from "../src/map/userLocation";
 
 describe("첫 실행 위치 권한 (#92)", () => {
@@ -66,9 +64,5 @@ describe("내 위치 마커", () => {
   it("위치가 없거나 잘못되면 표시하지 않는다", () => {
     for (const loc of [null, undefined, { lat: NaN, lng: 129 }, { lat: 91, lng: 129 }])
       expect(userLocationFeatures(loc).features).toEqual([]);
-  });
-  it("거래 마커와 구분되는 파란 점과 옅은 원으로 그린다", () => {
-    expect(USER_DOT_LAYER).toMatchObject({ type: "circle", paint: { "circle-color": "#1A73E8", "circle-stroke-color": "#FFFFFF" } });
-    expect(USER_HALO_LAYER).toMatchObject({ type: "circle", paint: { "circle-opacity": 0.16 } });
   });
 });

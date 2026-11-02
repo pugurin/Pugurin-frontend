@@ -1,12 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  baseStyle,
-  fromMapZoom,
-  koreanLabels,
-  markerFeatures,
-  markerLines,
-  toMapZoom,
-} from "../src/map/style";
+import { markerItems, markerLines } from "../src/map/markers";
 import type { ComplexMarker, RegionMarker } from "../src/api/types";
 
 const region: RegionMarker = {
@@ -33,14 +26,6 @@ const complex = (latest: Partial<ComplexMarker["latest"]>): ComplexMarker => ({
     contract_date: "2026-08-14",
     ...latest,
   },
-});
-
-describe("줌 변환", () => {
-  it("MapLibre 줌은 화면·API 줌보다 1 작다", () => {
-    expect(toMapZoom(12)).toBe(11);
-    expect(fromMapZoom(11)).toBe(12);
-    expect(fromMapZoom(toMapZoom(14.4))).toBeCloseTo(14.4);
-  });
 });
 
 describe("마커 글자", () => {
@@ -72,36 +57,20 @@ describe("마커 글자", () => {
   });
 });
 
-describe("마커 GeoJSON", () => {
-  it("선택된 마커는 먹색 배경과 가장 높은 우선순위를 가진다", () => {
-    const fc = markerFeatures([region, complex({})], "apartment", "평", "c1");
-    const [r, c] = fc.features.map((f) => f.properties!);
-    expect(c).toMatchObject({ id: "c1", box: "box-selected", rank: 0 });
-    expect(r).toMatchObject({ box: "box-apartment", region: true, rank: 1 });
-    expect(fc.features[1].geometry.coordinates).toEqual([129.14, 35.15]);
+describe("런타임에 넘기는 마커", () => {
+  it("선택된 마커는 먹색과 가장 높은 우선순위를 가진다", () => {
+    const [r, c] = markerItems([region, complex({})], "apartment", "평", "c1");
+    expect(c).toMatchObject({ id: "c1", color: "#111110", rank: 0, lat: 35.15, lng: 129.14, amount: "14.5억" });
+    expect(r).toMatchObject({ color: "#3E64A0", region: true, rank: 1, title: "우동" });
   });
-});
-
-describe("배경 스타일", () => {
-  it("VWorld 키가 없으면 받아 둔 OpenFreeMap 스타일을 그대로 쓰고, 지적도는 넣지 않는다", () => {
-    const free = { version: 8 as const, sources: {}, layers: [{ id: "x", type: "background" as const }] };
-    expect(baseStyle("normal", true, free)).toBe(free);
-  });
-  it("OpenFreeMap 지명은 한글 우선으로 바꾼다", () => {
-    const s = koreanLabels({
-      version: 8,
-      sources: {},
-      layers: [
-        { id: "label", type: "symbol", source: "o", layout: { "text-field": "{name}" } },
-        { id: "road", type: "line", source: "o" },
-      ],
-    });
-    expect((s.layers[0] as { layout: Record<string, unknown> }).layout["text-field"]).toEqual([
-      "coalesce",
-      ["get", "name:ko"],
-      ["get", "name:nonlatin"],
-      ["get", "name"],
-    ]);
-    expect(s.layers[1]).toEqual({ id: "road", type: "line", source: "o" });
+  it("거래가 많은 단지가 먼저 자리를 잡는다", () => {
+    const [many, few] = markerItems(
+      [complex({}), { ...complex({}), complex_id: "c2", transaction_count: 1 }],
+      "villa",
+      "평",
+      null,
+    );
+    expect(many.rank).toBeLessThan(few.rank);
+    expect(many.color).toBe("#B0506B");
   });
 });

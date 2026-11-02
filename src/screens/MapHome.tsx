@@ -1196,11 +1196,6 @@ export function MapHome({
             <T size={14} color={C.light}>
               1평 = 3.3058㎡ · 소수 첫째 자리까지
             </T>
-            {!process.env.EXPO_PUBLIC_KAKAO_JS_KEY && (
-              <T size={14} color={C.muted}>
-                샘플 지도에서는 위성·지적도 배경을 확인할 수 없어요
-              </T>
-            )}
             <Btn onPress={() => setLayers(false)}>확인</Btn>
           </Pressable>
         </Pressable>
