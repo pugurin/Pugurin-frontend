@@ -25,8 +25,13 @@ vi.mock("react-native", async () => ({
   }),
 }));
 vi.mock("expo-location", () => ({}));
+// Sheet 목: 받은 peek을 data-peek로 남긴다
 vi.mock("../src/components/Sheet", () => ({
-  Sheet: ({ children }: any) => <aside>{children}</aside>,
+  Sheet: ({ children, peek }: any) => (
+    <aside data-testid="sheet" data-peek={peek}>
+      {children}
+    </aside>
+  ),
 }));
 vi.mock("../src/screens/MarketSheets", () => ({
   ComplexContent: () => null,
@@ -347,6 +352,44 @@ describe("학교 레이어와 지도", () => {
     expect(await screen.findByText("해운대여자고등학교")).toBeTruthy();
     expect(map.props.selected).toBe("school:s-haeundae-girls-high");
     // 응답 meta를 시트에 넘긴다(기준일)
-    expect(screen.getByText(/기준일 2026-11-02/)).toBeTruthy();
+    expect(screen.getByText(/기준일 2026\.11\.02/)).toBeTruthy();
+  });
+  it("학교 시트는 기본(230)보다 큰 peek으로 열어 내용이 peek 하나에 다 보이게 한다", async () => {
+    const { moveTo } = setup();
+    await moveTo(15);
+    await waitFor(() => expect(map.props.schools).toEqual(SCHOOLS));
+    act(() =>
+      map.props.onEvent({
+        type: "marker",
+        id: "school:s-haeundae-girls-high",
+      }),
+    );
+    await screen.findByText("해운대여자고등학교");
+    expect(
+      Number(screen.getByTestId("sheet").dataset.peek),
+    ).toBeGreaterThanOrEqual(330);
+  });
+  it("학교 시트가 열린 채 학교 스위치를 끄면 시트를 닫는다", async () => {
+    const { moveTo, switchSchools } = setup();
+    await moveTo(15);
+    await waitFor(() => expect(map.props.schools).toEqual(SCHOOLS));
+    act(() =>
+      map.props.onEvent({
+        type: "marker",
+        id: "school:s-haeundae-girls-high",
+      }),
+    );
+    await screen.findByText("해운대여자고등학교");
+    await switchSchools(false);
+    expect(screen.queryByText("해운대여자고등학교")).toBeNull();
+    expect(map.props.selected).toBeNull();
+  });
+  it("꺼져 있으면 지도를 움직여도 schools 배열을 새로 만들지 않는다(마커를 다시 그리지 않게)", async () => {
+    const { moveTo } = setup({ schools: false });
+    await moveTo(15);
+    const first = map.props.schools;
+    await moveTo(15);
+    await moveTo(13);
+    expect(map.props.schools).toBe(first);
   });
 });

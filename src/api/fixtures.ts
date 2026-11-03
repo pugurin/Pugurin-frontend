@@ -470,7 +470,8 @@ export const AUCTIONS: AuctionDetail[] = [
 ];
 // 학교 샘플. 우동·센텀 근처 5곳이며 거리는 서버가 계산하므로 비워 둔다
 export const SCHOOL_META: Meta = {
-  data_as_of: "2026-11-02",
+  // 백엔드처럼 날짜시간으로 둔다
+  data_as_of: "2026-11-02T14:03:11.123456+09:00",
   source_attribution: ["나이스 교육정보 개방 포털", "건강보험심사평가원"],
   school_notice: "배정 학교(학군)가 아니라 직선거리로 가까운 학교입니다",
 };

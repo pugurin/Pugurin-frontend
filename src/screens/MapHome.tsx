@@ -60,7 +60,7 @@ import type { Camera, MapCommand, MapEvent } from "../map/types";
 import { ComplexContent, RegionContent } from "./MarketSheets";
 import { LandContent } from "./LandContent";
 import { AuctionContent } from "./AuctionContent";
-import { SchoolContent } from "./SchoolContent";
+import { SCHOOL_PEEK, SchoolContent } from "./SchoolContent";
 export type Focus = { result: SearchResult; nonce: number };
 // 경매 목록에서 고른 줄. 좌표가 없으면 지도는 그대로 두고 시트만 연다
 export type AuctionFocus = {
@@ -364,7 +364,8 @@ export function MapHome({
   // 탭·필터와 상관없이 같은 요청이다
   useEffect(() => {
     if (!schools || outside || camera.zoom < SCHOOL_MIN_ZOOM) {
-      setSchoolList([]);
+      // 이미 비어 있으면 같은 배열을 둬서 지도를 움직일 때마다 마커를 다시 그리지 않게 한다
+      setSchoolList((p) => (p.length ? [] : p));
       setSchoolNotReady(false);
       return;
     }
@@ -392,6 +393,10 @@ export function MapHome({
       clearTimeout(timer);
     };
   }, [repo, camera, schools, outside, retry]);
+  // 학교 시트가 열린 채 학교 레이어를 끄면 시트도 닫는다
+  useEffect(() => {
+    if (!schools && selected?.kind === "school") close();
+  }, [schools]);
   useEffect(() => {
     if (!focus) return;
     close();
@@ -738,6 +743,8 @@ export function MapHome({
       stage={desktop ? "full" : stage}
       onStage={desktop ? () => {} : setStage}
       onClose={close}
+      // 학교 시트는 peek 하나에 내용이 다 보이도록 더 높게 연다
+      peek={selected.kind === "school" ? SCHOOL_PEEK : undefined}
       docked={desktop}
       panelWidth={panelWidth}
     >
