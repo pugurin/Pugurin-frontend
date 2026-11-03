@@ -335,11 +335,7 @@ const school: School = {
 
 describe("학교 마커", () => {
   const live = () => fake.shapes.filter((s) => s.map && s.options.content?.classList?.contains("pg-marker"));
-  // 점으로 줄어든 학교는 school 클래스가 빠지므로 접근성 이름으로도 찾는다
-  const schoolOverlay = () =>
-    live().find(
-      (s) => s.options.content.classList.contains("school") || s.options.content.getAttribute("aria-label")?.includes("해운대여고"),
-    )!;
+  const schoolOverlay = () => live().find((s) => s.options.content.classList.contains("school"))!;
   const auctionOverlay = () => live().find((s) => s.options.content.classList.contains("auction"))!;
   const complexOverlay = () => live().find((s) => s.options.content.textContent?.includes("14.5억"))!;
 
@@ -389,10 +385,17 @@ describe("학교 마커", () => {
     }
   });
 
-  it("실거래·단지 옆 경매·학교가 같은 자리에 있으면 학교만 점이 된다", () => {
+  it("실거래·단지 옆 경매·학교가 같은 자리에 있으면 학교만 이름 없는 작은 배지가 된다", () => {
     start("test-key", props({ auctions: [auction], schools: [school] }));
     expect(live()).toHaveLength(3);
-    expect(schoolOverlay().options.content.className).toBe("pg-marker dot");
+    const o = schoolOverlay();
+    const button: HTMLButtonElement = o.options.content;
+    expect(button.className).toBe("pg-marker school lv-high compact");
+    expect(button.querySelector(".shape.diamond")!.textContent).toBe("고");
+    expect(button.querySelector(".name")).toBeNull();
+    expect(button.getAttribute("aria-label")).toBe("해운대여고 학교 보기");
+    // 작은 배지는 가운데를 좌표에 두고, 가격 마커 위에 그려 가려지지 않게 한다
+    expect(o.options).toMatchObject({ xAnchor: 0.5, yAnchor: 0.5, zIndex: 11 });
     expect(complexOverlay().options.content.classList.contains("dot")).toBe(false);
     expect(auctionOverlay().options.content.className).toBe("pg-marker auction");
   });
@@ -409,18 +412,18 @@ describe("학교 마커", () => {
       });
       receive(markerState(p));
       expect(auctionOverlay().options.content.className).toBe("pg-marker auction");
-      expect(schoolOverlay().options.content.className).toBe("pg-marker dot");
+      expect(schoolOverlay().options.content.className).toBe("pg-marker school lv-high compact");
     } finally {
       width.mockRestore();
       height.mockRestore();
     }
   });
 
-  it("점으로 줄어든 학교를 누르면 확대하지 않고 marker를 보낸다", () => {
+  it("작은 배지가 된 학교를 누르면 확대하지 않고 marker를 보낸다", () => {
     const { events, map } = start("test-key", props({ auctions: [auction], schools: [school] }));
     const setLevel = vi.spyOn(map, "setLevel");
     const button: HTMLButtonElement = schoolOverlay().options.content;
-    expect(button.className).toBe("pg-marker dot");
+    expect(button.classList.contains("compact")).toBe(true);
     button.click();
     expect(setLevel).not.toHaveBeenCalled();
     expect(events.filter((e) => e.type === "marker")).toEqual([{ type: "marker", id: "school:h1" }]);
