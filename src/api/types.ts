@@ -40,6 +40,8 @@ export type Meta = {
   source_url?: string;
   // 학교 응답의 안내 문구(직선거리 기준이며 학군이 아님)
   school_notice?: string;
+  // 배정 초등학교 안내 문구(학구도는 참고용이며 실제 배정은 교육청 확인)
+  assignment_notice?: string;
 };
 export type Envelope<T> = { data: T; meta?: Meta };
 export type Latest = {
@@ -240,6 +242,18 @@ export type Hospital = {
   doctors: number | null;
   distance_m: number | null;
 };
+// 단지 주변 학교 요약(`/complexes/{id}/nearby`). 학교급별 반경 안 가까운 순 최대 3곳이다
+// 병원 요약도 같이 오지만 화면에서 쓰지 않아 타입에 넣지 않는다
+export type NearbySchools = {
+  radius_m: number;
+  // 학구도(통학구역) 기준 배정 초등학교. 서버가 학구도를 아직 싣지 않았으면 키가 없고,
+  // 통학구역 밖이면 null이다
+  assigned_elementary?: School | null;
+  elementary: School[];
+  middle: School[];
+  high: School[];
+};
+export type Nearby = { schools: NearbySchools };
 export type AuctionSource = "court" | "public";
 export type AuctionGroup =
   "apartment" | "officetel" | "villa" | "land" | "other";

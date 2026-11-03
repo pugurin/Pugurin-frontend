@@ -53,6 +53,7 @@ function makeRepo(auctions: () => Promise<any>) {
     analysis: async () => ({ data: null }),
     stats: async () => ({ data: { trend: [], transaction_count: 0 } }),
     auctions: vi.fn(auctions),
+    nearby: async () => ({ data: { schools: null } }),
   } as any;
 }
 const ok = (data: Auction[]) => async () => ({ data, meta: AUCTION_META });
