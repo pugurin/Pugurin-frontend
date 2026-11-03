@@ -47,15 +47,16 @@ describe("hospitalAreas", () => {
     expect(hospitalAreas([], 14)).toEqual([]);
   });
 
-  it("줌 14에서 경도 0.003(약 273m) 차이는 한 원, 0.006(약 546m)이면 두 원이다", () => {
-    const near = [make("a"), make("b", { lng: LNG + 0.003 })];
+  it("줌 14(1px≈2m, 48px≈96m)에서 경도 0.0008(약 73m) 차이는 한 원, 0.0015(약 137m)이면 두 원이다", () => {
+    const near = [make("a"), make("b", { lng: LNG + 0.0008 })];
     expect(hospitalAreas(near, 14)).toHaveLength(1);
-    const far = [make("a"), make("b", { lng: LNG + 0.006 })];
+    const far = [make("a"), make("b", { lng: LNG + 0.0015 })];
     expect(hospitalAreas(far, 14)).toHaveLength(2);
   });
 
-  it("줌 16에서는 273m 떨어진 두 병원이 나뉜다", () => {
-    const list = [make("a"), make("b", { lng: LNG + 0.003 })];
+  it("줌 16(48px≈24m)에서는 줌 14에서 묶이던 73m 떨어진 두 병원이 나뉜다", () => {
+    const list = [make("a"), make("b", { lng: LNG + 0.0008 })];
+    expect(hospitalAreas(list, 14)).toHaveLength(1);
     expect(hospitalAreas(list, 16)).toHaveLength(2);
   });
 
@@ -89,12 +90,12 @@ describe("hospitalAreas", () => {
     expect(area.lng).toBe(LNG);
   });
 
-  it("두 병원은 중심이 가운데이고 반경은 각 136m + 30m 근처다", () => {
-    const list = [make("a"), make("b", { lng: LNG + 0.003 })];
+  it("두 병원은 중심이 가운데이고 반경은 각 36m + 30m 근처다(최소 40m보다 크다)", () => {
+    const list = [make("a"), make("b", { lng: LNG + 0.0008 })];
     const [area] = hospitalAreas(list, 14);
-    expect(area.lng).toBeCloseTo(LNG + 0.0015, 6);
+    expect(area.lng).toBeCloseTo(LNG + 0.0004, 6);
     expect(area.lat).toBeCloseTo(LAT, 6);
-    expect(Math.abs(area.radius_m - 166)).toBeLessThanOrEqual(2);
+    expect(Math.abs(area.radius_m - 66)).toBeLessThanOrEqual(2);
   });
 
   it("좌표가 null인 병원은 빠진다", () => {
@@ -115,15 +116,23 @@ describe("hospitalAreas", () => {
     expect(areas[0].members.map((m) => m.id)).toEqual(["a"]);
   });
 
-  it("한 병원은 한 원에만 들어간다", () => {
+  it("한 병원은 한 원에만 들어가고, 시드 거리로만 묶어 이어서 합치지 않는다", () => {
+    // a–b 73m, b–c 73m, a–c 146m. 시드 a는 b만 닿고, c는 b와 가까워도 따로 원이 된다
     const list = [
       make("a"),
-      make("b", { lng: LNG + 0.003 }),
-      make("c", { lng: LNG + 0.006 }),
+      make("b", { lng: LNG + 0.0008 }),
+      make("c", { lng: LNG + 0.0016 }),
     ];
     const areas = hospitalAreas(list, 14);
-    const ids = areas.flatMap((a) => a.members.map((m) => m.id));
-    expect(ids.sort()).toEqual(["a", "b", "c"]);
+    expect(areas).toHaveLength(2);
+    expect(areas.map((a) => a.id)).toEqual([
+      "hospital-area:a",
+      "hospital-area:c",
+    ]);
+    expect(areas.map((a) => a.members.map((m) => m.id))).toEqual([
+      ["a", "b"],
+      ["c"],
+    ]);
   });
 });
 

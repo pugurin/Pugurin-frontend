@@ -50,9 +50,9 @@ function HospitalRow({
           <T size={14} color={C.ink2}>
             {address}
           </T>
-          {(h.tel || homepage) && (
+          {!!h.tel || !!homepage ? (
             <View style={[s.row, { marginTop: 8, flexWrap: "wrap" }]}>
-              {h.tel && (
+              {h.tel ? (
                 <Btn
                   secondary
                   onPress={() =>
@@ -61,17 +61,17 @@ function HospitalRow({
                 >
                   전화
                 </Btn>
-              )}
-              {homepage && (
+              ) : null}
+              {homepage ? (
                 <Btn
                   secondary
                   onPress={() => void Linking.openURL(homepage).catch(() => {})}
                 >
                   홈페이지
                 </Btn>
-              )}
+              ) : null}
             </View>
-          )}
+          ) : null}
         </View>
       )}
     </View>

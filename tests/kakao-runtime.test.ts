@@ -433,8 +433,8 @@ describe("학교 마커", () => {
 
 describe("병원 원", () => {
   const areas = [
-    { id: "hospital:a", lat: 35.15, lng: 129.14, radius_m: 120, members: [{}, {}, {}] },
-    { id: "hospital:b", lat: 35.16, lng: 129.15, radius_m: 80, members: [{}] },
+    { id: "hospital-area:a", lat: 35.15, lng: 129.14, radius_m: 120, members: [{}, {}, {}] },
+    { id: "hospital-area:b", lat: 35.16, lng: 129.15, radius_m: 80, members: [{}] },
   ] as any;
   const circles = () => fake.shapes.filter((s) => s.map && s.options.radius != null);
   const labels = () => fake.shapes.filter((s) => s.map && s.options.content?.classList?.contains("pg-area"));
@@ -463,12 +463,14 @@ describe("병원 원", () => {
     labels()[1].options.content.click();
     fake.trigger(map, "click", { latLng: new fake.kakao.maps.LatLng(35.16, 129.15) });
     await new Promise((r) => setTimeout(r, 10));
-    expect(events.filter((e) => e.type === "marker")).toEqual([{ type: "marker", id: "hospital:b" }]);
+    expect(events.filter((e) => e.type === "marker")).toEqual([{ type: "marker", id: "hospital-area:b" }]);
     expect(events.some((e) => e.type === "mapClick")).toBe(false);
   });
 
   it("빈 배열을 받으면 이전 원을 지운다", () => {
     const { receive } = start("test-key", props({ hospitalAreas: areas }));
+    expect(circles()).toHaveLength(2);
+    expect(labels()).toHaveLength(2);
     receive(fullState(props({ hospitalAreas: [] })));
     expect(circles()).toHaveLength(0);
     expect(labels()).toHaveLength(0);

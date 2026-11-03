@@ -461,6 +461,13 @@ export function MapHome({
       hospitalList.length ? hospitalAreas(hospitalList, camera.zoom) : NO_AREAS,
     [hospitalList, camera.zoom],
   );
+  // 병원 시트가 열린 채 원이 다시 묶이면 같은 id 원으로 바꾸고, 그 id가 없어지면 시트를 닫는다
+  useEffect(() => {
+    if (selected?.kind !== "hospitals") return;
+    const next = areas.find((a) => a.id === selected.area.id);
+    if (!next) close();
+    else if (next !== selected.area) setSelected({ ...selected, area: next });
+  }, [areas]);
   useEffect(() => {
     if (!focus) return;
     close();

@@ -354,4 +354,42 @@ describe("병원 레이어와 지도", () => {
     expect(screen.queryByText("병원 2곳")).toBeNull();
     expect(map.props.hospitalAreas).toEqual([]);
   });
+  it("병원 시트가 열린 채 원이 다시 묶이면 같은 id 원으로 바꾸고, 그 id가 없어지면 시트를 닫는다", async () => {
+    const at = (id: string, tier: string, dLng: number): Hospital => ({
+      ...HOSPITALS[2],
+      id,
+      name: `${id} 이름`,
+      tier,
+      lat: 35.156,
+      lng: 129.06 + dLng,
+    });
+    let data: Hospital[] = [at("g", "general", 0), at("c1", "clinic", 0.0003)];
+    const { moveTo } = await setup({
+      hospitalsImpl: async () => ({ data, meta: HOSPITAL_META }),
+    });
+    await moveTo(14);
+    await waitFor(() =>
+      expect(map.props.hospitalAreas.map((a: any) => a.id)).toEqual([
+        "hospital-area:g",
+      ]),
+    );
+    act(() => map.props.onEvent({ type: "marker", id: "hospital-area:g" }));
+    expect(await screen.findByText("병원 2곳")).toBeTruthy();
+    // 같은 id 원에 병원이 늘면 열린 시트도 새 원을 보여준다
+    data = [...data, at("c2", "clinic", 0.0005)];
+    await moveTo(14);
+    expect(await screen.findByText("병원 3곳")).toBeTruthy();
+    expect(screen.getByText("c2 이름")).toBeTruthy();
+    // 시드 병원이 빠져 그 id 원이 없어지면 시트를 닫는다
+    data = data.filter((h) => h.id !== "g");
+    await moveTo(14);
+    await waitFor(() =>
+      expect(map.props.hospitalAreas.map((a: any) => a.id)).toEqual([
+        "hospital-area:c1",
+      ]),
+    );
+    expect(screen.queryByText("병원 3곳")).toBeNull();
+    expect(screen.queryByText("병원 2곳")).toBeNull();
+    expect(screen.queryByText("c1 이름")).toBeNull();
+  });
 });

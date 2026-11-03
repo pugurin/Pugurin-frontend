@@ -22,8 +22,9 @@ export const HOSPITAL_TIER_LABEL: Record<
 
 // 한 원으로 묶는 화면 거리(px)
 const GROUP_PX = 48;
-// 줌 0에서 적도의 1px당 미터
-const METERS_PER_PX_Z0 = 156543.03;
+// 앱 줌 z는 18 - 카카오 레벨이고, 카카오 지도(TM 좌표)는 레벨 L에서 1px이 2^(L-3)m다.
+// 그래서 1px당 미터는 2^(15 - 줌)이다(줌 14에서 2m, 48px이면 약 96m)
+const metersPerPx = (zoom: number): number => 2 ** (15 - zoom);
 // 위도·경도 1도의 미터. 위도는 경도와 같은 값으로 단순화한다(근사 오차는 0.2% 안팎)
 const METERS_PER_DEG = 111320;
 // 반경 여유와 최소 반경(m)
@@ -78,9 +79,7 @@ export function hospitalAreas(list: Hospital[], zoom: number): HospitalArea[] {
   const areas: HospitalArea[] = [];
   for (const seed of ordered) {
     if (taken.has(seed.id)) continue;
-    const reach =
-      (GROUP_PX * METERS_PER_PX_Z0 * Math.cos((seed.lat * Math.PI) / 180)) /
-      2 ** zoom;
+    const reach = GROUP_PX * metersPerPx(zoom);
     const members = ordered.filter(
       (h) =>
         !taken.has(h.id) &&
