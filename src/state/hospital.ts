@@ -4,6 +4,8 @@ import type { Hospital } from "../api/types";
 export const HOSPITAL_COLOR = "#0E7FA8";
 // 지도에 올리는 병원 종별. 치과·한방·보건소 등은 올리지 않는다. 순서가 묶기 순서다
 export const HOSPITAL_TIERS = ["general", "hospital", "clinic"] as const;
+// 병원 원을 요청하는 최소 줌. 학교 레이어와 같다
+export const HOSPITAL_MIN_ZOOM = 14;
 // 화면 영역 하나에서 받는 병원 수 상한
 export const HOSPITAL_LIMIT = 500;
 // 병원 데이터 출처 문구

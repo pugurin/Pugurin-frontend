@@ -96,6 +96,8 @@ export default function App() {
   const [cad, setCad] = useState(false);
   // 지도 학교 레이어. 처음엔 꺼짐이고 켠 상태를 저장한다
   const [schools, setSchools] = useState(false);
+  // 지도 병원 레이어. 학교처럼 처음엔 꺼짐이고 켠 상태를 저장한다
+  const [hospitals, setHospitals] = useState(false);
   const [recent, setRecent] = useState<Recent[]>([]);
   const [focus, setFocus] = useState<Focus>();
   // 경매 목록에서 고른 줄. 지도가 그 경매로 이동해 시트를 연다
@@ -172,6 +174,7 @@ export default function App() {
     loadStored<"normal" | "satellite">("base", "normal").then(setBase);
     loadStored<boolean>("cad", false).then(setCad);
     loadStored<boolean>("schools", false).then(setSchools);
+    loadStored<boolean>("hospitals", false).then(setHospitals);
     loadStored<boolean>("today_enabled", true).then(setTodayEnabled);
     loadStored<boolean>("tips_enabled", true).then((value) => {
       setTipsEnabled(value);
@@ -502,6 +505,11 @@ export default function App() {
                 onSchools={(on) => {
                   setSchools(on);
                   void store("schools", on);
+                }}
+                hospitals={hospitals}
+                onHospitals={(on) => {
+                  setHospitals(on);
+                  void store("hospitals", on);
                 }}
                 focus={focus}
                 focusAuction={auctionFocus}
