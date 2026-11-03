@@ -1872,15 +1872,15 @@ function RailBtn({
       accessibilityState={{ selected: active }}
       onPress={onPress}
       style={({ pressed }) => ({
-        width: 54,
-        paddingVertical: 8,
+        width: 44,
+        paddingVertical: 5,
         alignItems: "center",
-        gap: 2,
+        gap: 1,
         backgroundColor: active ? C.ink : pressed ? C.bg2 : C.surface,
       })}
     >
-      <Icon name={icon} size={20} color={active ? C.surface : C.ink} />
-      <T size={13} bold={active} color={active ? C.surface : C.ink}>
+      <Icon name={icon} size={17} color={active ? C.surface : C.ink} />
+      <T size={12} bold={active} color={active ? C.surface : C.ink}>
         {label}
       </T>
     </Pressable>
