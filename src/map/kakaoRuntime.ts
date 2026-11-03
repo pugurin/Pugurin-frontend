@@ -1,6 +1,7 @@
 // 카카오 지도·로드뷰 런타임. 웹은 페이지에서 바로, 앱은 WebView 안에서 같은 코드를 실행한다.
 // 앱 WebView에 문자열로 넣어야 해서 일반 JS 문자열로 둔다 (백틱과 "${"는 쓰지 않는다)
 import { USER_LOCATION_COLOR } from "./userLocation";
+import { HOSPITAL_COLOR } from "../state/hospital";
 import { SELECTION_COLOR } from "./selection";
 
 export const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? "";
@@ -21,6 +22,7 @@ var SDK_ERROR = '카카오 지도를 불러올 수 없어요. 네트워크와 �
 var NO_KEY = '카카오 지도 키(EXPO_PUBLIC_KAKAO_JS_KEY)가 설정되지 않았어요.';
 var SELECTION_COLOR = ${JSON.stringify(SELECTION_COLOR)};
 var USER_COLOR = ${JSON.stringify(USER_LOCATION_COLOR)};
+var HOSPITAL_COLOR = ${JSON.stringify(HOSPITAL_COLOR)};
 var waiting = null;
 
 // SDK는 한 번만 넣고, 동시에 부른 쪽은 같은 결과를 기다린다
@@ -70,6 +72,7 @@ function addStyle() {
     '.pg-marker.school .name{font-size:11px;font-weight:700}' +
     // 겹친 학교는 점 대신 이름 없는 작은 배지로 그린다. 칸 테두리와 도형 사이 여백은 그대로 둔다
     '.pg-marker.school.compact{padding:0 1px;gap:0}' +
+    '.pg-area{border:1.5px solid ' + HOSPITAL_COLOR + ';border-radius:999px;background:#fff;color:' + HOSPITAL_COLOR + ';padding:1px 7px;font:700 11px/1.4 Pretendard,-apple-system,sans-serif;white-space:nowrap;cursor:pointer}' +
     '.pg-marker.dot{width:14px;height:14px;border:2px solid #fff;border-radius:50%;background:var(--color);box-shadow:0 1px 3px #0004}.pg-marker.dot:after{display:none}' +
     '.pg-measure{position:absolute;left:0;top:0;visibility:hidden;pointer-events:none}';
   document.head.appendChild(style);
@@ -208,7 +211,7 @@ window.pugurinKakaoMap = function (el, config, send) {
     measure.remove();
   }
 
-  // 필지 경계·선택 지점·내 위치
+  // 필지 경계·선택 지점·내 위치·병원 원
   function renderShapes() {
     shapes.forEach(function (s) { s.setMap(null); });
     shapes = [];
@@ -229,6 +232,21 @@ window.pugurinKakaoMap = function (el, config, send) {
         shapes.push(new kakao.maps.Polygon(Object.assign({ path: paths(poly), fillColor: SELECTION_COLOR, fillOpacity: 0.1 }, line)));
       });
       if (g.type === 'LineString') shapes.push(new kakao.maps.Polyline(Object.assign({ path: paths([g.coordinates])[0] }, line)));
+    });
+    // 병원 원과 개수 라벨. 마커 겹침 계산에는 넣지 않는다
+    (state.areas || []).forEach(function (a) {
+      var pos = latLng(a.lat, a.lng);
+      shapes.push(new kakao.maps.Circle({ center: pos, radius: a.radius_m, fillColor: HOSPITAL_COLOR, fillOpacity: 0.12, strokeColor: HOSPITAL_COLOR, strokeWeight: 1, strokeOpacity: 0.5, zIndex: 1 }));
+      var label = document.createElement('button');
+      label.type = 'button';
+      label.className = 'pg-area';
+      label.textContent = '병원 ' + a.count;
+      label.setAttribute('aria-label', '병원 ' + a.count + '곳 보기');
+      label.onclick = function () {
+        markerClick = Date.now();
+        send({ type: 'marker', id: a.id });
+      };
+      shapes.push(new kakao.maps.CustomOverlay({ position: pos, content: label, xAnchor: 0.5, yAnchor: 0.5, zIndex: 4, clickable: true }));
     });
     shapes.forEach(function (s) { s.setMap(map); });
   }
@@ -268,7 +286,7 @@ window.pugurinKakaoMap = function (el, config, send) {
       if (!map) return;
       applyLayers();
       if ('items' in m) renderMarkers();
-      if ('selection' in m || 'user' in m) renderShapes();
+      if ('selection' in m || 'user' in m || 'areas' in m) renderShapes();
     } else if (m.type === 'move' || m.type === 'zoom') {
       if (!map) { pending = m; return; }
       if (m.type === 'move') move(m);

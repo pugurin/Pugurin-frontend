@@ -1,5 +1,6 @@
 import type { Geometry } from "geojson";
 import type { SelectionPoint } from "./selection";
+import type { HospitalArea } from "../state/hospital";
 import type { UserLocation } from "./userLocation";
 import type { Auction, BBox, Marker, Property, School } from "../api/types";
 export type Camera = { lat: number; lng: number; zoom: number; bbox: BBox };
@@ -22,6 +23,8 @@ export type MapProps = {
   selected: string | null;
   selectionPoint?: SelectionPoint;
   parcelGeometry?: Geometry | null;
+  // 지도에 그릴 병원 원. 없으면 그리지 않는다
+  hospitalAreas?: HospitalArea[];
   // 위치 권한을 받아 확인한 내 위치. 없으면 표시하지 않는다
   userLocation?: UserLocation | null;
   unit: "평" | "㎡";
