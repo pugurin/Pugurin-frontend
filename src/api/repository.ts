@@ -284,11 +284,14 @@ export class Repository {
               .sort((a, b) => a.distance_m - b.distance_m)
               .slice(0, 3)
           : [];
+      const elementary = pick("elementary");
       return Promise.resolve({
         data: {
           schools: {
             radius_m: radius,
-            elementary: pick("elementary"),
+            // 샘플에는 학구도가 없어 가장 가까운 초등학교를 배정 학교로 둔다
+            assigned_elementary: elementary[0] ?? null,
+            elementary,
             middle: pick("middle"),
             high: pick("high"),
           },

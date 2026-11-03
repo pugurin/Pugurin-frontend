@@ -89,9 +89,7 @@ describe("단지 상세 거래 이력", () => {
   });
 
   it(`${TX_PREVIEW}건 이하면 더보기를 띄우지 않는다`, async () => {
-    renderFull(
-      makeRepo(async () => ({ data: NEARBY, meta: SCHOOL_META }), 3),
-    );
+    renderFull(makeRepo(async () => ({ data: NEARBY, meta: SCHOOL_META }), 3));
     await screen.findByText("거래 이력");
     expect(floors()).toBe(3);
     expect(screen.queryByText("더보기")).toBeNull();
@@ -132,6 +130,50 @@ describe("단지 상세 주변 학교", () => {
     await screen.findByText("거래 이력");
     await waitFor(() => expect(repo.nearby).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByText("주변 학교")).toBeNull());
+  });
+});
+
+describe("배정 초등학교", () => {
+  const withZone = (assigned: any): Nearby => ({
+    schools: { ...NEARBY.schools, assigned_elementary: assigned },
+  });
+
+  it("서버가 배정 초등학교를 주면 초등학교는 배정 학교로, 중·고는 가까운 학교로 보여준다", async () => {
+    const open = vi.spyOn(Linking, "openURL").mockResolvedValue(true);
+    renderFull(
+      makeRepo(async () => ({
+        data: withZone(school("s-udong-elem", 274)),
+        meta: SCHOOL_META,
+      })),
+    );
+    await screen.findByText("배정 초등학교");
+    expect(screen.getByText(/배정 · 직선 274m/)).toBeTruthy();
+    // 가까운 초등학교 목록은 숨긴다
+    expect(screen.queryByText("센텀초등학교")).toBeNull();
+    expect(screen.getByText("가까운 중학교")).toBeTruthy();
+    expect(screen.getByText("가까운 고등학교")).toBeTruthy();
+    expect(
+      screen.getByText(/실제 배정은 관할 교육지원청에 확인하세요/),
+    ).toBeTruthy();
+    expect(screen.getByText(/한국교육시설안전원 학구도/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("우동초등학교 홈페이지 열기"));
+    expect(open).toHaveBeenCalledWith("https://udong.es.kr");
+  });
+
+  it("통학구역 밖(null)이면 찾지 못했다고 쓴다", async () => {
+    renderFull(
+      makeRepo(async () => ({ data: withZone(null), meta: SCHOOL_META })),
+    );
+    expect(
+      await screen.findByText("학구도에서 배정 학교를 찾지 못했어요"),
+    ).toBeTruthy();
+  });
+
+  it("서버가 학구도를 싣기 전(키 없음)이면 가까운 초등학교로 대신한다", async () => {
+    renderFull(makeRepo(async () => ({ data: NEARBY, meta: SCHOOL_META })));
+    await screen.findByText("우동초등학교");
+    expect(screen.queryByText("배정 초등학교")).toBeNull();
+    expect(screen.getByText("센텀초등학교")).toBeTruthy();
   });
 });
 
