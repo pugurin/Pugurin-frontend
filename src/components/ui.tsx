@@ -37,6 +37,10 @@ import {
   FileText,
   Lightbulb,
   PersonStanding,
+  Home,
+  Gavel,
+  GraduationCap,
+  Hospital,
   type LucideIcon,
 } from "lucide-react-native";
 import { C, FONT } from "../theme/tokens";
@@ -68,6 +72,10 @@ export const ICONS = {
   mail: Mail,
   file: FileText,
   roadview: PersonStanding,
+  home: Home,
+  gavel: Gavel,
+  school: GraduationCap,
+  hospital: Hospital,
 };
 export type IconName = keyof typeof ICONS;
 export function Icon({
