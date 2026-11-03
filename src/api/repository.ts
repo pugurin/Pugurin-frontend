@@ -1,4 +1,5 @@
 import { ApiClient, ApiError } from "./client";
+import { HOSPITAL_TIERS } from "../state/hospital";
 import type {
   Analysis,
   Auction,
@@ -270,12 +271,11 @@ export class Repository {
   }
   // 화면 영역 안의 병원. 지도에는 종합병원·병원·의원만 올린다
   hospitals(bbox: BBox, signal?: AbortSignal): Promise<Envelope<Hospital[]>> {
-    const tiers = ["general", "hospital", "clinic"];
     if (this.mode === "sample") {
       const [w, s, e, n] = bbox;
       const data = HOSPITALS.filter(
         (x) =>
-          tiers.includes(x.tier) &&
+          (HOSPITAL_TIERS as readonly string[]).includes(x.tier) &&
           x.lng != null &&
           x.lat != null &&
           x.lng >= w &&
@@ -287,7 +287,7 @@ export class Repository {
     }
     const p = new URLSearchParams({
       bbox: bbox.join(","),
-      tier: tiers.join(","),
+      tier: HOSPITAL_TIERS.join(","),
     });
     return this.client.get<Hospital[]>(`/hospitals?${p}`, signal);
   }
