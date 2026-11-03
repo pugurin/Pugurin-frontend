@@ -42,6 +42,10 @@ import { TransactionRow } from "../components/TransactionRow";
 import type { SheetStage } from "../components/Sheet";
 import { HAS_KAKAO } from "../map/kakaoRuntime";
 import { RoadviewModal } from "../roadview/RoadviewModal";
+import { NearbySchoolsSection } from "./NearbySchools";
+
+// 단지 상세에서 거래 이력을 처음 펼쳐 두는 건수. 나머지는 더보기로 연다
+export const TX_PREVIEW = 4;
 export function RegionContent({
   marker,
   filters,
@@ -304,6 +308,9 @@ export function ComplexContent({
   const [page, setPage] = useState(1);
   const [retry, setRetry] = useState(0);
   const [roadview, setRoadview] = useState(false);
+  const [allTx, setAllTx] = useState(false);
+  // 단지·정렬·해제 포함을 바꾸면 다시 4건만 보여준다
+  useEffect(() => setAllTx(false), [id, sort, cancelled, filters]);
   useEffect(() => {
     const a = new AbortController();
     setLoading(true);
@@ -616,7 +623,7 @@ export function ComplexContent({
                     <Icon name={cancelled ? "check" : "plus"} size={18} />
                     <T size={14}>해제 거래 포함</T>
                   </Pressable>
-                  {items.map((t) => (
+                  {(allTx ? items : items.slice(0, TX_PREVIEW)).map((t) => (
                     <TransactionRow
                       key={t.id}
                       tx={{
@@ -629,19 +636,26 @@ export function ComplexContent({
                     />
                   ))}
                   {loading && <StateCard loading />}
-                  {page < (meta?.total_pages ?? 1) && (
-                    <Btn
-                      secondary
-                      disabled={loading}
-                      onPress={() => {
-                        setLoading(true);
-                        setPage((v) => v + 1);
-                      }}
-                    >
-                      거래 더 보기
+                  {!allTx && items.length > TX_PREVIEW ? (
+                    <Btn secondary onPress={() => setAllTx(true)}>
+                      더보기
                     </Btn>
+                  ) : (
+                    page < (meta?.total_pages ?? 1) && (
+                      <Btn
+                        secondary
+                        disabled={loading}
+                        onPress={() => {
+                          setLoading(true);
+                          setPage((v) => v + 1);
+                        }}
+                      >
+                        거래 더 보기
+                      </Btn>
+                    )
                   )}
                 </Section>
+                <NearbySchoolsSection complexId={complex.id} repo={repo} />
               </View>
               <View style={{ flex: twoColumns ? 1 : undefined, minWidth: 0 }}>
                 <Section

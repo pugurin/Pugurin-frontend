@@ -218,6 +218,15 @@ export type School = {
   opened_on: string | null;
   distance_m: number | null;
 };
+// 단지 주변 학교 요약(`/complexes/{id}/nearby`). 학교급별 반경 안 가까운 순 최대 3곳이다
+// 병원 요약도 같이 오지만 화면에서 쓰지 않아 타입에 넣지 않는다
+export type NearbySchools = {
+  radius_m: number;
+  elementary: School[];
+  middle: School[];
+  high: School[];
+};
+export type Nearby = { schools: NearbySchools };
 export type AuctionSource = "court" | "public";
 export type AuctionGroup =
   "apartment" | "officetel" | "villa" | "land" | "other";

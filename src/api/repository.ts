@@ -9,6 +9,7 @@ import type {
   Envelope,
   Filters,
   MarkerData,
+  Nearby,
   Parcel,
   School,
   SearchResult,
@@ -265,6 +266,41 @@ export class Repository {
     const p = new URLSearchParams({ bbox: bbox.join(",") });
     return this.client.get<School[]>(`/schools?${p}`, signal);
   }
+  // 단지 주변 학교. 샘플 모드는 서버처럼 직선거리 3km 안에서 학교급별 가까운 3곳을 고른다
+  nearby(complexId: string, signal?: AbortSignal): Promise<Envelope<Nearby>> {
+    if (this.mode === "sample") {
+      const c = COMPLEXES.find((x) => x.id === complexId);
+      const radius = 3000;
+      const pick = (level: School["level"]) =>
+        c
+          ? SCHOOLS.filter(
+              (x) => x.level === level && x.lat != null && x.lng != null,
+            )
+              .map((x) => ({
+                ...x,
+                distance_m: Math.round(distanceM(c.lat, c.lng, x.lat!, x.lng!)),
+              }))
+              .filter((x) => x.distance_m <= radius)
+              .sort((a, b) => a.distance_m - b.distance_m)
+              .slice(0, 3)
+          : [];
+      return Promise.resolve({
+        data: {
+          schools: {
+            radius_m: radius,
+            elementary: pick("elementary"),
+            middle: pick("middle"),
+            high: pick("high"),
+          },
+        },
+        meta: SCHOOL_META,
+      });
+    }
+    return this.client.get<Nearby>(
+      `/complexes/${encodeURIComponent(complexId)}/nearby`,
+      signal,
+    );
+  }
   // 검색 결과·필지 마커처럼 PNU를 이미 알 때. 응답 형태는 parcelLookup과 같다
   parcel(pnu: string, signal?: AbortSignal) {
     return this.mode === "sample"
@@ -283,3 +319,13 @@ const renewals = (f: Filters): Record<string, string> =>
   f.deal_type !== "sale" && f.include_renewals
     ? { include_renewals: "true" }
     : {};
+// 두 좌표 사이 직선거리(m). 샘플 모드에서 서버의 거리 계산을 흉내 낸다
+function distanceM(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const r = Math.PI / 180;
+  const a =
+    Math.sin(((lat2 - lat1) * r) / 2) ** 2 +
+    Math.cos(lat1 * r) *
+      Math.cos(lat2 * r) *
+      Math.sin(((lng2 - lng1) * r) / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(a));
+}
