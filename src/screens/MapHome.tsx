@@ -56,6 +56,7 @@ import {
   Chip,
   Icon,
   IconBtn,
+  type IconName,
   Notice,
   StateCard,
   T,
@@ -189,6 +190,8 @@ export function MapHome({
   const [mapError, setMapError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [layers, setLayers] = useState(false);
+  // 오른쪽 메뉴바의 실거래 켜짐. 끄면 구·동·단지 실거래 마커를 부르지 않는다
+  const [trades, setTrades] = useState(true);
   // 로드뷰 모드: 켠 동안 지도를 누르면 그 자리의 로드뷰를 연다
   const [roadview, setRoadview] = useState(false);
   const [roadviewAt, setRoadviewAt] = useState<{ lat: number; lng: number } | null>(null);
@@ -220,6 +223,7 @@ export function MapHome({
   const ref = useRef(0);
   const lastFilters = useRef(filters);
   const lastAuction = useRef(auction);
+  const lastTrades = useRef(trades);
   // 검색으로 고른 단지에 맞춰 유형 탭을 바꿀 때는 필터가 바뀌어도 단지 패널을 닫지 않는다
   const keepSelection = useRef(false);
   const queryBBox = busanQueryBBox(camera.bbox);
@@ -237,7 +241,7 @@ export function MapHome({
   const auctionZoom = !outside && camera.zoom >= AUCTION_MIN_ZOOM;
   const showAuctions =
     auctionZoom &&
-    (auction || (filters.deal_type === "sale" && !rangeFiltered));
+    (auction || (trades && filters.deal_type === "sale" && !rangeFiltered));
   const move = (c: MapCommand) => setCommand({ ...c, nonce: ++ref.current });
   const landRequest = useRef<AbortController | null>(null);
   const pendingLand = useRef<{
@@ -268,9 +272,12 @@ export function MapHome({
   useEffect(() => {
     const controller = new AbortController();
     const changed =
-      lastFilters.current !== filters || lastAuction.current !== auction;
+      lastFilters.current !== filters ||
+      lastAuction.current !== auction ||
+      lastTrades.current !== trades;
     lastFilters.current = filters;
     lastAuction.current = auction;
+    lastTrades.current = trades;
     if (changed) {
       setMarkers([]);
       setAuctions([]);
@@ -279,8 +286,8 @@ export function MapHome({
       else close();
       setPanelDismissed(false);
     }
-    // 경매 탭에서는 실거래 마커를 부르지 않는다
-    if (outside || auction) {
+    // 경매 탭이거나 메뉴바에서 실거래를 끄면 실거래 마커를 부르지 않는다
+    if (outside || auction || !trades) {
       setLoading(false);
       setMarkers([]);
       setError(null);
@@ -326,7 +333,7 @@ export function MapHome({
       clearTimeout(timer);
       clearTimeout(loadingTimer);
     };
-  }, [repo, filters, camera, outside, retry, auction]);
+  }, [repo, filters, camera, outside, retry, auction, trades]);
   // 경매 요청. 매매(가격·면적 필터 없음)이거나 경매 탭일 때, 단지 마커가 나오는 줌에서만 부른다.
   // 매매↔경매를 바꾸면 위 effect가 경매 목록을 비우므로 auction이 바뀔 때도 다시 부른다
   useEffect(() => {
@@ -794,6 +801,7 @@ export function MapHome({
     !busy &&
     !errorShown &&
     !auction &&
+    trades &&
     !outside &&
     camera.zoom >= 11 &&
     markers.length === 0 &&
@@ -1264,7 +1272,51 @@ export function MapHome({
               )}
             </View>
           )}
-          <View style={{ position: "absolute", right: 12, top: 12, gap: 8 }}>
+          {/* 오른쪽 버튼 묶음은 지도 가운데 오류·안내 카드보다 위에 둔다 */}
+          <View
+            style={{
+              position: "absolute",
+              right: 12,
+              top: 12,
+              gap: 8,
+              zIndex: 2,
+            }}
+          >
+            {/* 메뉴바. 누른 종류의 마커만 지도에 그린다. 실거래와 경매는 둘 중 하나만 켜진다 */}
+            <View style={[float, { overflow: "hidden" }]}>
+              <RailBtn
+                icon="home"
+                label="실거래"
+                active={trades && !auction}
+                onPress={() => {
+                  if (auction) {
+                    onAuction?.(false);
+                    setTrades(true);
+                  } else setTrades(!trades);
+                }}
+              />
+              <View style={s.rule} />
+              <RailBtn
+                icon="gavel"
+                label="경매"
+                active={auction}
+                onPress={() => onAuction?.(!auction)}
+              />
+              <View style={s.rule} />
+              <RailBtn
+                icon="school"
+                label="학교"
+                active={schools}
+                onPress={() => onSchools?.(!schools)}
+              />
+              <View style={s.rule} />
+              <RailBtn
+                icon="hospital"
+                label="병원"
+                active={hospitals}
+                onPress={() => onHospitals?.(!hospitals)}
+              />
+            </View>
             <View style={float}>
               <IconBtn
                 name="layers"
@@ -1727,34 +1779,6 @@ export function MapHome({
                 trackColor={{ true: C.land }}
               />
             </View>
-            <View style={s.between}>
-              <View>
-                <T bold>학교</T>
-                <T size={14} color={C.muted}>
-                  초·중·고 위치를 지도에 표시해요
-                </T>
-              </View>
-              <Switch
-                value={schools}
-                accessibilityLabel="학교"
-                onValueChange={(v) => onSchools?.(v)}
-                trackColor={{ true: C.primary }}
-              />
-            </View>
-            <View style={s.between}>
-              <View>
-                <T bold>병원</T>
-                <T size={14} color={C.muted}>
-                  가까이 모인 병원·의원을 원으로 묶어 보여줘요
-                </T>
-              </View>
-              <Switch
-                value={hospitals}
-                accessibilityLabel="병원"
-                onValueChange={(v) => onHospitals?.(v)}
-                trackColor={{ true: C.primary }}
-              />
-            </View>
             <T bold>면적 단위</T>
             <View style={s.row}>
               {(["평", "㎡"] as const).map((u) => (
@@ -1827,6 +1851,39 @@ export function MapHome({
         onLater={() => answerLocation(false)}
       />
     </View>
+  );
+}
+// 오른쪽 메뉴바 버튼. 켜지면 진한 바탕에 흰 글자로 보인다
+function RailBtn({
+  icon,
+  label,
+  active,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label} 보기`}
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        width: 54,
+        paddingVertical: 8,
+        alignItems: "center",
+        gap: 2,
+        backgroundColor: active ? C.ink : pressed ? C.bg2 : C.surface,
+      })}
+    >
+      <Icon name={icon} size={20} color={active ? C.surface : C.ink} />
+      <T size={13} bold={active} color={active ? C.surface : C.ink}>
+        {label}
+      </T>
+    </Pressable>
   );
 }
 const float = {

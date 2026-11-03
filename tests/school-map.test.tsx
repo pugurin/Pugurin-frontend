@@ -108,6 +108,7 @@ function setup({
     schoolsImpl ?? (async () => ({ data: SCHOOLS, meta: SCHOOL_META })),
   );
   const onSchools = vi.fn();
+  const onAuction = vi.fn();
   const onMeta = vi.fn();
   const repo = {
     mode: "api",
@@ -135,7 +136,7 @@ function setup({
       notify={() => {}}
       onMeta={onMeta}
       auction={auction}
-      onAuction={() => {}}
+      onAuction={onAuction}
       onAuctionList={() => {}}
       schools={on}
       onSchools={onSchools}
@@ -158,6 +159,7 @@ function setup({
     auctions,
     schools: schoolsFn,
     onSchools,
+    onAuction,
     onMeta,
     moveTo,
     switchSchools,
@@ -187,13 +189,36 @@ const notFound = async () => {
 const notReady = async () => {
   throw new ApiError("준비 중", "DATA_NOT_READY");
 };
+describe("지도 메뉴바", () => {
+  it("'실거래'를 끄면 실거래 마커를 부르지 않고 지도에서 지운다", async () => {
+    const { markers, moveTo } = setup({ schools: false });
+    await moveTo(15);
+    await waitFor(() => expect(map.props.markers).toEqual([complex]));
+    fireEvent.click(screen.getByLabelText("실거래 보기"));
+    await act(() => wait(300));
+    expect(map.props.markers).toEqual([]);
+    const calls = markers.mock.calls.length;
+    await moveTo(15);
+    expect(markers.mock.calls.length).toBe(calls);
+    // 다시 켜면 부른다
+    fireEvent.click(screen.getByLabelText("실거래 보기"));
+    await act(() => wait(300));
+    await waitFor(() => expect(map.props.markers).toEqual([complex]));
+  });
+  it("'경매'를 누르면 경매 탭을 켜고, 경매 탭에서 '실거래'를 누르면 끈다", async () => {
+    const on = setup({ schools: false });
+    fireEvent.click(screen.getByLabelText("경매 보기"));
+    expect(on.onAuction).toHaveBeenCalledWith(true);
+    cleanup();
+    const off = setup({ schools: false, auction: true });
+    fireEvent.click(screen.getByLabelText("실거래 보기"));
+    expect(off.onAuction).toHaveBeenCalledWith(false);
+  });
+});
 describe("학교 레이어와 지도", () => {
-  it("레이어 시트에 '학교' 스위치가 있고 누르면 onSchools(true)", async () => {
+  it("메뉴바의 '학교'를 누르면 onSchools(true)", async () => {
     const { onSchools } = setup({ schools: false });
-    fireEvent.click(screen.getByLabelText("지도 레이어"));
-    expect(screen.getByText("학교")).toBeTruthy();
-    expect(screen.getByText("초·중·고 위치를 지도에 표시해요")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("학교"));
+    fireEvent.click(screen.getByLabelText("학교 보기"));
     expect(onSchools).toHaveBeenCalledWith(true);
   });
   it("학교가 켜져 있고 줌 14 이상이면 bbox로 학교를 부르고 MapCanvas schools에 넘긴다", async () => {

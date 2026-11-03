@@ -212,19 +212,15 @@ describe("App의 병원 레이어 저장", () => {
 });
 
 describe("병원 레이어와 지도", () => {
-  it("레이어 시트에서 '학교' 아래에 '병원' 스위치가 있고 누르면 onHospitals(true)", async () => {
+  it("메뉴바에서 '학교' 아래에 '병원'이 있고 누르면 onHospitals(true)", async () => {
     const { onHospitals } = await setup({ hospitals: false });
-    fireEvent.click(screen.getByLabelText("지도 레이어"));
-    const school = screen.getByText("학교");
-    const hospital = screen.getByText("병원");
+    const school = screen.getByLabelText("학교 보기");
+    const hospital = screen.getByLabelText("병원 보기");
     expect(
       school.compareDocumentPosition(hospital) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(
-      screen.getByText("가까이 모인 병원·의원을 원으로 묶어 보여줘요"),
-    ).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("병원"));
+    fireEvent.click(hospital);
     expect(onHospitals).toHaveBeenCalledWith(true);
   });
   it("켜져 있고 줌 14 이상이면 bbox와 tier를 붙여 부르고 원을 MapCanvas에 넘긴다", async () => {
