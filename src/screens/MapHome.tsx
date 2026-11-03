@@ -24,6 +24,7 @@ import type {
   Meta,
   Parcel,
   RegionMarker,
+  School,
   SearchResult,
 } from "../api/types";
 import {
@@ -40,6 +41,7 @@ import {
   PROPERTY,
 } from "../state/market";
 import { AUCTION_MIN_ZOOM } from "../state/auction";
+import { SCHOOL_LEVEL, SCHOOL_MIN_ZOOM } from "../state/school";
 import { C } from "../theme/tokens";
 import { Brand } from "../components/Brand";
 import {
@@ -58,6 +60,7 @@ import type { Camera, MapCommand, MapEvent } from "../map/types";
 import { ComplexContent, RegionContent } from "./MarketSheets";
 import { LandContent } from "./LandContent";
 import { AuctionContent } from "./AuctionContent";
+import { SCHOOL_PEEK, SchoolContent } from "./SchoolContent";
 export type Focus = { result: SearchResult; nonce: number };
 // 경매 목록에서 고른 줄. 좌표가 없으면 지도는 그대로 두고 시트만 연다
 export type AuctionFocus = {
@@ -92,6 +95,8 @@ export function MapHome({
   onAuction,
   onAuctionList,
   focusAuction,
+  schools = false,
+  onSchools,
 }: {
   repo: Repository;
   filters: Filters;
@@ -128,6 +133,9 @@ export function MapHome({
   }) => void;
   // 경매 목록 줄을 누르면 App이 넘긴다. nonce가 바뀔 때마다 그 경매로 이동해 시트를 연다
   focusAuction?: AuctionFocus | null;
+  // 학교 레이어. 켜면 줌 14 이상에서 화면 안 학교를 마커로 그린다
+  schools?: boolean;
+  onSchools?: (on: boolean) => void;
 }) {
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === "web" && width >= 1024;
@@ -149,6 +157,11 @@ export function MapHome({
   const [auctionNotReady, setAuctionNotReady] = useState(false);
   // 경매 요청이 진행 중인지. 경매 탭에서 로딩 알약에 쓴다
   const [auctionLoading, setAuctionLoading] = useState(false);
+  // 화면 안 학교와 그 응답 meta. meta는 학교 시트에만 쓰고 onMeta로 넘기지 않는다
+  const [schoolList, setSchoolList] = useState<School[]>([]);
+  const [schoolMeta, setSchoolMeta] = useState<Meta>();
+  // 학교 API가 404·503이면 마커 없이 준비 중 안내만 띄운다
+  const [schoolNotReady, setSchoolNotReady] = useState(false);
   const [meta, setMeta] = useState<Meta>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -163,6 +176,7 @@ export function MapHome({
   const [selected, setSelected] = useState<
     | { kind: "complex"; id: string }
     | { kind: "auction"; id: string }
+    | { kind: "school"; school: School; meta?: Meta }
     | { kind: "region"; marker: RegionMarker }
     | {
         kind: "land";
@@ -346,6 +360,43 @@ export function MapHome({
       clearTimeout(timer);
     };
   }, [repo, filters, camera, showAuctions, auction, retry]);
+  // 학교 요청. 켜져 있고 부산 안, 줌 14 이상일 때만 bbox로 부른다(level은 보내지 않는다).
+  // 탭·필터와 상관없이 같은 요청이다
+  useEffect(() => {
+    if (!schools || outside || camera.zoom < SCHOOL_MIN_ZOOM) {
+      // 이미 비어 있으면 같은 배열을 둬서 지도를 움직일 때마다 마커를 다시 그리지 않게 한다
+      setSchoolList((p) => (p.length ? [] : p));
+      setSchoolNotReady(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      repo
+        .schools(queryBBox!, controller.signal)
+        .then((r) => {
+          if (controller.signal.aborted) return;
+          setSchoolList(r.data);
+          setSchoolMeta(r.meta);
+          setSchoolNotReady(false);
+        })
+        .catch((e) => {
+          if (controller.signal.aborted) return;
+          // 404(API 미배포)·503(수집 전)은 준비 중으로 안내하고, 그 밖의 오류는 조용히 마커만 뺀다
+          setSchoolList([]);
+          setSchoolNotReady(
+            e?.code === "RESOURCE_NOT_FOUND" || e?.code === "DATA_NOT_READY",
+          );
+        });
+    }, 220);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [repo, camera, schools, outside, retry]);
+  // 학교 시트가 열린 채 학교 레이어를 끄면 시트도 닫는다
+  useEffect(() => {
+    if (!schools && selected?.kind === "school") close();
+  }, [schools]);
   useEffect(() => {
     if (!focus) return;
     close();
@@ -534,6 +585,14 @@ export function MapHome({
         landRequest.current?.abort();
         setSelected({ kind: "auction", id: e.id.slice("auction:".length) });
         setStage("peek");
+      } else if (e.id.startsWith("school:")) {
+        const school = schoolList.find((x) => `school:${x.id}` === e.id);
+        if (school) {
+          pendingLand.current = null;
+          landRequest.current?.abort();
+          setSelected({ kind: "school", school, meta: schoolMeta });
+          setStage("peek");
+        }
       } else if (e.id.startsWith("auction-group:")) {
         // 한 단지에 경매가 여러 건이면 그 단지로 거른 경매 목록을 연다
         const complexId = e.id.slice("auction-group:".length);
@@ -646,6 +705,28 @@ export function MapHome({
           : auctionsReady && auctions.length === 0
             ? "이 화면 안에 진행 중인 경매가 없어요"
             : null;
+  // 지도 가운데 안내 상태. 로딩 알약 → 오류 카드 → 안내 묶음(경매 안내·빈 지역 카드·학교 준비 중) 순이다
+  const busy = loading || (auction && auctionLoading);
+  const errorShown =
+    !busy && !!(error || mapError || (auction && auctionError));
+  const auctionCard = !busy && !errorShown && auction && !!auctionNotice;
+  const emptyCard =
+    !busy &&
+    !errorShown &&
+    !auction &&
+    !outside &&
+    camera.zoom >= 11 &&
+    markers.length === 0 &&
+    !emptyDismissed;
+  // 학교 준비 중 안내. 오류 카드가 떠 있을 때는 숨긴다
+  const schoolNotice = schools && schoolNotReady && !errorShown;
+  // 학교 범례. 켜져 있고 줌 14 이상이며 준비 중이 아닐 때만. 기타는 화면 안에 있을 때만 더한다
+  const schoolLegend =
+    schools && !outside && camera.zoom >= SCHOOL_MIN_ZOOM && !schoolNotReady
+      ? (["elementary", "middle", "high", "special", "other"] as const).filter(
+          (l) => l !== "other" || schoolList.some((x) => x.level === "other"),
+        )
+      : null;
   const detailSheet = selected ? (
     <Sheet
       key={
@@ -653,13 +734,17 @@ export function MapHome({
           ? `complex:${selected.id}`
           : selected.kind === "auction"
             ? `auction:${selected.id}`
-            : selected.kind === "land"
-              ? `land:${selected.lat},${selected.lng}`
-              : `region:${selected.marker.region_code}`
+            : selected.kind === "school"
+              ? `school:${selected.school.id}`
+              : selected.kind === "land"
+                ? `land:${selected.lat},${selected.lng}`
+                : `region:${selected.marker.region_code}`
       }
       stage={desktop ? "full" : stage}
       onStage={desktop ? () => {} : setStage}
       onClose={close}
+      // 학교 시트는 peek 하나에 내용이 다 보이도록 더 높게 연다
+      peek={selected.kind === "school" ? SCHOOL_PEEK : undefined}
       docked={desktop}
       panelWidth={panelWidth}
     >
@@ -691,6 +776,8 @@ export function MapHome({
           onHelp={onHelp}
           unit={unit}
         />
+      ) : selected.kind === "school" ? (
+        <SchoolContent school={selected.school} meta={selected.meta} />
       ) : selected.kind === "auction" ? (
         <AuctionContent
           id={selected.id}
@@ -1019,12 +1106,15 @@ export function MapHome({
             markers={markers}
             property={filters.property_type}
             auctions={auctions}
+            schools={schoolList}
             selected={
               selected?.kind === "complex"
                 ? selected.id
                 : selected?.kind === "auction"
                   ? `auction:${selected.id}`
-                  : null
+                  : selected?.kind === "school"
+                    ? `school:${selected.school.id}`
+                    : null
             }
             unit={unit}
             selectionPoint={
@@ -1137,7 +1227,7 @@ export function MapHome({
               </Btn>
             </View>
           )}
-          {loading || (auction && auctionLoading) ? (
+          {busy ? (
             <View
               style={{
                 position: "absolute",
@@ -1156,7 +1246,7 @@ export function MapHome({
                 {auction ? "경매 불러오는 중…" : "실거래가 불러오는 중…"}
               </T>
             </View>
-          ) : error || mapError || (auction && auctionError) ? (
+          ) : errorShown ? (
             <View
               style={{
                 position: "absolute",
@@ -1175,30 +1265,12 @@ export function MapHome({
                 }}
               />
             </View>
-          ) : auction ? (
-            auctionNotice && (
-              <View
-                pointerEvents="box-none"
-                style={{
-                  position: "absolute",
-                  left: 24,
-                  right: 24,
-                  top: "24%",
-                  alignItems: "center",
-                }}
-              >
-                <View style={{ ...s.card, maxWidth: 300 }}>
-                  <T size={16} bold>
-                    {auctionNotice}
-                  </T>
-                </View>
-              </View>
-            )
-          ) : !outside &&
-            camera.zoom >= 11 &&
-            markers.length === 0 &&
-            !emptyDismissed ? (
+          ) : null}
+          {/* 지도 가운데 안내는 한 세로 묶음에 쌓아 서로 겹치지 않게 한다.
+              경매 안내나 빈 지역 카드가 먼저, 학교 준비 중 안내가 그 아래다 */}
+          {!errorShown && (auctionCard || emptyCard || schoolNotice) && (
             <View
+              testID="map-notices"
               pointerEvents="box-none"
               style={{
                 position: "absolute",
@@ -1206,49 +1278,141 @@ export function MapHome({
                 right: 24,
                 top: "24%",
                 alignItems: "center",
+                gap: 8,
               }}
             >
-              <View
-                style={{ ...s.card, width: "100%", maxWidth: 300, gap: 10 }}
-              >
-                <View style={s.between}>
-                  <T size={18} bold style={{ flex: 1 }}>
-                    이 조건의 거래가 없어요
+              {auctionCard && (
+                <View style={{ ...s.card, maxWidth: 300 }}>
+                  <T size={16} bold>
+                    {auctionNotice}
                   </T>
-                  <IconBtn
-                    name="close"
-                    label="안내 닫기"
-                    onPress={() => setEmptyDismissed(true)}
-                    style={{ width: 30, height: 30, marginRight: -4 }}
-                  />
                 </View>
-                {filters.period_months < MAX_PERIOD_MONTHS ? (
-                  <>
-                    <T size={15} color={C.muted}>
-                      기간을 늘리면 더 많은 거래를 볼 수 있어요
+              )}
+              {emptyCard && (
+                <View
+                  style={{ ...s.card, width: "100%", maxWidth: 300, gap: 10 }}
+                >
+                  <View style={s.between}>
+                    <T size={18} bold style={{ flex: 1 }}>
+                      이 조건의 거래가 없어요
                     </T>
-                    <Btn
-                      secondary
-                      small
-                      onPress={() =>
-                        onFilters({
-                          ...filters,
-                          period_months: MAX_PERIOD_MONTHS,
-                        })
-                      }
-                    >
-                      기간 늘리기 (최근 {MAX_PERIOD_MONTHS}개월)
-                    </Btn>
-                  </>
-                ) : (
-                  <T size={15} color={C.muted}>
-                    최근 {MAX_PERIOD_MONTHS}개월 동안 이 지역에 신고된 거래가
-                    없어요
+                    <IconBtn
+                      name="close"
+                      label="안내 닫기"
+                      onPress={() => setEmptyDismissed(true)}
+                      style={{ width: 30, height: 30, marginRight: -4 }}
+                    />
+                  </View>
+                  {filters.period_months < MAX_PERIOD_MONTHS ? (
+                    <>
+                      <T size={15} color={C.muted}>
+                        기간을 늘리면 더 많은 거래를 볼 수 있어요
+                      </T>
+                      <Btn
+                        secondary
+                        small
+                        onPress={() =>
+                          onFilters({
+                            ...filters,
+                            period_months: MAX_PERIOD_MONTHS,
+                          })
+                        }
+                      >
+                        기간 늘리기 (최근 {MAX_PERIOD_MONTHS}개월)
+                      </Btn>
+                    </>
+                  ) : (
+                    <T size={15} color={C.muted}>
+                      최근 {MAX_PERIOD_MONTHS}개월 동안 이 지역에 신고된 거래가
+                      없어요
+                    </T>
+                  )}
+                </View>
+              )}
+              {schoolNotice && (
+                <View
+                  testID="school-notice"
+                  pointerEvents="none"
+                  style={{ ...s.card, maxWidth: 300 }}
+                >
+                  <T size={16} bold>
+                    학교 정보를 준비 중이에요
                   </T>
-                )}
-              </View>
+                </View>
+              )}
             </View>
-          ) : null}
+          )}
+          {schoolLegend && (
+            <View
+              accessibilityLabel="학교 범례"
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: 12,
+                // 목록 보기 버튼(높이 38) 위에 둔다
+                bottom: selected ? 16 : 62,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                ...float,
+                borderRadius: 8,
+              }}
+            >
+              {schoolLegend.map((l) => {
+                const { color, shape, legend } = SCHOOL_LEVEL[l];
+                return (
+                  <View
+                    key={l}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 3,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 10,
+                        height: 10,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <View
+                        style={
+                          shape === "circle"
+                            ? {
+                                width: 10,
+                                height: 10,
+                                borderRadius: 5,
+                                backgroundColor: color,
+                              }
+                            : shape === "square"
+                              ? {
+                                  width: 9,
+                                  height: 9,
+                                  borderRadius: 2,
+                                  backgroundColor: color,
+                                }
+                              : {
+                                  width: 7,
+                                  height: 7,
+                                  borderRadius: 1,
+                                  backgroundColor: color,
+                                  transform: [{ rotate: "45deg" }],
+                                }
+                        }
+                      />
+                    </View>
+                    <T size={12} bold color={C.ink2}>
+                      {legend}
+                    </T>
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </View>
         {desktop && detailSheet}
         {panelVisible && !selected && (
@@ -1441,6 +1605,20 @@ export function MapHome({
                     : onCadastral(v)
                 }
                 trackColor={{ true: C.land }}
+              />
+            </View>
+            <View style={s.between}>
+              <View>
+                <T bold>학교</T>
+                <T size={14} color={C.muted}>
+                  초·중·고 위치를 지도에 표시해요
+                </T>
+              </View>
+              <Switch
+                value={schools}
+                accessibilityLabel="학교"
+                onValueChange={(v) => onSchools?.(v)}
+                trackColor={{ true: C.primary }}
               />
             </View>
             <T bold>면적 단위</T>

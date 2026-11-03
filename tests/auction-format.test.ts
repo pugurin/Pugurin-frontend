@@ -176,6 +176,9 @@ describe("경매 문구 함수", () => {
     expect(auctionSourceLine({ ...meta, data_mode: "sample" }, "api")).toBe(
       "샘플 데이터 · 출처: 대법원 법원경매정보 · 기준일 2026.10.05",
     );
+    expect(
+      auctionSourceLine({ ...meta, source_attribution: ["A", "B"] }, "api"),
+    ).toBe("출처: A · B · 기준일 2026.10.05");
     expect(auctionSourceLine(undefined, "sample")).toBe("샘플 데이터");
     expect(auctionSourceLine(undefined, "api")).toBe("");
   });

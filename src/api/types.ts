@@ -35,9 +35,11 @@ export type Meta = {
   total_pages?: number;
   data_mode?: string;
   method?: string;
-  // 경매·공매 응답의 출처. 화면에 표시해야 한다
-  source_attribution?: string;
+  // 경매·공매·학교 응답의 출처. 화면에 표시해야 한다(학교는 여러 곳이라 배열)
+  source_attribution?: string | string[];
   source_url?: string;
+  // 학교 응답의 안내 문구(직선거리 기준이며 학군이 아님)
+  school_notice?: string;
 };
 export type Envelope<T> = { data: T; meta?: Meta };
 export type Latest = {
@@ -197,6 +199,24 @@ export type Parcel = {
       }[]
     | null;
   glossary?: Record<string, string>;
+};
+// 학교급. 백엔드 SchoolOut.level과 같다
+export type SchoolLevel =
+  "elementary" | "middle" | "high" | "special" | "other";
+export type School = {
+  id: string;
+  name: string;
+  kind: string | null;
+  level: SchoolLevel;
+  foundation: string | null;
+  coed: string | null;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  tel: string | null;
+  homepage: string | null;
+  opened_on: string | null;
+  distance_m: number | null;
 };
 export type AuctionSource = "court" | "public";
 export type AuctionGroup =

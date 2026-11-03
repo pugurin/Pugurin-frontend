@@ -1,7 +1,7 @@
 import type { Geometry } from "geojson";
 import type { SelectionPoint } from "./selection";
 import type { UserLocation } from "./userLocation";
-import type { Auction, BBox, Marker, Property } from "../api/types";
+import type { Auction, BBox, Marker, Property, School } from "../api/types";
 export type Camera = { lat: number; lng: number; zoom: number; bbox: BBox };
 export type MapCommand =
   | { type: "move"; lat?: number; lng?: number; zoom?: number; bbox?: BBox }
@@ -16,6 +16,8 @@ export type MapProps = {
   markers: Marker[];
   // 지도에 올릴 경매 물건. 좌표 없는 물건은 그리지 않는다
   auctions?: Auction[];
+  // 지도에 올릴 학교. 좌표 없는 학교는 그리지 않는다
+  schools?: School[];
   property: Property;
   selected: string | null;
   selectionPoint?: SelectionPoint;

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { webRuntime } from "../src/map/kakaoRuntime";
-import { fullState } from "../src/map/bridge";
+import { fullState, markerState } from "../src/map/bridge";
 import type { MapProps } from "../src/map/types";
-import type { Auction, ComplexMarker } from "../src/api/types";
+import type { Auction, ComplexMarker, School } from "../src/api/types";
 
 // 카카오 SDK 대역. 런타임이 부르는 API만 흉내 낸다
 function fakeKakao() {
@@ -314,6 +314,86 @@ describe("경매 마커", () => {
     live().find((s) => s.options.content.classList.contains("dot"))!.options.content.click();
     expect(setLevel).toHaveBeenCalledWith(6, expect.anything());
     expect(events.some((e) => e.type === "marker")).toBe(false);
+  });
+});
+
+const school: School = {
+  id: "h1",
+  name: "해운대여자고등학교",
+  kind: "고등학교",
+  level: "high",
+  foundation: "공립",
+  coed: "여",
+  address: "부산광역시 해운대구 우동 1",
+  lat: 35.15,
+  lng: 129.14,
+  tel: null,
+  homepage: null,
+  opened_on: null,
+  distance_m: null,
+};
+
+describe("학교 마커", () => {
+  const live = () => fake.shapes.filter((s) => s.map && s.options.content?.classList?.contains("pg-marker"));
+  // 점으로 줄어든 학교는 school 클래스가 빠지므로 접근성 이름으로도 찾는다
+  const schoolOverlay = () =>
+    live().find(
+      (s) => s.options.content.classList.contains("school") || s.options.content.getAttribute("aria-label")?.includes("해운대여고"),
+    )!;
+  const auctionOverlay = () => live().find((s) => s.options.content.classList.contains("auction"))!;
+  const complexOverlay = () => live().find((s) => s.options.content.textContent?.includes("14.5억"))!;
+
+  it("학교는 배지 안 도형 글자와 줄인 이름으로 그리고, 칸 가운데를 좌표에 맞춘다", () => {
+    start("test-key", props({ markers: [], schools: [school] }));
+    const o = schoolOverlay();
+    const button: HTMLButtonElement = o.options.content;
+    expect(button.className).toBe("pg-marker school lv-high");
+    const badge = button.firstElementChild!;
+    expect(badge.className).toBe("badge");
+    const shape = badge.firstElementChild!;
+    expect(shape.classList.contains("shape")).toBe(true);
+    expect(shape.classList.contains("diamond")).toBe(true);
+    expect(shape.textContent).toBe("고");
+    expect(button.querySelector(".name")!.textContent).toBe("해운대여고");
+    expect(button.style.getPropertyValue("--color")).toBe("#5B3FA0");
+    expect(o.options).toMatchObject({ xAnchor: 0.5, yAnchor: 0.5 });
+  });
+
+  it("실거래·단지 옆 경매·학교가 같은 자리에 있으면 학교만 점이 된다", () => {
+    start("test-key", props({ auctions: [auction], schools: [school] }));
+    expect(live()).toHaveLength(3);
+    expect(schoolOverlay().options.content.className).toBe("pg-marker dot");
+    expect(complexOverlay().options.content.classList.contains("dot")).toBe(false);
+    expect(auctionOverlay().options.content.className).toBe("pg-marker auction");
+  });
+
+  it("학교는 단지 옆 경매보다 뒤에 자리를 잡아 경매를 점으로 밀어내지 않는다", () => {
+    // 마커 크기를 40×20으로 두고, 학교를 단지 옆 경매가 놓일 자리(단지 오른쪽 끝 +4px 너머)에 둔다
+    const width = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(40);
+    const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(20);
+    try {
+      const p = props({ auctions: [auction], schools: [{ ...school, lng: 129.2 }] });
+      const { receive, map } = start("test-key", p);
+      map.getProjection = () => ({
+        containerPointFromCoords: (c: { lng: number }) => ({ x: c.lng === 129.2 ? 144 : 100, y: 100 }),
+      });
+      receive(markerState(p));
+      expect(auctionOverlay().options.content.className).toBe("pg-marker auction");
+      expect(schoolOverlay().options.content.className).toBe("pg-marker dot");
+    } finally {
+      width.mockRestore();
+      height.mockRestore();
+    }
+  });
+
+  it("점으로 줄어든 학교를 누르면 확대하지 않고 marker를 보낸다", () => {
+    const { events, map } = start("test-key", props({ auctions: [auction], schools: [school] }));
+    const setLevel = vi.spyOn(map, "setLevel");
+    const button: HTMLButtonElement = schoolOverlay().options.content;
+    expect(button.className).toBe("pg-marker dot");
+    button.click();
+    expect(setLevel).not.toHaveBeenCalled();
+    expect(events.filter((e) => e.type === "marker")).toEqual([{ type: "marker", id: "school:h1" }]);
   });
 });
 
