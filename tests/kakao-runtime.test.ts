@@ -343,7 +343,7 @@ describe("학교 마커", () => {
   const auctionOverlay = () => live().find((s) => s.options.content.classList.contains("auction"))!;
   const complexOverlay = () => live().find((s) => s.options.content.textContent?.includes("14.5억"))!;
 
-  it("학교는 배지 안 도형 글자와 줄인 이름으로 그리고, 칸 가운데를 좌표에 맞춘다", () => {
+  it("학교는 배지 안 도형 글자와 줄인 이름으로 그린다", () => {
     start("test-key", props({ markers: [], schools: [school] }));
     const o = schoolOverlay();
     const button: HTMLButtonElement = o.options.content;
@@ -356,7 +356,37 @@ describe("학교 마커", () => {
     expect(shape.textContent).toBe("고");
     expect(button.querySelector(".name")!.textContent).toBe("해운대여고");
     expect(button.style.getPropertyValue("--color")).toBe("#5B3FA0");
-    expect(o.options).toMatchObject({ xAnchor: 0.5, yAnchor: 0.5 });
+  });
+
+  it("학교는 칸 가운데가 아니라 도형 배지 가운데(왼쪽에서 14.5px)를 좌표에 맞춘다", () => {
+    const width = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(80);
+    try {
+      start("test-key", props({ markers: [], schools: [school] }));
+      expect(schoolOverlay().options).toMatchObject({ xAnchor: 14.5 / 80, yAnchor: 0.5 });
+    } finally {
+      width.mockRestore();
+    }
+  });
+
+  it("학교 겹침 판정도 배지 가운데 기준 자리로 한다", () => {
+    // 단지 마커(40×20, 꼬리)는 x 80~120에 놓인다. 학교(80×20)를 x 150에 두면
+    // 칸 가운데 기준(110~190)이면 겹치지만, 배지 기준(135.5~215.5)이면 겹치지 않는다
+    const width = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("school") ? 80 : 40;
+    });
+    const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(20);
+    try {
+      const p = props({ schools: [{ ...school, lng: 129.2 }] });
+      const { receive, map } = start("test-key", p);
+      map.getProjection = () => ({
+        containerPointFromCoords: (c: { lng: number }) => ({ x: c.lng === 129.2 ? 150 : 100, y: 100 }),
+      });
+      receive(markerState(p));
+      expect(schoolOverlay().options.content.className).toBe("pg-marker school lv-high");
+    } finally {
+      width.mockRestore();
+      height.mockRestore();
+    }
   });
 
   it("실거래·단지 옆 경매·학교가 같은 자리에 있으면 학교만 점이 된다", () => {

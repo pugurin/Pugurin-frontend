@@ -86,6 +86,7 @@ function paths(coords) {
 }
 
 window.pugurinKakaoMap = function (el, config, send) {
+  var SCHOOL_BADGE_X = 14.5;
   var map = null, destroyed = false, overlays = [], shapes = [], pending = null, markerClick = 0;
   var state = { items: [], base: 'normal', cadastral: false, roadview: false, selection: null, user: null };
   var overlaysOn = {};
@@ -153,9 +154,11 @@ window.pugurinKakaoMap = function (el, config, send) {
       var button = markerButton(m);
       measure.appendChild(button);
       var bw = button.offsetWidth, bh = button.offsetHeight;
-      // 지역·학교 마커는 꼬리가 없어 칸 가운데를 좌표에 맞춘다
+      // 지역·학교 마커는 꼬리가 없어 세로 가운데를 좌표에 맞춘다.
+      // 학교는 칸 가운데가 아니라 도형 배지 가운데(테두리 1.5 + 왼쪽 여백 3 + 배지 반 10 = 14.5px)를 좌표에 둔다
       var centered = m.region || !!m.school;
-      var r = { left: p.x - bw / 2, right: p.x + bw / 2, top: centered ? p.y - bh / 2 : p.y - bh - 7, bottom: centered ? p.y + bh / 2 : p.y };
+      var ax = m.school && bw ? SCHOOL_BADGE_X : bw / 2;
+      var r = { left: p.x - ax, right: p.x - ax + bw, top: centered ? p.y - bh / 2 : p.y - bh - 7, bottom: centered ? p.y + bh / 2 : p.y };
       // 붙을 단지가 점이 아닌 상태로 그려졌으면 그 오른쪽 옆으로 옮긴다. 단지 위치에서 가로로만 띄운다
       // 그릴 위치도 단지 위치로 잡아, 그려진 상자와 겹침 판정 사각형이 같게 한다
       var host = m.attach ? placed[m.attach] : null;
@@ -190,7 +193,7 @@ window.pugurinKakaoMap = function (el, config, send) {
         send({ type: 'hover', id: m.id, x: e.clientX - b.left, y: e.clientY - b.top });
       };
       button.onmouseleave = function () { send({ type: 'hover', id: null }); };
-      var o = new kakao.maps.CustomOverlay({ position: pos, content: button, xAnchor: host ? 0 : 0.5, yAnchor: (dot && !host) || centered ? 0.5 : 1, zIndex: m.rank === 0 ? 100 : dot ? 5 : 10, clickable: true });
+      var o = new kakao.maps.CustomOverlay({ position: pos, content: button, xAnchor: host ? 0 : m.school && !dot && bw ? SCHOOL_BADGE_X / bw : 0.5, yAnchor: (dot && !host) || centered ? 0.5 : 1, zIndex: m.rank === 0 ? 100 : dot ? 5 : 10, clickable: true });
       o.setMap(map);
       overlays.push(o);
     });
