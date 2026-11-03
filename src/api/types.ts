@@ -218,6 +218,28 @@ export type School = {
   opened_on: string | null;
   distance_m: number | null;
 };
+// 병원 종별. 백엔드 HospitalOut.tier와 같다
+export type HospitalTier =
+  | "general"
+  | "hospital"
+  | "clinic"
+  | "dental"
+  | "oriental"
+  | "public"
+  | "other";
+export type Hospital = {
+  id: string;
+  name: string;
+  class_name: string | null;
+  tier: HospitalTier;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  tel: string | null;
+  homepage: string | null;
+  doctors: number | null;
+  distance_m: number | null;
+};
 export type AuctionSource = "court" | "public";
 export type AuctionGroup =
   "apartment" | "officetel" | "villa" | "land" | "other";

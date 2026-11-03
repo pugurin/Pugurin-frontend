@@ -1,4 +1,5 @@
 import { ApiClient, ApiError } from "./client";
+import { HOSPITAL_TIERS } from "../state/hospital";
 import type {
   Analysis,
   Auction,
@@ -8,6 +9,7 @@ import type {
   Complex,
   Envelope,
   Filters,
+  Hospital,
   MarkerData,
   Parcel,
   School,
@@ -21,6 +23,8 @@ import {
   AUCTIONS,
   AUCTION_META,
   COMPLEXES,
+  HOSPITALS,
+  HOSPITAL_META,
   SAMPLE_META,
   SCHOOLS,
   SCHOOL_META,
@@ -264,6 +268,28 @@ export class Repository {
     }
     const p = new URLSearchParams({ bbox: bbox.join(",") });
     return this.client.get<School[]>(`/schools?${p}`, signal);
+  }
+  // 화면 영역 안의 병원. 지도에는 종합병원·병원·의원만 올린다
+  hospitals(bbox: BBox, signal?: AbortSignal): Promise<Envelope<Hospital[]>> {
+    if (this.mode === "sample") {
+      const [w, s, e, n] = bbox;
+      const data = HOSPITALS.filter(
+        (x) =>
+          (HOSPITAL_TIERS as readonly string[]).includes(x.tier) &&
+          x.lng != null &&
+          x.lat != null &&
+          x.lng >= w &&
+          x.lng <= e &&
+          x.lat >= s &&
+          x.lat <= n,
+      );
+      return Promise.resolve({ data, meta: HOSPITAL_META });
+    }
+    const p = new URLSearchParams({
+      bbox: bbox.join(","),
+      tier: HOSPITAL_TIERS.join(","),
+    });
+    return this.client.get<Hospital[]>(`/hospitals?${p}`, signal);
   }
   // 검색 결과·필지 마커처럼 PNU를 이미 알 때. 응답 형태는 parcelLookup과 같다
   parcel(pnu: string, signal?: AbortSignal) {

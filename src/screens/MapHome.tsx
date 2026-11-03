@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -20,6 +20,7 @@ import type {
   Auction,
   BBox,
   Filters,
+  Hospital,
   Marker,
   Meta,
   Parcel,
@@ -42,6 +43,12 @@ import {
 } from "../state/market";
 import { AUCTION_MIN_ZOOM } from "../state/auction";
 import { SCHOOL_LEVEL, SCHOOL_MIN_ZOOM } from "../state/school";
+import {
+  HOSPITAL_LIMIT,
+  HOSPITAL_MIN_ZOOM,
+  hospitalAreas,
+  type HospitalArea,
+} from "../state/hospital";
 import { C } from "../theme/tokens";
 import { Brand } from "../components/Brand";
 import {
@@ -61,6 +68,9 @@ import { ComplexContent, RegionContent } from "./MarketSheets";
 import { LandContent } from "./LandContent";
 import { AuctionContent } from "./AuctionContent";
 import { SCHOOL_PEEK, SchoolContent } from "./SchoolContent";
+import { HospitalAreaContent } from "./HospitalAreaContent";
+// 병원 원이 없을 때 넘기는 빈 배열. 늘 같은 참조라 지도가 다시 그리지 않는다
+const NO_AREAS: HospitalArea[] = [];
 export type Focus = { result: SearchResult; nonce: number };
 // 경매 목록에서 고른 줄. 좌표가 없으면 지도는 그대로 두고 시트만 연다
 export type AuctionFocus = {
@@ -97,6 +107,8 @@ export function MapHome({
   focusAuction,
   schools = false,
   onSchools,
+  hospitals = false,
+  onHospitals,
 }: {
   repo: Repository;
   filters: Filters;
@@ -136,6 +148,9 @@ export function MapHome({
   // 학교 레이어. 켜면 줌 14 이상에서 화면 안 학교를 마커로 그린다
   schools?: boolean;
   onSchools?: (on: boolean) => void;
+  // 병원 레이어. 켜면 줌 14 이상에서 화면 안 병원을 원으로 묶어 그린다
+  hospitals?: boolean;
+  onHospitals?: (on: boolean) => void;
 }) {
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === "web" && width >= 1024;
@@ -162,6 +177,11 @@ export function MapHome({
   const [schoolMeta, setSchoolMeta] = useState<Meta>();
   // 학교 API가 404·503이면 마커 없이 준비 중 안내만 띄운다
   const [schoolNotReady, setSchoolNotReady] = useState(false);
+  // 화면 안 병원과 그 응답 meta. meta는 병원 시트에만 쓴다
+  const [hospitalList, setHospitalList] = useState<Hospital[]>([]);
+  const [hospitalMeta, setHospitalMeta] = useState<Meta>();
+  // 병원 API가 404·503이면 원 없이 준비 중 안내만 띄운다
+  const [hospitalNotReady, setHospitalNotReady] = useState(false);
   const [meta, setMeta] = useState<Meta>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -177,6 +197,7 @@ export function MapHome({
     | { kind: "complex"; id: string }
     | { kind: "auction"; id: string }
     | { kind: "school"; school: School; meta?: Meta }
+    | { kind: "hospitals"; area: HospitalArea; meta?: Meta }
     | { kind: "region"; marker: RegionMarker }
     | {
         kind: "land";
@@ -397,6 +418,56 @@ export function MapHome({
   useEffect(() => {
     if (!schools && selected?.kind === "school") close();
   }, [schools]);
+  // 병원 요청. 학교와 같은 조건(켜짐·부산 안·줌 14 이상)에서 bbox로 부른다.
+  // tier는 Repository가 붙이고, 탭·필터와 상관없이 같은 요청이다
+  useEffect(() => {
+    if (!hospitals || outside || camera.zoom < HOSPITAL_MIN_ZOOM) {
+      // 이미 비어 있으면 같은 배열을 둬서 지도를 움직일 때마다 원을 다시 그리지 않게 한다
+      setHospitalList((p) => (p.length ? [] : p));
+      setHospitalNotReady(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      repo
+        .hospitals(queryBBox!, controller.signal)
+        .then((r) => {
+          if (controller.signal.aborted) return;
+          setHospitalList(r.data);
+          setHospitalMeta(r.meta);
+          setHospitalNotReady(false);
+        })
+        .catch((e) => {
+          if (controller.signal.aborted) return;
+          // 404·503은 준비 중으로 안내하고, 그 밖의 오류는 조용히 원만 뺀다
+          setHospitalList((p) => (p.length ? [] : p));
+          setHospitalNotReady(
+            e?.code === "RESOURCE_NOT_FOUND" || e?.code === "DATA_NOT_READY",
+          );
+        });
+    }, 220);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [repo, camera, hospitals, outside, retry]);
+  // 병원 시트가 열린 채 병원 레이어를 끄면 시트도 닫는다
+  useEffect(() => {
+    if (!hospitals && selected?.kind === "hospitals") close();
+  }, [hospitals]);
+  // 화면 거리로 묶은 병원 원. 병원이 없으면 같은 빈 배열을 둬 지도가 다시 그리지 않게 한다
+  const areas = useMemo(
+    () =>
+      hospitalList.length ? hospitalAreas(hospitalList, camera.zoom) : NO_AREAS,
+    [hospitalList, camera.zoom],
+  );
+  // 병원 시트가 열린 채 원이 다시 묶이면 같은 id 원으로 바꾸고, 그 id가 없어지면 시트를 닫는다
+  useEffect(() => {
+    if (selected?.kind !== "hospitals") return;
+    const next = areas.find((a) => a.id === selected.area.id);
+    if (!next) close();
+    else if (next !== selected.area) setSelected({ ...selected, area: next });
+  }, [areas]);
   useEffect(() => {
     if (!focus) return;
     close();
@@ -593,6 +664,15 @@ export function MapHome({
           setSelected({ kind: "school", school, meta: schoolMeta });
           setStage("peek");
         }
+      } else if (e.id.startsWith("hospital-area:")) {
+        // 원 라벨을 누르면 그 원의 병원 시트를 연다(확대하지 않는다)
+        const area = areas.find((a) => a.id === e.id);
+        if (area) {
+          pendingLand.current = null;
+          landRequest.current?.abort();
+          setSelected({ kind: "hospitals", area, meta: hospitalMeta });
+          setStage("peek");
+        }
       } else if (e.id.startsWith("auction-group:")) {
         // 한 단지에 경매가 여러 건이면 그 단지로 거른 경매 목록을 연다
         const complexId = e.id.slice("auction-group:".length);
@@ -720,6 +800,14 @@ export function MapHome({
     !emptyDismissed;
   // 학교 준비 중 안내. 오류 카드가 떠 있을 때는 숨긴다
   const schoolNotice = schools && schoolNotReady && !errorShown;
+  // 병원 준비 중 안내와 서버 상한(500곳) 안내. 오류 카드가 떠 있을 때는 둘 다 숨긴다
+  const hospitalNotice = hospitals && hospitalNotReady && !errorShown;
+  const hospitalLimitNotice =
+    hospitals &&
+    !outside &&
+    camera.zoom >= HOSPITAL_MIN_ZOOM &&
+    hospitalList.length >= HOSPITAL_LIMIT &&
+    !errorShown;
   // 학교 범례. 켜져 있고 줌 14 이상이며 준비 중이 아닐 때만. 기타는 화면 안에 있을 때만 더한다
   const schoolLegend =
     schools && !outside && camera.zoom >= SCHOOL_MIN_ZOOM && !schoolNotReady
@@ -736,7 +824,9 @@ export function MapHome({
             ? `auction:${selected.id}`
             : selected.kind === "school"
               ? `school:${selected.school.id}`
-              : selected.kind === "land"
+              : selected.kind === "hospitals"
+                ? selected.area.id
+                : selected.kind === "land"
                 ? `land:${selected.lat},${selected.lng}`
                 : `region:${selected.marker.region_code}`
       }
@@ -778,6 +868,8 @@ export function MapHome({
         />
       ) : selected.kind === "school" ? (
         <SchoolContent school={selected.school} meta={selected.meta} />
+      ) : selected.kind === "hospitals" ? (
+        <HospitalAreaContent area={selected.area} meta={selected.meta} />
       ) : selected.kind === "auction" ? (
         <AuctionContent
           id={selected.id}
@@ -1107,6 +1199,7 @@ export function MapHome({
             property={filters.property_type}
             auctions={auctions}
             schools={schoolList}
+            hospitalAreas={areas}
             selected={
               selected?.kind === "complex"
                 ? selected.id
@@ -1267,8 +1360,13 @@ export function MapHome({
             </View>
           ) : null}
           {/* 지도 가운데 안내는 한 세로 묶음에 쌓아 서로 겹치지 않게 한다.
-              경매 안내나 빈 지역 카드가 먼저, 학교 준비 중 안내가 그 아래다 */}
-          {!errorShown && (auctionCard || emptyCard || schoolNotice) && (
+              경매 안내나 빈 지역 카드가 먼저, 학교·병원 안내가 그 아래다 */}
+          {!errorShown &&
+            (auctionCard ||
+              emptyCard ||
+              schoolNotice ||
+              hospitalNotice ||
+              hospitalLimitNotice) && (
             <View
               testID="map-notices"
               pointerEvents="box-none"
@@ -1337,6 +1435,28 @@ export function MapHome({
                 >
                   <T size={16} bold>
                     학교 정보를 준비 중이에요
+                  </T>
+                </View>
+              )}
+              {hospitalNotice && (
+                <View
+                  testID="hospital-notice"
+                  pointerEvents="none"
+                  style={{ ...s.card, maxWidth: 300 }}
+                >
+                  <T size={16} bold>
+                    병원 정보를 준비 중이에요
+                  </T>
+                </View>
+              )}
+              {hospitalLimitNotice && (
+                <View
+                  testID="hospital-limit-notice"
+                  pointerEvents="none"
+                  style={{ ...s.card, maxWidth: 300 }}
+                >
+                  <T size={16} bold>
+                    병원이 많아 일부만 세었어요. 확대하면 정확해져요
                   </T>
                 </View>
               )}
@@ -1618,6 +1738,20 @@ export function MapHome({
                 value={schools}
                 accessibilityLabel="학교"
                 onValueChange={(v) => onSchools?.(v)}
+                trackColor={{ true: C.primary }}
+              />
+            </View>
+            <View style={s.between}>
+              <View>
+                <T bold>병원</T>
+                <T size={14} color={C.muted}>
+                  가까이 모인 병원·의원을 원으로 묶어 보여줘요
+                </T>
+              </View>
+              <Switch
+                value={hospitals}
+                accessibilityLabel="병원"
+                onValueChange={(v) => onHospitals?.(v)}
                 trackColor={{ true: C.primary }}
               />
             </View>

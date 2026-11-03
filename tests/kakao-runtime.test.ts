@@ -68,6 +68,7 @@ function fakeKakao() {
       CustomOverlay: Shape,
       Polygon: Shape,
       Polyline: Shape,
+      Circle: Shape,
       MapTypeId: { ROADMAP: "ROADMAP", HYBRID: "HYBRID", USE_DISTRICT: "USE_DISTRICT", ROADVIEW: "ROADVIEW" },
       event: { addListener: (target: unknown, name: string, fn: () => void) => listeners.push({ target, name, fn }) },
       load: (cb: () => void) => cb(),
@@ -427,6 +428,52 @@ describe("학교 마커", () => {
     button.click();
     expect(setLevel).not.toHaveBeenCalled();
     expect(events.filter((e) => e.type === "marker")).toEqual([{ type: "marker", id: "school:h1" }]);
+  });
+});
+
+describe("병원 원", () => {
+  const areas = [
+    { id: "hospital-area:a", lat: 35.15, lng: 129.14, radius_m: 120, members: [{}, {}, {}] },
+    { id: "hospital-area:b", lat: 35.16, lng: 129.15, radius_m: 80, members: [{}] },
+  ] as any;
+  const circles = () => fake.shapes.filter((s) => s.map && s.options.radius != null);
+  const labels = () => fake.shapes.filter((s) => s.map && s.options.content?.classList?.contains("pg-area"));
+
+  it("원마다 Circle과 개수 라벨을 그린다", () => {
+    start("test-key", props({ hospitalAreas: areas }));
+    expect(circles()).toHaveLength(2);
+    expect(circles()[0].options).toMatchObject({
+      radius: 120,
+      fillColor: "#0E7FA8",
+      fillOpacity: 0.12,
+      strokeColor: "#0E7FA8",
+      strokeWeight: 1,
+      strokeOpacity: 0.5,
+      zIndex: 1,
+    });
+    expect(circles()[0].options.center).toMatchObject({ lat: 35.15, lng: 129.14 });
+    expect(labels()).toHaveLength(2);
+    expect(labels()[0].options.zIndex).toBe(4);
+    expect(labels()[0].options.content.textContent).toBe("병원 3");
+    expect(labels()[0].options.content.getAttribute("aria-label")).toBe("병원 3곳 보기");
+  });
+
+  it("라벨을 누르면 marker만 보내고 지도 클릭으로 처리하지 않는다", async () => {
+    const { events, map } = start("test-key", props({ hospitalAreas: areas }));
+    labels()[1].options.content.click();
+    fake.trigger(map, "click", { latLng: new fake.kakao.maps.LatLng(35.16, 129.15) });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(events.filter((e) => e.type === "marker")).toEqual([{ type: "marker", id: "hospital-area:b" }]);
+    expect(events.some((e) => e.type === "mapClick")).toBe(false);
+  });
+
+  it("빈 배열을 받으면 이전 원을 지운다", () => {
+    const { receive } = start("test-key", props({ hospitalAreas: areas }));
+    expect(circles()).toHaveLength(2);
+    expect(labels()).toHaveLength(2);
+    receive(fullState(props({ hospitalAreas: [] })));
+    expect(circles()).toHaveLength(0);
+    expect(labels()).toHaveLength(0);
   });
 });
 
