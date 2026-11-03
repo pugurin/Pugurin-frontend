@@ -335,15 +335,11 @@ const school: School = {
 
 describe("학교 마커", () => {
   const live = () => fake.shapes.filter((s) => s.map && s.options.content?.classList?.contains("pg-marker"));
-  // 점으로 줄어든 학교는 school 클래스가 빠지므로 접근성 이름으로도 찾는다
-  const schoolOverlay = () =>
-    live().find(
-      (s) => s.options.content.classList.contains("school") || s.options.content.getAttribute("aria-label")?.includes("해운대여고"),
-    )!;
+  const schoolOverlay = () => live().find((s) => s.options.content.classList.contains("school"))!;
   const auctionOverlay = () => live().find((s) => s.options.content.classList.contains("auction"))!;
   const complexOverlay = () => live().find((s) => s.options.content.textContent?.includes("14.5억"))!;
 
-  it("학교는 배지 안 도형 글자와 줄인 이름으로 그리고, 칸 가운데를 좌표에 맞춘다", () => {
+  it("학교는 배지 안 도형 글자와 줄인 이름으로 그린다", () => {
     start("test-key", props({ markers: [], schools: [school] }));
     const o = schoolOverlay();
     const button: HTMLButtonElement = o.options.content;
@@ -356,13 +352,50 @@ describe("학교 마커", () => {
     expect(shape.textContent).toBe("고");
     expect(button.querySelector(".name")!.textContent).toBe("해운대여고");
     expect(button.style.getPropertyValue("--color")).toBe("#5B3FA0");
-    expect(o.options).toMatchObject({ xAnchor: 0.5, yAnchor: 0.5 });
   });
 
-  it("실거래·단지 옆 경매·학교가 같은 자리에 있으면 학교만 점이 된다", () => {
+  it("학교는 칸 가운데가 아니라 도형 배지 가운데(왼쪽에서 14.5px)를 좌표에 맞춘다", () => {
+    const width = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(80);
+    try {
+      start("test-key", props({ markers: [], schools: [school] }));
+      expect(schoolOverlay().options).toMatchObject({ xAnchor: 14.5 / 80, yAnchor: 0.5 });
+    } finally {
+      width.mockRestore();
+    }
+  });
+
+  it("학교 겹침 판정도 배지 가운데 기준 자리로 한다", () => {
+    // 단지 마커(40×20, 꼬리)는 x 80~120에 놓인다. 학교(80×20)를 x 150에 두면
+    // 칸 가운데 기준(110~190)이면 겹치지만, 배지 기준(135.5~215.5)이면 겹치지 않는다
+    const width = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("school") ? 80 : 40;
+    });
+    const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(20);
+    try {
+      const p = props({ schools: [{ ...school, lng: 129.2 }] });
+      const { receive, map } = start("test-key", p);
+      map.getProjection = () => ({
+        containerPointFromCoords: (c: { lng: number }) => ({ x: c.lng === 129.2 ? 150 : 100, y: 100 }),
+      });
+      receive(markerState(p));
+      expect(schoolOverlay().options.content.className).toBe("pg-marker school lv-high");
+    } finally {
+      width.mockRestore();
+      height.mockRestore();
+    }
+  });
+
+  it("실거래·단지 옆 경매·학교가 같은 자리에 있으면 학교만 이름 없는 작은 배지가 된다", () => {
     start("test-key", props({ auctions: [auction], schools: [school] }));
     expect(live()).toHaveLength(3);
-    expect(schoolOverlay().options.content.className).toBe("pg-marker dot");
+    const o = schoolOverlay();
+    const button: HTMLButtonElement = o.options.content;
+    expect(button.className).toBe("pg-marker school lv-high compact");
+    expect(button.querySelector(".shape.diamond")!.textContent).toBe("고");
+    expect(button.querySelector(".name")).toBeNull();
+    expect(button.getAttribute("aria-label")).toBe("해운대여고 학교 보기");
+    // 작은 배지는 가운데를 좌표에 두고, 가격 마커 위에 그려 가려지지 않게 한다
+    expect(o.options).toMatchObject({ xAnchor: 0.5, yAnchor: 0.5, zIndex: 11 });
     expect(complexOverlay().options.content.classList.contains("dot")).toBe(false);
     expect(auctionOverlay().options.content.className).toBe("pg-marker auction");
   });
@@ -379,18 +412,18 @@ describe("학교 마커", () => {
       });
       receive(markerState(p));
       expect(auctionOverlay().options.content.className).toBe("pg-marker auction");
-      expect(schoolOverlay().options.content.className).toBe("pg-marker dot");
+      expect(schoolOverlay().options.content.className).toBe("pg-marker school lv-high compact");
     } finally {
       width.mockRestore();
       height.mockRestore();
     }
   });
 
-  it("점으로 줄어든 학교를 누르면 확대하지 않고 marker를 보낸다", () => {
+  it("작은 배지가 된 학교를 누르면 확대하지 않고 marker를 보낸다", () => {
     const { events, map } = start("test-key", props({ auctions: [auction], schools: [school] }));
     const setLevel = vi.spyOn(map, "setLevel");
     const button: HTMLButtonElement = schoolOverlay().options.content;
-    expect(button.className).toBe("pg-marker dot");
+    expect(button.classList.contains("compact")).toBe(true);
     button.click();
     expect(setLevel).not.toHaveBeenCalled();
     expect(events.filter((e) => e.type === "marker")).toEqual([{ type: "marker", id: "school:h1" }]);

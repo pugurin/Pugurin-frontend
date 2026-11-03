@@ -68,6 +68,8 @@ function addStyle() {
     '.pg-marker.school .shape.diamond{width:13px;height:13px;border-radius:2px;transform:rotate(45deg);font-size:9.5px}' +
     '.pg-marker.school .shape.diamond>span{transform:rotate(-45deg)}' +
     '.pg-marker.school .name{font-size:11px;font-weight:700}' +
+    // 겹친 학교는 점 대신 이름 없는 작은 배지로 그린다. 칸 테두리와 도형 사이 여백은 그대로 둔다
+    '.pg-marker.school.compact{padding:0 1px;gap:0}' +
     '.pg-marker.dot{width:14px;height:14px;border:2px solid #fff;border-radius:50%;background:var(--color);box-shadow:0 1px 3px #0004}.pg-marker.dot:after{display:none}' +
     '.pg-measure{position:absolute;left:0;top:0;visibility:hidden;pointer-events:none}';
   document.head.appendChild(style);
@@ -86,6 +88,7 @@ function paths(coords) {
 }
 
 window.pugurinKakaoMap = function (el, config, send) {
+  var SCHOOL_BADGE_X = 14.5;
   var map = null, destroyed = false, overlays = [], shapes = [], pending = null, markerClick = 0;
   var state = { items: [], base: 'normal', cadastral: false, roadview: false, selection: null, user: null };
   var overlaysOn = {};
@@ -153,9 +156,11 @@ window.pugurinKakaoMap = function (el, config, send) {
       var button = markerButton(m);
       measure.appendChild(button);
       var bw = button.offsetWidth, bh = button.offsetHeight;
-      // 지역·학교 마커는 꼬리가 없어 칸 가운데를 좌표에 맞춘다
+      // 지역·학교 마커는 꼬리가 없어 세로 가운데를 좌표에 맞춘다.
+      // 학교는 칸 가운데가 아니라 도형 배지 가운데(테두리 1.5 + 왼쪽 여백 3 + 배지 반 10 = 14.5px)를 좌표에 둔다
       var centered = m.region || !!m.school;
-      var r = { left: p.x - bw / 2, right: p.x + bw / 2, top: centered ? p.y - bh / 2 : p.y - bh - 7, bottom: centered ? p.y + bh / 2 : p.y };
+      var ax = m.school && bw ? SCHOOL_BADGE_X : bw / 2;
+      var r = { left: p.x - ax, right: p.x - ax + bw, top: centered ? p.y - bh / 2 : p.y - bh - 7, bottom: centered ? p.y + bh / 2 : p.y };
       // 붙을 단지가 점이 아닌 상태로 그려졌으면 그 오른쪽 옆으로 옮긴다. 단지 위치에서 가로로만 띄운다
       // 그릴 위치도 단지 위치로 잡아, 그려진 상자와 겹침 판정 사각형이 같게 한다
       var host = m.attach ? placed[m.attach] : null;
@@ -167,10 +172,16 @@ window.pugurinKakaoMap = function (el, config, send) {
         r = { left: hr.right + 4, right: hr.right + 4 + bw, top: hr.bottom - bh - 7, bottom: hr.bottom };
       }
       var dot = m.rank > 0 && rects.some(function (a) { return r.left < a.right + 3 && r.right > a.left - 3 && r.top < a.bottom + 3 && r.bottom > a.top - 3; });
-      if (dot) {
+      // 학교는 점으로 줄이지 않고 학교급 도형만 남긴다. 점이면 학교인지 알아볼 수 없다
+      var compact = dot && !!m.school;
+      if (compact) {
+        button.classList.add('compact');
+        button.querySelector('.name').remove();
+        button.setAttribute('aria-label', m.amount + ' 학교 보기');
+      } else if (dot) {
         button.className = 'pg-marker dot';
         button.replaceChildren();
-        button.setAttribute('aria-label', m.auction ? '경매 물건 보기' : m.school ? m.amount + ' 학교 보기' : (m.title || '마커') + ' 확대');
+        button.setAttribute('aria-label', m.auction ? '경매 물건 보기' : (m.title || '마커') + ' 확대');
       } else {
         rects.push(r);
         if (!m.auction) placed[m.id] = { rect: r, pos: pos };
@@ -179,7 +190,7 @@ window.pugurinKakaoMap = function (el, config, send) {
       button.onclick = function () {
         markerClick = Date.now();
         send({ type: 'hover', id: null });
-        // 경매·학교 점은 확대하지 않고 바로 시트를 연다
+        // 경매 점과 작은 학교 배지는 확대하지 않고 바로 시트를 연다
         if (dot && !m.auction && !m.school) {
           map.setCenter(pos);
           map.setLevel(Math.max(1, map.getLevel() - 1), { animate: { duration: 260 } });
@@ -190,7 +201,7 @@ window.pugurinKakaoMap = function (el, config, send) {
         send({ type: 'hover', id: m.id, x: e.clientX - b.left, y: e.clientY - b.top });
       };
       button.onmouseleave = function () { send({ type: 'hover', id: null }); };
-      var o = new kakao.maps.CustomOverlay({ position: pos, content: button, xAnchor: host ? 0 : 0.5, yAnchor: (dot && !host) || centered ? 0.5 : 1, zIndex: m.rank === 0 ? 100 : dot ? 5 : 10, clickable: true });
+      var o = new kakao.maps.CustomOverlay({ position: pos, content: button, xAnchor: host ? 0 : m.school && !dot && bw ? SCHOOL_BADGE_X / bw : 0.5, yAnchor: (dot && !host) || centered ? 0.5 : 1, zIndex: m.rank === 0 ? 100 : compact ? 11 : dot ? 5 : 10, clickable: true });
       o.setMap(map);
       overlays.push(o);
     });
