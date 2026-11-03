@@ -5,6 +5,11 @@ export const SCHOOL_MIN_ZOOM = 14;
 // 학교 시트와 목록에 붙이는 안내 문구. 배정 학교(학군)와 헷갈리지 않게 한다
 export const SCHOOL_NOTICE =
   "배정 학교(학군)가 아니라 직선거리로 가까운 학교입니다";
+// 배정 초등학교 안내 문구. 학구도는 법적 효력이 없고 입학생 수에 따라 분산 배정될 수 있다
+export const ASSIGNMENT_NOTICE =
+  "학구도 기준이며 참고용이에요. 실제 배정은 관할 교육지원청에 확인하세요";
+// 학구도 출처 문구
+export const ASSIGNMENT_SOURCE = "한국교육시설안전원 학구도";
 // 학교 데이터 출처 문구
 export const SCHOOL_SOURCE = "나이스 교육정보 개방 포털";
 
