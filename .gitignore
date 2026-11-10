@@ -8,6 +8,8 @@ web-build/
 .DS_Store
 coverage/
 *.log
+# npm run web:https가 만드는 자체 서명 인증서
+.cert/
 
 # expo prebuild로 생성되는 네이티브 폴더 (MapLibre 때문에 development build 필요)
 /ios
