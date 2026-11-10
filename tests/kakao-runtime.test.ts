@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { webRuntime } from "../src/map/kakaoRuntime";
 import { fullState, markerState } from "../src/map/bridge";
 import type { MapProps } from "../src/map/types";
-import type { Auction, ComplexMarker, School } from "../src/api/types";
+import type { Auction, ComplexMarker, Redevelopment, School } from "../src/api/types";
+import { REDEVELOPMENTS } from "../src/api/fixtures";
 
 // 카카오 SDK 대역. 런타임이 부르는 API만 흉내 낸다
 function fakeKakao() {
@@ -516,5 +517,33 @@ describe("로드뷰 런타임", () => {
     const status = roadview();
     expect(status).toHaveBeenCalledWith("none");
     expect(fake.kakao.lastRoadview).toBeUndefined();
+  });
+});
+
+describe("재개발 마커", () => {
+  const redev: Redevelopment = {
+    ...REDEVELOPMENTS[0],
+    lat: complex.lat,
+    lng: complex.lng,
+  };
+  const live = () => fake.shapes.filter((s) => s.map && s.options.content?.classList?.contains("pg-marker"));
+
+  it("점선 흰 칸에 유형·단계·구역명을 쓰고, 누르면 marker를 보낸다", () => {
+    const { events } = start("test-key", props({ markers: [], redevelopments: [redev] }));
+    const b: HTMLButtonElement = live()[0].options.content;
+    expect(b.className).toBe("pg-marker redev");
+    expect(b.getAttribute("aria-label")).toBe("재개발 관리처분 우동1구역");
+    b.click();
+    expect(events.filter((e) => e.type === "marker")).toEqual([{ type: "marker", id: "redev:BARA_SAMPLE_001" }]);
+  });
+
+  it("실거래 마커와 겹치면 재개발이 점이 되고, 점을 눌러도 확대하지 않고 marker를 보낸다", () => {
+    const { events, map } = start("test-key", props({ redevelopments: [redev] }));
+    const dot = live().find((s) => s.options.content.classList.contains("dot"))!;
+    expect(dot.options.content.getAttribute("aria-label")).toBe("우동1구역 재개발 구역 보기");
+    const setLevel = vi.spyOn(map, "setLevel");
+    dot.options.content.click();
+    expect(setLevel).not.toHaveBeenCalled();
+    expect(events.filter((e) => e.type === "marker")).toEqual([{ type: "marker", id: "redev:BARA_SAMPLE_001" }]);
   });
 });

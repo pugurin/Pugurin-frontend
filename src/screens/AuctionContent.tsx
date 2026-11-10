@@ -75,7 +75,7 @@ export function Badge({
   );
 }
 
-function InfoRow({
+export function InfoRow({
   label,
   children,
 }: {

@@ -1,7 +1,22 @@
 // 지도 마커 글자·색. 카카오 지도 런타임(kakaoRuntime.ts)에는 여기서 만든 MarkerItem만 넘긴다
-import type { Auction, Marker, Property, School, SchoolLevel } from "../api/types";
+import type {
+  Auction,
+  Marker,
+  Property,
+  Redevelopment,
+  School,
+  SchoolLevel,
+} from "../api/types";
 import { auctionAmount, auctionSub } from "../state/auction";
 import { formatPrice, markerId } from "../state/market";
+import {
+  REDEVELOPMENT_COLOR,
+  REDEVELOPMENT_DONE_COLOR,
+  REDEVELOPMENT_KIND_LABEL,
+  isDone,
+  shortAreaName,
+  stageShort,
+} from "../state/redevelopment";
 import { SCHOOL_LEVEL, schoolShortName, type SchoolShape } from "../state/school";
 import type { MapProps } from "./types";
 
@@ -75,6 +90,8 @@ export type MarkerItem = {
   // 학교 도형 안 글자와 도형 모양. 런타임 문자열은 SCHOOL_LEVEL을 import할 수 없어 항목에 실어 보낸다
   badge?: string;
   shape?: SchoolShape;
+  // 재개발 구역 마커. 점선 테두리 흰 칸에 사업 유형·단계·구역명을 쓴다
+  redev?: boolean;
 };
 
 export function markerItems(
@@ -191,6 +208,32 @@ export function schoolItems(schools: School[], selected: string | null): MarkerI
         school: s.level,
         badge: level.badge,
         shape: level.shape,
+      },
+    ];
+  });
+}
+
+// 재개발 구역 마커. 가격 마커보다 뒤에 자리를 잡는다(겹치면 재개발이 점이 된다)
+export function redevelopmentItems(
+  list: Redevelopment[],
+  selected: string | null,
+): MarkerItem[] {
+  return list.flatMap((r) => {
+    if (r.lat == null || r.lng == null) return [];
+    const id = `redev:${r.id}`;
+    return [
+      {
+        id,
+        lat: r.lat,
+        lng: r.lng,
+        region: false,
+        title: REDEVELOPMENT_KIND_LABEL[r.kind],
+        amount: stageShort(r),
+        sub: shortAreaName(r.area_name),
+        color: isDone(r) ? REDEVELOPMENT_DONE_COLOR : REDEVELOPMENT_COLOR,
+        // 많이 진행된 구역이 먼저 자리를 잡는다
+        rank: id === selected ? 0 : 900 - (r.stage_order ?? 0),
+        redev: true,
       },
     ];
   });

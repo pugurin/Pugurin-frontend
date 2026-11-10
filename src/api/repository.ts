@@ -1,7 +1,10 @@
 import { ApiClient, ApiError } from "./client";
 import { HOSPITAL_TIERS } from "../state/hospital";
+import { REDEVELOPMENT_LIMIT } from "../state/redevelopment";
 import type {
   Analysis,
+  Redevelopment,
+  RedevelopmentStage,
   Auction,
   AuctionDetail,
   AuctionQuery,
@@ -21,6 +24,8 @@ import type {
   Transaction,
 } from "./types";
 import {
+  REDEVELOPMENTS,
+  REDEVELOPMENT_META,
   AUCTIONS,
   AUCTION_META,
   COMPLEXES,
@@ -291,6 +296,34 @@ export class Repository {
       tier: HOSPITAL_TIERS.join(","),
     });
     return this.client.get<Hospital[]>(`/hospitals?${p}`, signal);
+  }
+  // 화면 영역 안의 정비사업 구역. 좌표가 있는 구역 중 고른 단계만 받는다
+  redevelopments(
+    bbox: BBox,
+    stages: readonly RedevelopmentStage[],
+    signal?: AbortSignal,
+  ): Promise<Envelope<Redevelopment[]>> {
+    if (this.mode === "sample") {
+      const [w, s, e, n] = bbox;
+      const data = REDEVELOPMENTS.filter(
+        (x) =>
+          stages.includes(x.stage) &&
+          !x.is_closed &&
+          x.lng != null &&
+          x.lat != null &&
+          x.lng >= w &&
+          x.lng <= e &&
+          x.lat >= s &&
+          x.lat <= n,
+      );
+      return Promise.resolve({ data, meta: REDEVELOPMENT_META });
+    }
+    const p = new URLSearchParams({
+      bbox: bbox.join(","),
+      stage: stages.join(","),
+      page_size: String(REDEVELOPMENT_LIMIT),
+    });
+    return this.client.get<Redevelopment[]>(`/redevelopments?${p}`, signal);
   }
   // 단지 주변 학교. 샘플 모드는 서버처럼 직선거리 3km 안에서 학교급별 가까운 3곳을 고른다
   nearby(complexId: string, signal?: AbortSignal): Promise<Envelope<Nearby>> {

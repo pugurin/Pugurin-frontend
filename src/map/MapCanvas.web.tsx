@@ -37,7 +37,7 @@ export default function MapCanvas(p: MapProps) {
   useEffect(() => {
     receive.current?.(markerState(p));
     p.onMarkerHover?.(null);
-  }, [p.markers, p.auctions, p.schools, p.property, p.unit, p.selected]);
+  }, [p.markers, p.auctions, p.schools, p.redevelopments, p.property, p.unit, p.selected]);
 
   useEffect(() => {
     receive.current?.(layerState(p));
