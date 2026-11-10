@@ -1,7 +1,7 @@
 // 지도 마커 글자·색. 카카오 지도 런타임(kakaoRuntime.ts)에는 여기서 만든 MarkerItem만 넘긴다
-import type { Auction, Marker, Property, School, SchoolLevel } from "../api/types";
+import type { Auction, ComplexMarker, Marker, Property, School, SchoolLevel, TypicalArea } from "../api/types";
 import { auctionAmount, auctionSub } from "../state/auction";
-import { formatPrice, markerId } from "../state/market";
+import { formatPrice, markerId, pyeongType } from "../state/market";
 import { SCHOOL_LEVEL, schoolShortName, type SchoolShape } from "../state/school";
 import type { MapProps } from "./types";
 
@@ -35,6 +35,8 @@ export function markerLines(m: Marker, unit: MapProps["unit"]) {
           : "보증금 " + man(s.median_deposit) + " · 월 " + man(s.median_monthly_rent);
     return { title: m.name, amount, sub: m.transaction_count.toLocaleString("ko-KR") + "건" };
   }
+  const typical = m.kind === "complex" ? typicalLines(m, unit) : null;
+  if (typical) return typical;
   const l = m.latest;
   const amount =
     l.deal_type === "sale"
@@ -50,6 +52,29 @@ export function markerLines(m: Marker, unit: MapProps["unit"]) {
     amount,
     sub: `${prefix}${value}${unit} · '${l.contract_date.slice(2, 7).replace("-", ".")}`,
   };
+}
+
+// 단지 마커의 대표 평형(거래가 가장 많은 평형) 평균가. 서버가 안 보냈거나 맞는 평균값이 없으면 null
+function typicalLines(m: ComplexMarker, unit: MapProps["unit"]) {
+  const t = m.typical;
+  if (!t) return null;
+  const deal = m.latest.deal_type;
+  const amount =
+    deal === "sale"
+      ? t.avg_price != null && price(t.avg_price)
+      : deal === "jeonse"
+        ? t.avg_deposit != null && "전세 " + price(t.avg_deposit)
+        : t.avg_deposit != null && t.avg_monthly_rent != null && man(t.avg_deposit) + "/" + man(t.avg_monthly_rent);
+  if (!amount) return null;
+  return { title: "", amount, sub: typicalArea(t, unit) };
+}
+
+// 공급 평형이 있으면 "34평형"(㎡면 "112㎡형"), 없으면 전용 "25평"(㎡면 "84㎡")
+function typicalArea(t: TypicalArea, unit: MapProps["unit"]) {
+  if (t.supply_area_pyeong != null) {
+    return unit === "㎡" ? Math.round(t.supply_area_pyeong * 3.3058) + "㎡형" : pyeongType(t.supply_area_pyeong);
+  }
+  return unit === "㎡" ? Math.floor(t.exclusive_area_m2) + "㎡" : Math.floor(t.exclusive_area_pyeong) + "평";
 }
 
 export type MarkerItem = {

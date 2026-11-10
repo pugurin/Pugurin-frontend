@@ -57,6 +57,51 @@ describe("마커 글자", () => {
   });
 });
 
+describe("단지 마커 대표 평형(typical)", () => {
+  type Typical = NonNullable<ComplexMarker["typical"]>;
+  const withTypical = (t: Partial<Typical>, latest: Partial<ComplexMarker["latest"]> = {}): ComplexMarker => ({
+    ...complex(latest),
+    typical: {
+      exclusive_area_m2: 84.97,
+      exclusive_area_pyeong: 25.7,
+      supply_area_pyeong: 34,
+      transaction_count: 9,
+      avg_price: 1412000000,
+      avg_deposit: null,
+      avg_monthly_rent: null,
+      ...t,
+    },
+  });
+
+  it("매매는 공급 평형과 평균가", () => {
+    expect(markerLines(withTypical({}), "평")).toEqual({ title: "", amount: "14.1억", sub: "34평형" });
+  });
+  it("공급 평형이 없으면 전용 평", () => {
+    expect(markerLines(withTypical({ supply_area_pyeong: null }), "평").sub).toBe("25평");
+  });
+  it("㎡ 단위", () => {
+    expect(markerLines(withTypical({}), "㎡").sub).toBe("112㎡형");
+    expect(markerLines(withTypical({ supply_area_pyeong: null }), "㎡").sub).toBe("84㎡");
+  });
+  it("전세는 평균 보증금", () => {
+    const m = withTypical({ avg_price: null, avg_deposit: 320000000 }, { deal_type: "jeonse", price: null, deposit: 500000000 });
+    expect(markerLines(m, "평")).toMatchObject({ amount: "전세 3.2억", sub: "34평형" });
+  });
+  it("월세는 평균 보증금/월세", () => {
+    const m = withTypical(
+      { avg_price: null, avg_deposit: 30000000, avg_monthly_rent: 650000 },
+      { deal_type: "monthly", price: null, deposit: 50000000, monthly_rent: 800000 },
+    );
+    expect(markerLines(m, "평")).toMatchObject({ amount: "3,000/65", sub: "34평형" });
+  });
+  it("typical이 없거나 null이면 최근 거래로 표시한다", () => {
+    expect(markerLines({ ...complex({}), typical: null }, "평")).toMatchObject({ amount: "14.5억", sub: "34평 · '26.08" });
+  });
+  it("거래유형에 맞는 평균값이 없으면 최근 거래로 표시한다", () => {
+    expect(markerLines(withTypical({ avg_price: null }), "평").amount).toBe("14.5억");
+  });
+});
+
 describe("런타임에 넘기는 마커", () => {
   it("선택된 마커는 먹색과 가장 높은 우선순위를 가진다", () => {
     const [r, c] = markerItems([region, complex({})], "apartment", "평", "c1");
