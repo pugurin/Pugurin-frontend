@@ -77,11 +77,11 @@ describe("단지 마커 대표 평형(typical)", () => {
     expect(markerLines(withTypical({}), "평")).toEqual({ title: "", amount: "14.1억", sub: "34평형" });
   });
   it("공급 평형이 없으면 전용 평", () => {
-    expect(markerLines(withTypical({ supply_area_pyeong: null }), "평").sub).toBe("25평");
+    expect(markerLines(withTypical({ supply_area_pyeong: null }), "평").sub).toBe("전용 25.7평");
   });
   it("㎡ 단위", () => {
     expect(markerLines(withTypical({}), "㎡").sub).toBe("112㎡형");
-    expect(markerLines(withTypical({ supply_area_pyeong: null }), "㎡").sub).toBe("84㎡");
+    expect(markerLines(withTypical({ supply_area_pyeong: null }), "㎡").sub).toBe("전용 85.0㎡");
   });
   it("전세는 평균 보증금", () => {
     const m = withTypical({ avg_price: null, avg_deposit: 320000000 }, { deal_type: "jeonse", price: null, deposit: 500000000 });
