@@ -73,6 +73,9 @@ function addStyle() {
     // 겹친 학교는 점 대신 이름 없는 작은 배지로 그린다. 칸 테두리와 도형 사이 여백은 그대로 둔다
     '.pg-marker.school.compact{padding:0 1px;gap:0}' +
     '.pg-area{border:1.5px solid ' + HOSPITAL_COLOR + ';border-radius:999px;background:#fff;color:' + HOSPITAL_COLOR + ';padding:1px 7px;font:700 11px/1.4 Pretendard,-apple-system,sans-serif;white-space:nowrap;cursor:pointer}' +
+    // 단지 마커 오른쪽 위 모서리의 경매 배지. 겹침 계산에는 넣지 않는다
+    '.pg-marker .pg-tag{position:absolute;top:-10px;right:-10px;border:1.5px solid var(--tag);border-radius:999px;background:#fff;color:var(--tag);padding:1px 5px;font:700 11px/1.3 Pretendard,-apple-system,sans-serif;cursor:pointer}' +
+    '.pg-marker .pg-tag.on{background:var(--tag);color:#fff}' +
     '.pg-marker.dot{width:14px;height:14px;border:2px solid #fff;border-radius:50%;background:var(--color);box-shadow:0 1px 3px #0004}.pg-marker.dot:after{display:none}' +
     '.pg-measure{position:absolute;left:0;top:0;visibility:hidden;pointer-events:none}';
   document.head.appendChild(style);
@@ -92,6 +95,8 @@ function paths(coords) {
 
 window.pugurinKakaoMap = function (el, config, send) {
   var SCHOOL_BADGE_X = 14.5;
+  // 꼬리 높이. 꼬리는 상자 밖(bottom:-7px)에 그려져 offsetHeight에 들어가지 않는다
+  var TAIL = 7;
   var map = null, destroyed = false, overlays = [], shapes = [], pending = null, markerClick = 0;
   var state = { items: [], base: 'normal', cadastral: false, roadview: false, selection: null, user: null };
   var overlaysOn = {};
@@ -139,9 +144,27 @@ window.pugurinKakaoMap = function (el, config, send) {
     return button;
   }
 
+  // 단지 마커 모서리에 경매 배지를 붙인다. 배지를 누르면 단지가 아니라 그 경매를 연다
+  function addTag(host, m) {
+    var tag = document.createElement('span');
+    tag.className = 'pg-tag' + (m.rank === 0 ? ' on' : '');
+    tag.style.setProperty('--tag', m.color);
+    tag.textContent = m.tag;
+    tag.setAttribute('role', 'button');
+    tag.setAttribute('aria-label', '경매 ' + m.tag.replace(/[^0-9]/g, '') + '건 보기');
+    tag.onclick = function (e) {
+      e.stopPropagation();
+      markerClick = Date.now();
+      send({ type: 'hover', id: null });
+      send({ type: 'marker', id: m.id });
+    };
+    host.appendChild(tag);
+  }
+
   // 마커를 다시 그린다. 겹치는 마커는 rank가 큰 쪽을 점으로 줄인다.
-  // 단지 옆에 붙는 경매(attach)는 단지를 먼저 자리 잡은 뒤, 그 오른쪽 끝 +4px, 아래 끝에 맞춰 놓는다.
-  // 학교는 단지 옆 경매보다도 뒤에 자리를 잡아, 가격·경매 마커를 점으로 밀어내지 않게 한다
+  // 단지에 속한 경매(attach)는 단지를 먼저 자리 잡은 뒤 그 단지 마커 모서리에 배지로 붙인다.
+  // 단지가 점이면 배지도 그리지 않는다(확대하면 보인다).
+  // 학교는 경매 배지보다도 뒤에 자리를 잡아, 가격·경매 마커를 점으로 밀어내지 않게 한다
   function renderMarkers() {
     overlays.forEach(function (o) { o.setMap(null); });
     overlays = [];
@@ -154,6 +177,12 @@ window.pugurinKakaoMap = function (el, config, send) {
     var stage = function (m) { return m.school ? 2 : m.attach ? 1 : 0; };
     var items = state.items.slice().sort(function (a, b) { return stage(a) - stage(b) || byRank(a, b); });
     items.forEach(function (m) {
+      // 단지에 붙는 경매는 따로 그리지 않고 단지 마커에 배지로 단다. 단지가 점이면 건너뛴다
+      if (m.attach) {
+        var host = placed[m.attach];
+        if (host && m.tag) addTag(host, m);
+        return;
+      }
       var pos = latLng(m.lat, m.lng), p = proj.containerPointFromCoords(pos);
       if (p.x < -150 || p.x > w + 150 || p.y < -150 || p.y > h + 150) return;
       var button = markerButton(m);
@@ -162,18 +191,8 @@ window.pugurinKakaoMap = function (el, config, send) {
       // 지역·학교 마커는 꼬리가 없어 세로 가운데를 좌표에 맞춘다.
       // 학교는 칸 가운데가 아니라 도형 배지 가운데(테두리 1.5 + 왼쪽 여백 3 + 배지 반 10 = 14.5px)를 좌표에 둔다
       var centered = m.region || !!m.school;
-      var ax = m.school && bw ? SCHOOL_BADGE_X : bw / 2;
-      var r = { left: p.x - ax, right: p.x - ax + bw, top: centered ? p.y - bh / 2 : p.y - bh - 7, bottom: centered ? p.y + bh / 2 : p.y };
-      // 붙을 단지가 점이 아닌 상태로 그려졌으면 그 오른쪽 옆으로 옮긴다. 단지 위치에서 가로로만 띄운다
-      // 그릴 위치도 단지 위치로 잡아, 그려진 상자와 겹침 판정 사각형이 같게 한다
-      var host = m.attach ? placed[m.attach] : null;
-      var gap = 0;
-      if (host) {
-        var hr = host.rect;
-        pos = host.pos;
-        gap = (hr.right - hr.left) / 2 + 4;
-        r = { left: hr.right + 4, right: hr.right + 4 + bw, top: hr.bottom - bh - 7, bottom: hr.bottom };
-      }
+      var ax = m.school && bw ? SCHOOL_BADGE_X / bw : 0.5;
+      var r = { left: p.x - ax * bw, right: p.x - ax * bw + bw, top: centered ? p.y - bh / 2 : p.y - bh - TAIL, bottom: centered ? p.y + bh / 2 : p.y };
       var dot = m.rank > 0 && rects.some(function (a) { return r.left < a.right + 3 && r.right > a.left - 3 && r.top < a.bottom + 3 && r.bottom > a.top - 3; });
       // 학교는 점으로 줄이지 않고 학교급 도형만 남긴다. 점이면 학교인지 알아볼 수 없다
       var compact = dot && !!m.school;
@@ -187,9 +206,8 @@ window.pugurinKakaoMap = function (el, config, send) {
         button.setAttribute('aria-label', m.auction ? '경매 물건 보기' : (m.title || '마커') + ' 확대');
       } else {
         rects.push(r);
-        if (!m.auction) placed[m.id] = { rect: r, pos: pos };
+        if (!m.auction) placed[m.id] = button;
       }
-      if (host) button.style.marginLeft = gap + 'px';
       button.onclick = function () {
         markerClick = Date.now();
         send({ type: 'hover', id: null });
@@ -204,7 +222,9 @@ window.pugurinKakaoMap = function (el, config, send) {
         send({ type: 'hover', id: m.id, x: e.clientX - b.left, y: e.clientY - b.top });
       };
       button.onmouseleave = function () { send({ type: 'hover', id: null }); };
-      var o = new kakao.maps.CustomOverlay({ position: pos, content: button, xAnchor: host ? 0 : m.school && !dot && bw ? SCHOOL_BADGE_X / bw : 0.5, yAnchor: (dot && !host) || centered ? 0.5 : 1, zIndex: m.rank === 0 ? 100 : compact ? 11 : dot ? 5 : 10, clickable: true });
+      // 꼬리 있는 마커는 꼬리 끝(상자 아래 + TAIL)을 좌표에 맞춘다
+      var yAnchor = dot || centered ? 0.5 : bh ? (bh + TAIL) / bh : 1;
+      var o = new kakao.maps.CustomOverlay({ position: pos, content: button, xAnchor: compact ? 0.5 : ax, yAnchor: yAnchor, zIndex: m.rank === 0 ? 100 : compact ? 11 : dot ? 5 : 10, clickable: true });
       o.setMap(map);
       overlays.push(o);
     });

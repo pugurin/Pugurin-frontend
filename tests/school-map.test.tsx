@@ -205,8 +205,20 @@ describe("지도 메뉴바", () => {
     await act(() => wait(300));
     await waitFor(() => expect(map.props.markers).toEqual([complex]));
   });
-  it("'경매'를 누르면 경매 탭을 켜고, 경매 탭에서 '실거래'를 누르면 끈다", async () => {
+  it("실거래를 켠 채 '경매'를 누르면 경매 탭이 아니라 실거래+경매가 된다", async () => {
+    const { onAuction, auctions, moveTo } = setup({ schools: false });
+    fireEvent.click(screen.getByLabelText("경매 보기"));
+    expect(onAuction).not.toHaveBeenCalled();
+    await moveTo(15);
+    await waitFor(() => expect(auctions).toHaveBeenCalled());
+    expect(map.props.markers).toEqual([complex]);
+    // 실거래+경매에서 실거래를 끄면 경매 탭(경매만)으로 바뀐다
+    fireEvent.click(screen.getByLabelText("실거래 보기"));
+    expect(onAuction).toHaveBeenCalledWith(true);
+  });
+  it("실거래를 끈 채 '경매'를 누르면 경매 탭을 켜고, 경매 탭에서 '실거래'를 누르면 끈다", async () => {
     const on = setup({ schools: false });
+    fireEvent.click(screen.getByLabelText("실거래 보기"));
     fireEvent.click(screen.getByLabelText("경매 보기"));
     expect(on.onAuction).toHaveBeenCalledWith(true);
     cleanup();

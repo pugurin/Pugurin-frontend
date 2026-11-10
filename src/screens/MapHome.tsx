@@ -192,6 +192,9 @@ export function MapHome({
   const [layers, setLayers] = useState(false);
   // 오른쪽 메뉴바의 실거래 켜짐. 끄면 구·동·단지 실거래 마커를 부르지 않는다
   const [trades, setTrades] = useState(true);
+  // 실거래를 켠 채 메뉴바에서 경매도 켰는지. 켜면 경매가 있는 단지 마커에 ⚖ 배지를 붙인다.
+  // 경매만 켠 상태는 경매 탭(auction)이다
+  const [withAuctions, setWithAuctions] = useState(false);
   // 로드뷰 모드: 켠 동안 지도를 누르면 그 자리의 로드뷰를 연다
   const [roadview, setRoadview] = useState(false);
   const [roadviewAt, setRoadviewAt] = useState<{ lat: number; lng: number } | null>(null);
@@ -239,9 +242,11 @@ export function MapHome({
     filters.land_area_pyeong_max,
   ].some((v) => v !== undefined);
   const auctionZoom = !outside && camera.zoom >= AUCTION_MIN_ZOOM;
+  // 실거래 위에 경매를 겹쳐 볼 수 있는지. 경매는 매매 물건이라 매매에서만, 가격·면적 필터가 없을 때만 겹친다
+  const auctionOverlay = filters.deal_type === "sale" && !rangeFiltered;
   const showAuctions =
     auctionZoom &&
-    (auction || (trades && filters.deal_type === "sale" && !rangeFiltered));
+    (auction || (trades && withAuctions && auctionOverlay));
   const move = (c: MapCommand) => setCommand({ ...c, nonce: ++ref.current });
   const landRequest = useRef<AbortController | null>(null);
   const pendingLand = useRef<{
@@ -1014,6 +1019,7 @@ export function MapHome({
                   disabled={isLand && key !== "sale"}
                   onPress={() => {
                     onAuction?.(false);
+                    setTrades(true);
                     onFilters(changeDeal(filters, key));
                   }}
                 >
@@ -1159,6 +1165,7 @@ export function MapHome({
                       notify("토지는 매매 거래만 볼 수 있어요");
                     else {
                       onAuction?.(false);
+                      setTrades(true);
                       onFilters(changeDeal(filters, k));
                     }
                   }}
@@ -1282,7 +1289,8 @@ export function MapHome({
               zIndex: 2,
             }}
           >
-            {/* 메뉴바. 누른 종류의 마커만 지도에 그린다. 실거래와 경매는 둘 중 하나만 켜진다 */}
+            {/* 메뉴바. 누른 종류의 마커만 지도에 그린다. 실거래와 경매는 따로 켜고 끈다.
+                실거래+경매는 단지 마커에 ⚖ 배지, 경매만은 경매 탭이다 */}
             <View style={[float, { overflow: "hidden" }]}>
               <RailBtn
                 icon="home"
@@ -1290,8 +1298,14 @@ export function MapHome({
                 active={trades && !auction}
                 onPress={() => {
                   if (auction) {
+                    // 경매만 → 실거래+경매
                     onAuction?.(false);
                     setTrades(true);
+                    setWithAuctions(auctionOverlay);
+                  } else if (trades && withAuctions) {
+                    // 실거래+경매 → 경매만
+                    setWithAuctions(false);
+                    onAuction?.(true);
                   } else setTrades(!trades);
                 }}
               />
@@ -1299,8 +1313,20 @@ export function MapHome({
               <RailBtn
                 icon="gavel"
                 label="경매"
-                active={auction}
-                onPress={() => onAuction?.(!auction)}
+                active={auction || (trades && withAuctions)}
+                onPress={() => {
+                  if (auction) {
+                    // 경매만 → 모두 끔
+                    onAuction?.(false);
+                    setTrades(false);
+                  } else if (!trades) onAuction?.(true);
+                  else if (withAuctions) setWithAuctions(false);
+                  else if (auctionOverlay) setWithAuctions(true);
+                  else
+                    notify(
+                      "경매는 매매에서 가격·면적 필터 없이 같이 볼 수 있어요",
+                    );
+                }}
               />
               <View style={s.rule} />
               <RailBtn

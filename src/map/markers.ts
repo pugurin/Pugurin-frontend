@@ -65,8 +65,11 @@ export type MarkerItem = {
   rank: number;
   // 경매 마커는 흰 바탕 변형으로 그린다
   auction?: boolean;
-  // 옆에 붙을 단지 마커 id. 그 단지가 점이 아니게 그려졌을 때만 옆에 놓는다
+  // 배지로 붙을 단지 마커 id. 그 단지가 점이 아니게 그려졌을 때만 단지 마커 모서리에 tag 배지로 붙고,
+  // 단지가 점이면 그리지 않는다
   attach?: string;
+  // 단지 마커 모서리에 붙일 경매 배지 글자 (예: "⚖2")
+  tag?: string;
   // 학교 마커의 학교급. 꼬리 없는 흰 칸에 도형 배지와 줄인 이름으로 그린다
   school?: SchoolLevel;
   // 학교 도형 안 글자와 도형 모양. 런타임 문자열은 SCHOOL_LEVEL을 import할 수 없어 항목에 실어 보낸다
@@ -97,8 +100,8 @@ export function markerItems(
 }
 
 // 경매 마커. 좌표 없는 물건은 지도에 그리지 않는다.
-// 같은 단지 여러 건은 하나("auction-group:{complex_id}")로 합친다. 단지 마커가 있으면 그 옆에 붙이고,
-// 없으면(경매 탭이나 거래 없는 단지) 첫 물건 좌표에 둔다
+// 같은 단지 여러 건은 하나("auction-group:{complex_id}")로 합친다. 단지 마커가 있으면 그 단지 마커에
+// 배지로 붙이고, 없으면(경매 탭이나 거래 없는 단지) 첫 물건 좌표에 경매 마커로 둔다
 export function auctionItems(
   auctions: Auction[],
   markers: Marker[],
@@ -143,7 +146,7 @@ export function auctionItems(
         sub: prices.length ? `최저 ${formatPrice(Math.min(...prices))}` : "최저가 미정",
         color: isSelected ? SELECTED_COLOR : AUCTION_COLOR,
         rank: isSelected ? 0 : 3,
-        ...(attach ? { attach } : {}),
+        ...(attach ? { attach, tag: `⚖${group.length}` } : {}),
       });
       return;
     }
@@ -158,7 +161,7 @@ export function auctionItems(
       sub: auctionSub(a, today),
       color: isSelected ? SELECTED_COLOR : AUCTION_COLOR,
       rank: isSelected ? 0 : 3,
-      ...(attach ? { attach } : {}),
+      ...(attach ? { attach, tag: "⚖1" } : {}),
     });
   });
   // 서버가 준 순서(매각기일 가까운 순)대로 먼저 자리를 잡게 한다. 실거래(2~3) 뒤, 선택은 0

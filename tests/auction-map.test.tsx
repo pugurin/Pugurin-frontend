@@ -86,16 +86,20 @@ const sample = {
   min_price: 360000000,
 };
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// 메뉴바에서 실거래를 켠 채 경매도 켠다(실거래+경매)
+const railAuctions = () => fireEvent.click(screen.getByLabelText("경매 보기"));
 function setup({
   filters = DEFAULT_FILTERS,
   auction,
   auctionsImpl,
   list = [complex],
+  notify = () => {},
 }: {
   filters?: Filters;
   auction?: boolean;
   auctionsImpl?: (...args: any[]) => Promise<any>;
   list?: any[];
+  notify?: (s: string) => void;
 } = {}) {
   map.zoom = 14;
   const markers = vi.fn(async () => ({ data: { markers: list }, meta: {} }));
@@ -129,7 +133,7 @@ function setup({
       cadastral={false}
       onCadastral={() => {}}
       onHelp={() => {}}
-      notify={() => {}}
+      notify={notify}
       onMeta={() => {}}
       auction={on}
       onAuction={onAuction}
@@ -160,8 +164,29 @@ function setup({
   };
 }
 describe("경매 탭과 지도", () => {
-  it("매매·줌 14 이상이면 같은 물건 탭의 경매를 함께 부르고 마커로 넘긴다", async () => {
+  it("매매에서 메뉴바로 경매를 켜기 전에는 경매를 부르지 않는다", async () => {
+    const { markers, auctions, moveTo } = setup();
+    await moveTo(15);
+    expect(markers).toHaveBeenCalled();
+    expect(auctions).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("경매 보기").getAttribute("aria-selected")).not.toBe("true");
+  });
+  it("전세에서 메뉴바 경매를 누르면 켜지 않고 안내만 한다", async () => {
+    const notify = vi.fn();
+    const { auctions, moveTo } = setup({
+      filters: { ...DEFAULT_FILTERS, deal_type: "jeonse" },
+      notify,
+    });
+    railAuctions();
+    await moveTo(15);
+    expect(auctions).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith(
+      "경매는 매매에서 가격·면적 필터 없이 같이 볼 수 있어요",
+    );
+  });
+  it("매매·줌 14 이상에서 메뉴바로 경매를 켜면 같은 물건 탭의 경매를 함께 부르고 마커로 넘긴다", async () => {
     const { auctions, moveTo } = setup();
+    railAuctions();
     await moveTo(14);
     await waitFor(() => expect(auctions).toHaveBeenCalled());
     const [q, signal] = auctions.mock.calls.at(-1)!;
@@ -230,6 +255,7 @@ describe("경매 탭과 지도", () => {
     expect(screen.queryByText("다시 시도")).toBeNull();
     cleanup();
     const c = setup({ auctionsImpl: notFound });
+    railAuctions();
     await c.moveTo(14);
     expect(c.auctions).toHaveBeenCalled();
     expect(screen.queryByText("경매 정보를 준비 중이에요")).toBeNull();
@@ -280,6 +306,7 @@ describe("경매 탭과 지도", () => {
     const { auctions, moveTo } = setup({
       auctionsImpl: async () => ({ data: [], meta: {} }),
     });
+    railAuctions();
     await moveTo(14);
     expect(auctions).toHaveBeenCalled();
     expect(
@@ -288,6 +315,7 @@ describe("경매 탭과 지도", () => {
   });
   it("매매에서 경매 탭으로 바꾸면 경매를 다시 불러 지도에 남긴다", async () => {
     const { auctions, markers, moveTo, switchAuction } = setup();
+    railAuctions();
     await moveTo(14);
     await waitFor(() => expect(map.props.auctions).toEqual([sample]));
     const before = auctions.mock.calls.length;
@@ -298,7 +326,7 @@ describe("경매 탭과 지도", () => {
     expect(
       screen.queryByText("이 화면 안에 진행 중인 경매가 없어요"),
     ).toBeNull();
-    // 경매 → 매매로 돌아오면 실거래와 경매를 다시 함께 그린다
+    // 경매 → 매매로 돌아오면 메뉴바에서 켜 둔 대로 실거래와 경매를 다시 함께 그린다
     const trades = markers.mock.calls.length;
     const again = auctions.mock.calls.length;
     await switchAuction(false);
@@ -338,6 +366,7 @@ describe("경매 탭과 지도", () => {
     expect(chip.getAttribute("aria-disabled")).not.toBe("true");
     fireEvent.click(chip);
     expect(onAuction).toHaveBeenCalledWith(true);
+    railAuctions();
     await moveTo(15);
     expect(auctions.mock.calls.at(-1)![0].groups).toEqual(["land"]);
   });
@@ -368,6 +397,7 @@ describe("경매 탭과 지도", () => {
         return Promise.resolve({ data: [], meta: {} });
       },
     });
+    railAuctions();
     await moveTo(14);
     await waitFor(() => expect(auctions).toHaveBeenCalledTimes(1));
     await moveTo(14);
