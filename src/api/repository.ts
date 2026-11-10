@@ -14,6 +14,7 @@ import type {
   Nearby,
   Parcel,
   School,
+  SchoolZone,
   SearchResult,
   Sort,
   Stats,
@@ -21,6 +22,8 @@ import type {
   Transaction,
 } from "./types";
 import {
+  SCHOOL_ZONES,
+  SCHOOL_ZONE_META,
   AUCTIONS,
   AUCTION_META,
   COMPLEXES,
@@ -291,6 +294,22 @@ export class Repository {
       tier: HOSPITAL_TIERS.join(","),
     });
     return this.client.get<Hospital[]>(`/hospitals?${p}`, signal);
+  }
+  // 초등학교 통학구역 경계. 통학구역이 없는 학교는 404(RESOURCE_NOT_FOUND)다
+  schoolZone(
+    schoolId: string,
+    signal?: AbortSignal,
+  ): Promise<Envelope<SchoolZone>> {
+    if (this.mode === "sample") {
+      const zone = SCHOOL_ZONES.find((z) => z.school_id === schoolId);
+      return zone
+        ? Promise.resolve({ data: zone, meta: SCHOOL_ZONE_META })
+        : Promise.reject(new ApiError("통학구역 없음", "RESOURCE_NOT_FOUND"));
+    }
+    return this.client.get<SchoolZone>(
+      `/schools/${encodeURIComponent(schoolId)}/zone`,
+      signal,
+    );
   }
   // 단지 주변 학교. 샘플 모드는 서버처럼 직선거리 3km 안에서 학교급별 가까운 3곳을 고른다
   nearby(complexId: string, signal?: AbortSignal): Promise<Envelope<Nearby>> {

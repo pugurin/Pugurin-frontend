@@ -13,6 +13,7 @@ import type {
   Meta,
   School,
   Hospital,
+  SchoolZone,
 } from "./types";
 import { TERMS } from "./terms";
 export { TERMS };
@@ -655,5 +656,47 @@ export const HOSPITALS: Hospital[] = [
     lng: 129.1687,
     tel: "051-000-2003",
     doctors: 1,
+  },
+];
+// 통학구역 샘플. 우동초·센텀초 둘만 둔다(실제 학구도가 아니라 화면 확인용 대략 경계)
+export const SCHOOL_ZONE_META: Meta = {
+  data_as_of: "2026-09-01T00:00:00+09:00",
+  source_attribution: ["한국교육시설안전원 학구도"],
+};
+export const SCHOOL_ZONES: SchoolZone[] = [
+  {
+    school_id: "s-udong-elem",
+    kind: "elementary",
+    geometry: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [129.138, 35.156],
+          [129.148, 35.1555],
+          [129.15, 35.161],
+          [129.147, 35.168],
+          [129.1395, 35.169],
+          [129.137, 35.162],
+          [129.138, 35.156],
+        ],
+      ],
+    },
+  },
+  {
+    school_id: "s-centum-elem",
+    kind: "elementary",
+    geometry: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [129.127, 35.165],
+          [129.136, 35.1645],
+          [129.1375, 35.172],
+          [129.129, 35.174],
+          [129.126, 35.17],
+          [129.127, 35.165],
+        ],
+      ],
+    },
   },
 ];

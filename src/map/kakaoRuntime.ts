@@ -2,6 +2,7 @@
 // 앱 WebView에 문자열로 넣어야 해서 일반 JS 문자열로 둔다 (백틱과 "${"는 쓰지 않는다)
 import { USER_LOCATION_COLOR } from "./userLocation";
 import { HOSPITAL_COLOR } from "../state/hospital";
+import { SCHOOL_LEVEL } from "../state/school";
 import { SELECTION_COLOR } from "./selection";
 
 export const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? "";
@@ -23,6 +24,7 @@ var NO_KEY = '카카오 지도 키(EXPO_PUBLIC_KAKAO_JS_KEY)가 설정되지 않
 var SELECTION_COLOR = ${JSON.stringify(SELECTION_COLOR)};
 var USER_COLOR = ${JSON.stringify(USER_LOCATION_COLOR)};
 var HOSPITAL_COLOR = ${JSON.stringify(HOSPITAL_COLOR)};
+var ZONE_COLOR = ${JSON.stringify(SCHOOL_LEVEL.elementary.color)};
 var waiting = null;
 
 // SDK는 한 번만 넣고, 동시에 부른 쪽은 같은 결과를 기다린다
@@ -253,6 +255,12 @@ window.pugurinKakaoMap = function (el, config, send) {
       });
       if (g.type === 'LineString') shapes.push(new kakao.maps.Polyline(Object.assign({ path: paths([g.coordinates])[0] }, line)));
     });
+    // 초등학교 통학구역. 학교 색 테두리와 옅은 채움으로 마커·필지 아래에 그린다
+    var zone = state.zone;
+    var zonePolys = !zone ? [] : zone.type === 'Polygon' ? [zone.coordinates] : zone.type === 'MultiPolygon' ? zone.coordinates : [];
+    zonePolys.forEach(function (poly) {
+      shapes.push(new kakao.maps.Polygon({ path: paths(poly), strokeColor: ZONE_COLOR, strokeWeight: 2.5, strokeOpacity: 0.9, fillColor: ZONE_COLOR, fillOpacity: 0.14, zIndex: 0 }));
+    });
     // 병원 원과 개수 라벨. 마커 겹침 계산에는 넣지 않는다
     (state.areas || []).forEach(function (a) {
       var pos = latLng(a.lat, a.lng);
@@ -306,7 +314,7 @@ window.pugurinKakaoMap = function (el, config, send) {
       if (!map) return;
       applyLayers();
       if ('items' in m) renderMarkers();
-      if ('selection' in m || 'user' in m || 'areas' in m) renderShapes();
+      if ('selection' in m || 'user' in m || 'areas' in m || 'zone' in m) renderShapes();
     } else if (m.type === 'move' || m.type === 'zoom') {
       if (!map) { pending = m; return; }
       if (m.type === 'move') move(m);

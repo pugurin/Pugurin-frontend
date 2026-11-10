@@ -45,7 +45,7 @@ export default function MapCanvas(p: MapProps) {
 
   useEffect(() => {
     receive.current?.(shapeState(p));
-  }, [p.selectionPoint, p.parcelGeometry, p.userLocation, p.hospitalAreas]);
+  }, [p.selectionPoint, p.parcelGeometry, p.userLocation, p.hospitalAreas, p.schoolZone]);
 
   useEffect(() => {
     if (p.command) receive.current?.(p.command);
