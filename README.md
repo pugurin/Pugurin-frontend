@@ -15,14 +15,16 @@ npm start                   # 이후에는 개발 서버만
 
 iOS 시뮬레이터 API 주소는 localhost:8000, Android 에뮬레이터는 10.0.2.2:8000이다. 실제 휴대폰은 EXPO_PUBLIC_API_URL에 접근 가능한 HTTPS 백엔드의 /api/v1 주소를 입력한다. 기존 EXPO_PUBLIC_API_BASE 서버 주소도 지원한다.
 
-웹 미리보기는 별도 터미널에서 `npm run api:dev`와 `npm run web`을 실행한다. 개발 중계는 같은 PC의 백엔드만 사용하고 127.0.0.1:8001에 바인딩한다. 배포 서버에서 사용하지 않는다.
+웹 미리보기는 별도 터미널에서 `npm run api:dev`와 `npm run web`을 실행한다. 개발 중계는 같은 PC의 백엔드만 사용하고 127.0.0.1:8001에 바인딩한다. 배포 서버에서 사용하지 않는다. 배포된 백엔드로 붙이려면 `PUGURIN_API_TARGET=<백엔드 주소> npm run api:dev`로 실행한다.
+
+외부 http를 막는 네트워크(학교·회사망 등)에서는 `http://localhost:8081`의 지도가 빈 화면이 된다. 카카오 SDK가 http 페이지에서는 지도 본체와 타일도 http로 받기 때문이다. 이때는 위 두 개에 더해 `npm run web:https`를 실행하고 `https://localhost:8443`을 연다. 처음 실행하면 `.cert/`에 자체 서명 인증서를 만들고(openssl 필요), 브라우저가 처음 한 번 인증서 경고를 띄우면 "고급 → 이동"으로 넘긴다. 카카오 콘솔 JavaScript SDK 도메인에 `https://localhost:8443`도 등록해야 한다.
 
 웹 배포는 Netlify가 [`netlify.toml`](./netlify.toml)대로 한다. main에 머지되면 `npm run build:web`으로 `dist/`를 만들어 올린다. 배포 웹은 같은 주소의 `/api/v1`을 부르고, Netlify가 이를 백엔드로 넘긴다(프록시). 그래서 브라우저가 백엔드를 직접 부르지 않아 CORS 설정이 필요 없다. 백엔드에 HTTPS 도메인이 생기면 `netlify.toml`의 프록시 주소만 바꾼다. `EXPO_PUBLIC_*` 값은 빌드할 때 번들에 들어가므로, 카카오 키나 약관 URL은 Netlify 사이트 설정의 환경 변수에 넣고 다시 배포한다.
 
 ### 카카오맵 키
 
 1. [카카오 개발자 콘솔](https://developers.kakao.com)에서 앱을 만들고 **JavaScript 키**를 `.env`의 `EXPO_PUBLIC_KAKAO_JS_KEY`에 넣는다.
-2. JavaScript SDK 도메인에 지도를 띄울 주소를 등록한다. 로컬 웹은 `http://localhost:8081`, 배포 웹은 Netlify 주소.
+2. JavaScript SDK 도메인에 지도를 띄울 주소를 등록한다. 로컬 웹은 `http://localhost:8081`(https 개발 중계를 쓰면 `https://localhost:8443`도), 배포 웹은 Netlify 주소.
 3. 제품 설정 → 카카오맵 사용 설정을 켠다. 꺼져 있으면 키와 도메인이 맞아도 지도가 뜨지 않는다.
 4. 앱은 WebView 문서 주소(`EXPO_PUBLIC_KAKAO_APP_URL`)로 도메인 확인을 받는다. 2번에 등록한 **https** 주소를 넣는다(http 주소면 iOS가 지도 타일을 막는다).
 

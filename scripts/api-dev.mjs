@@ -4,7 +4,8 @@ const target = process.env.PUGURIN_API_TARGET || "http://127.0.0.1:8000";
 http
   .createServer(async (req, res) => {
     const origin = req.headers.origin;
-    if (origin && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))
+    // https 개발 중계(npm run web:https)에서 여는 페이지도 허용한다
+    if (origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))
       res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader(
