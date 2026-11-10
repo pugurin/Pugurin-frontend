@@ -362,6 +362,9 @@ describe("경매 시트", () => {
       />,
     );
     expect(await screen.findByText("해운대아이파크 84㎡")).toBeTruthy();
-    expect(screen.getByText("최근 실거래")).toBeTruthy();
+    expect(screen.getByText("같은 평형 평균 (34평형)")).toBeTruthy();
+    expect(
+      screen.getByText("같은 평형 평균 실거래(13.5억)보다 25% 낮아요"),
+    ).toBeTruthy();
   });
 });

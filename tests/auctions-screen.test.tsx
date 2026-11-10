@@ -45,6 +45,8 @@ const row = (n: number, extra: Partial<Auction> = {}): Auction => ({
   min_price: 360000000,
   appraisal_price: 520000000,
   min_price_ratio: 69,
+  // 최근 1건 비교 문구를 보는 줄이라 샘플의 평균가는 비운다
+  recent_trade_avg_price: null,
   fail_count: 2,
   sale_date: "2026-11-14",
   building_area_m2: 84.97,
