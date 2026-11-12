@@ -1,6 +1,11 @@
 // 지도 컴포넌트(웹·앱)와 카카오 런타임 사이의 메시지 변환
 import { markerHover } from "./hover";
-import { auctionItems, markerItems, schoolItems } from "./markers";
+import {
+  auctionItems,
+  markerItems,
+  redevelopmentItems,
+  schoolItems,
+} from "./markers";
 import { selectionFeatures } from "./selection";
 import { userLocationFeatures } from "./userLocation";
 import type { MapEvent, MapProps } from "./types";
@@ -17,6 +22,7 @@ export const markerState = (p: MapProps) => ({
     ...markerItems(p.markers, p.property, p.unit, p.selected),
     ...auctionItems(p.auctions ?? [], p.markers, p.selected, new Date()),
     ...schoolItems(p.schools ?? [], p.selected),
+    ...redevelopmentItems(p.redevelopments ?? [], p.selected),
   ],
 });
 export const layerState = (p: MapProps) => ({

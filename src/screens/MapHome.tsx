@@ -21,6 +21,7 @@ import type {
   BBox,
   Filters,
   Hospital,
+  Redevelopment,
   Marker,
   Meta,
   Parcel,
@@ -72,6 +73,11 @@ import { SCHOOL_PEEK, SchoolContent, type ZoneStatus } from "./SchoolContent";
 import { fitZoom, geometryBBox } from "../map/geometry";
 import type { Geometry } from "geojson";
 import { HospitalAreaContent } from "./HospitalAreaContent";
+import { RedevelopmentContent } from "./RedevelopmentContent";
+import {
+  REDEVELOPMENT_MAP_STAGES,
+  REDEVELOPMENT_MIN_ZOOM,
+} from "../state/redevelopment";
 // 병원 원이 없을 때 넘기는 빈 배열. 늘 같은 참조라 지도가 다시 그리지 않는다
 const NO_AREAS: HospitalArea[] = [];
 export type Focus = { result: SearchResult; nonce: number };
@@ -112,6 +118,8 @@ export function MapHome({
   onSchools,
   hospitals = false,
   onHospitals,
+  redevelopments = false,
+  onRedevelopments,
 }: {
   repo: Repository;
   filters: Filters;
@@ -154,6 +162,9 @@ export function MapHome({
   // 병원 레이어. 켜면 줌 14 이상에서 화면 안 병원을 원으로 묶어 그린다
   hospitals?: boolean;
   onHospitals?: (on: boolean) => void;
+  // 재개발 레이어. 켜면 줌 12 이상에서 진행 중인 정비사업 구역을 마커로 그린다
+  redevelopments?: boolean;
+  onRedevelopments?: (on: boolean) => void;
 }) {
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === "web" && width >= 1024;
@@ -191,6 +202,11 @@ export function MapHome({
     status: ZoneStatus;
     geometry?: Geometry;
   } | null>(null);
+  // 화면 안 재개발 구역과 그 응답 meta. meta는 재개발 시트에만 쓴다
+  const [redevList, setRedevList] = useState<Redevelopment[]>([]);
+  const [redevMeta, setRedevMeta] = useState<Meta>();
+  // 재개발 API가 404·503이면 마커 없이 준비 중 안내만 띄운다
+  const [redevNotReady, setRedevNotReady] = useState(false);
   const [meta, setMeta] = useState<Meta>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -212,6 +228,7 @@ export function MapHome({
     | { kind: "auction"; id: string }
     | { kind: "school"; school: School; meta?: Meta }
     | { kind: "hospitals"; area: HospitalArea; meta?: Meta }
+    | { kind: "redev"; redev: Redevelopment; meta?: Meta }
     | { kind: "region"; marker: RegionMarker }
     | {
         kind: "land";
@@ -480,6 +497,41 @@ export function MapHome({
   useEffect(() => {
     if (!schools && selected?.kind === "school") close();
   }, [schools]);
+  // 재개발 요청. 켜짐·부산 안·줌 12 이상에서 bbox로 부른다. 진행 중인 단계만 받는다
+  useEffect(() => {
+    if (!redevelopments || outside || camera.zoom < REDEVELOPMENT_MIN_ZOOM) {
+      setRedevList((p) => (p.length ? [] : p));
+      setRedevNotReady(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      repo
+        .redevelopments(queryBBox!, REDEVELOPMENT_MAP_STAGES, controller.signal)
+        .then((r) => {
+          if (controller.signal.aborted) return;
+          setRedevList(r.data);
+          setRedevMeta(r.meta);
+          setRedevNotReady(false);
+        })
+        .catch((e) => {
+          if (controller.signal.aborted) return;
+          // 404·503은 준비 중으로 안내하고, 그 밖의 오류는 조용히 마커만 뺀다
+          setRedevList((p) => (p.length ? [] : p));
+          setRedevNotReady(
+            e?.code === "RESOURCE_NOT_FOUND" || e?.code === "DATA_NOT_READY",
+          );
+        });
+    }, 220);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [repo, camera, redevelopments, outside, retry]);
+  // 재개발 시트가 열린 채 재개발 레이어를 끄면 시트도 닫는다
+  useEffect(() => {
+    if (!redevelopments && selected?.kind === "redev") close();
+  }, [redevelopments]);
   // 병원 요청. 학교와 같은 조건(켜짐·부산 안·줌 14 이상)에서 bbox로 부른다.
   // tier는 Repository가 붙이고, 탭·필터와 상관없이 같은 요청이다
   useEffect(() => {
@@ -726,6 +778,14 @@ export function MapHome({
           setSelected({ kind: "school", school, meta: schoolMeta });
           setStage("peek");
         }
+      } else if (e.id.startsWith("redev:")) {
+        const redev = redevList.find((x) => `redev:${x.id}` === e.id);
+        if (redev) {
+          pendingLand.current = null;
+          landRequest.current?.abort();
+          setSelected({ kind: "redev", redev, meta: redevMeta });
+          setStage("peek");
+        }
       } else if (e.id.startsWith("hospital-area:")) {
         // 원 라벨을 누르면 그 원의 병원 시트를 연다(확대하지 않는다)
         const area = areas.find((a) => a.id === e.id);
@@ -865,6 +925,8 @@ export function MapHome({
   const schoolNotice = schools && schoolNotReady && !errorShown;
   // 병원 준비 중 안내와 서버 상한(500곳) 안내. 오류 카드가 떠 있을 때는 둘 다 숨긴다
   const hospitalNotice = hospitals && hospitalNotReady && !errorShown;
+  // 재개발 준비 중 안내
+  const redevNotice = redevelopments && redevNotReady && !errorShown;
   const hospitalLimitNotice =
     hospitals &&
     !outside &&
@@ -889,6 +951,8 @@ export function MapHome({
               ? `school:${selected.school.id}`
               : selected.kind === "hospitals"
                 ? selected.area.id
+                : selected.kind === "redev"
+                ? `redev:${selected.redev.id}`
                 : selected.kind === "land"
                 ? `land:${selected.lat},${selected.lng}`
                 : `region:${selected.marker.region_code}`
@@ -939,6 +1003,12 @@ export function MapHome({
         />
       ) : selected.kind === "hospitals" ? (
         <HospitalAreaContent area={selected.area} meta={selected.meta} />
+      ) : selected.kind === "redev" ? (
+        <RedevelopmentContent
+          r={selected.redev}
+          meta={selected.meta}
+          unit={unit}
+        />
       ) : selected.kind === "auction" ? (
         <AuctionContent
           id={selected.id}
@@ -1271,6 +1341,7 @@ export function MapHome({
             auctions={auctions}
             schools={schoolList}
             hospitalAreas={areas}
+            redevelopments={redevList}
             selected={
               selected?.kind === "complex"
                 ? selected.id
@@ -1278,7 +1349,9 @@ export function MapHome({
                   ? `auction:${selected.id}`
                   : selected?.kind === "school"
                     ? `school:${selected.school.id}`
-                    : null
+                    : selected?.kind === "redev"
+                      ? `redev:${selected.redev.id}`
+                      : null
             }
             unit={unit}
             selectionPoint={
@@ -1399,6 +1472,13 @@ export function MapHome({
                 active={hospitals}
                 onPress={() => onHospitals?.(!hospitals)}
               />
+              <View style={s.rule} />
+              <RailBtn
+                icon="redev"
+                label="재개발"
+                active={redevelopments}
+                onPress={() => onRedevelopments?.(!redevelopments)}
+              />
             </View>
             <View style={float}>
               <IconBtn
@@ -1501,7 +1581,8 @@ export function MapHome({
               emptyCard ||
               schoolNotice ||
               hospitalNotice ||
-              hospitalLimitNotice) && (
+              hospitalLimitNotice ||
+              redevNotice) && (
             <View
               testID="map-notices"
               pointerEvents="box-none"
@@ -1592,6 +1673,17 @@ export function MapHome({
                 >
                   <T size={16} bold>
                     병원이 많아 일부만 세었어요. 확대하면 정확해져요
+                  </T>
+                </View>
+              )}
+              {redevNotice && (
+                <View
+                  testID="redev-notice"
+                  pointerEvents="none"
+                  style={{ ...s.card, maxWidth: 300 }}
+                >
+                  <T size={16} bold>
+                    재개발 정보를 준비 중이에요
                   </T>
                 </View>
               )}

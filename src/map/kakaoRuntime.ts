@@ -62,6 +62,10 @@ function addStyle() {
     '.pg-marker.region:after{display:none}.pg-marker.region .amount{padding:1px 0}.pg-marker.region .sub{padding:0}' +
     '.pg-marker.auction{border:2px solid var(--color);background:#fff;color:var(--color)}' +
     '.pg-marker.auction .amount{background:none;color:var(--color)}' +
+    // 재개발: 점선 테두리 흰 칸. 경계가 아니라 구역 대표 지점이라 점선으로 구분한다
+    '.pg-marker.redev{border:2px dashed var(--color);background:#fff;color:var(--color)}' +
+    '.pg-marker.redev .amount{background:none;color:var(--color);padding:0 8px}' +
+    '.pg-marker.redev .sub{color:#2A2A28}' +
     // 학교: 꼬리 없는 흰 칸. 20×20 배지 자리 가운데에 학교급 도형을 두고, 오른쪽에 줄인 이름을 쓴다
     '.pg-marker.school{display:flex;align-items:center;gap:4px;height:26px;box-sizing:border-box;padding:0 8px 0 3px;border-radius:9px;border:1.5px solid var(--color);background:#fff}' +
     '.pg-marker.school:after{display:none}' +
@@ -134,7 +138,7 @@ window.pugurinKakaoMap = function (el, config, send) {
     button.type = 'button';
     button.style.setProperty('--color', m.color);
     if (m.school) return schoolButton(button, m);
-    button.className = 'pg-marker' + (m.region ? ' region' : '') + (m.auction ? ' auction' : '');
+    button.className = 'pg-marker' + (m.region ? ' region' : '') + (m.auction ? ' auction' : '') + (m.redev ? ' redev' : '');
     button.setAttribute('aria-label', [m.title, m.amount, m.sub].filter(Boolean).join(' '));
     [[m.title, 'sub'], [m.amount, 'amount'], [m.sub, 'sub']].forEach(function (line) {
       if (!line[0]) return;
@@ -166,7 +170,7 @@ window.pugurinKakaoMap = function (el, config, send) {
   // 마커를 다시 그린다. 겹치는 마커는 rank가 큰 쪽을 점으로 줄인다.
   // 단지에 속한 경매(attach)는 단지를 먼저 자리 잡은 뒤 그 단지 마커 모서리에 배지로 붙인다.
   // 단지가 점이면 배지도 그리지 않는다(확대하면 보인다).
-  // 학교는 경매 배지보다도 뒤에 자리를 잡아, 가격·경매 마커를 점으로 밀어내지 않게 한다
+  // 학교·재개발은 경매 배지보다도 뒤에 자리를 잡아, 가격·경매 마커를 점으로 밀어내지 않게 한다
   function renderMarkers() {
     overlays.forEach(function (o) { o.setMap(null); });
     overlays = [];
@@ -176,7 +180,7 @@ window.pugurinKakaoMap = function (el, config, send) {
     measure.className = 'pg-measure';
     el.appendChild(measure);
     var byRank = function (a, b) { return a.rank - b.rank; };
-    var stage = function (m) { return m.school ? 2 : m.attach ? 1 : 0; };
+    var stage = function (m) { return m.school || m.redev ? 2 : m.attach ? 1 : 0; };
     var items = state.items.slice().sort(function (a, b) { return stage(a) - stage(b) || byRank(a, b); });
     items.forEach(function (m) {
       // 단지에 붙는 경매는 따로 그리지 않고 단지 마커에 배지로 단다. 단지가 점이면 건너뛴다
@@ -205,16 +209,16 @@ window.pugurinKakaoMap = function (el, config, send) {
       } else if (dot) {
         button.className = 'pg-marker dot';
         button.replaceChildren();
-        button.setAttribute('aria-label', m.auction ? '경매 물건 보기' : (m.title || '마커') + ' 확대');
+        button.setAttribute('aria-label', m.auction ? '경매 물건 보기' : m.redev ? m.sub + ' 재개발 구역 보기' : (m.title || '마커') + ' 확대');
       } else {
         rects.push(r);
-        if (!m.auction) placed[m.id] = button;
+        if (!m.auction && !m.redev) placed[m.id] = button;
       }
       button.onclick = function () {
         markerClick = Date.now();
         send({ type: 'hover', id: null });
-        // 경매 점과 작은 학교 배지는 확대하지 않고 바로 시트를 연다
-        if (dot && !m.auction && !m.school) {
+        // 경매·재개발 점과 작은 학교 배지는 확대하지 않고 바로 시트를 연다
+        if (dot && !m.auction && !m.school && !m.redev) {
           map.setCenter(pos);
           map.setLevel(Math.max(1, map.getLevel() - 1), { animate: { duration: 260 } });
         } else send({ type: 'marker', id: m.id });

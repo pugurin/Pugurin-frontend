@@ -273,6 +273,69 @@ export type NearbySchools = {
   high: School[];
 };
 export type Nearby = { schools: NearbySchools };
+// 정비사업 유형. 백엔드 RedevelopmentOut.kind와 같다
+export type RedevelopmentKind =
+  | "redevelopment"
+  | "reconstruction"
+  | "small_reconstruction"
+  | "small_redevelopment"
+  | "street_housing"
+  | "residential_improvement"
+  | "urban_environment"
+  | "other";
+// 사업추진단계. 표에 없는 원문은 unknown이고 step_raw를 그대로 보여 준다
+export type RedevelopmentStage =
+  | "cancelled"
+  | "planned"
+  | "designated"
+  | "committee"
+  | "association"
+  | "review"
+  | "project_approved"
+  | "disposal_approved"
+  | "construction"
+  | "completed"
+  | "transferred"
+  | "dissolved"
+  | "unknown";
+// 정비사업 구역(`/redevelopments`). 경계 폴리곤은 없고, 좌표는 지번을 지오코딩한 점이다
+export type Redevelopment = {
+  id: string;
+  area_name: string;
+  kind: RedevelopmentKind;
+  step_raw: string | null;
+  stage: RedevelopmentStage;
+  stage_order: number | null;
+  location: string | null;
+  // lot: 구역 지번, office: 조합 사무실 주소(좌표 없음), none: 비었음
+  location_kind: "lot" | "office" | "none";
+  lat: number | null;
+  lng: number | null;
+  // false면 지번이 아니라 법정동 중심점이다
+  location_precise: boolean;
+  area_m2: number | null;
+  area_pyeong: number | null;
+  households: number | null;
+  buildings: number | null;
+  union_members: number | null;
+  floor_area_ratio: number | null;
+  building_coverage_ratio: number | null;
+  scale: string | null;
+  business_entity: string | null;
+  contractor: string | null;
+  engineer: string | null;
+  architect: string | null;
+  specialists: string | null;
+  tel: string | null;
+  images: {
+    view: string | null;
+    location: string | null;
+    panorama: string | null;
+    layout: string | null;
+  } | null;
+  source_url: string | null;
+  is_closed: boolean;
+};
 export type AuctionSource = "court" | "public";
 export type AuctionGroup =
   "apartment" | "officetel" | "villa" | "land" | "other";
