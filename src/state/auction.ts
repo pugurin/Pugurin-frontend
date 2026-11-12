@@ -59,35 +59,48 @@ export function ratioLine(a: Auction): string | null {
   return `감정가 ${formatWon(a.appraisal_price)}의 ${Math.round(a.min_price_ratio)}%`;
 }
 
-// 최저가와 최근 실거래의 차이. 비교할 값이 없으면 null
-function tradeGap(a: Auction) {
+// 최저가와 견줄 실거래가. 같은 평형 평균가가 있으면 평균, 없으면(오래된 서버) 최근 1건
+export function tradeBase(a: Auction): { price: number; avg: boolean } | null {
+  const avg = a.recent_trade_avg_price;
+  if (avg != null && avg > 0) return { price: avg, avg: true };
   const recent = a.recent_trade_price;
+  return recent != null && recent > 0 ? { price: recent, avg: false } : null;
+}
+
+// 최저가와 실거래의 차이. 비교할 값이 없으면 null
+function tradeGap(a: Auction) {
+  const b = tradeBase(a);
   const min = a.min_price;
-  if (recent == null || recent <= 0 || min == null) return null;
+  if (!b || min == null) return null;
   return {
-    recent,
-    pct: Math.round(Math.abs(1 - min / recent) * 100),
-    lower: min < recent,
+    recent: b.price,
+    avg: b.avg,
+    pct: Math.round(Math.abs(1 - min / b.price) * 100),
+    lower: min < b.price,
   };
 }
 
-// 최저가와 최근 실거래를 견준 문구. 값이 없으면 null
+// 최저가와 실거래(같은 평형 평균 또는 최근 1건)를 견준 문구. 값이 없으면 null
 export function compareLine(
   a: Auction,
 ): { text: string; good: boolean } | null {
   const g = tradeGap(a);
   if (!g) return null;
   const price = formatPrice(g.recent);
+  const label = g.avg ? "같은 평형 평균 실거래" : "최근 실거래";
   if (g.pct === 0) {
-    return { text: `최근 실거래(${price})와 비슷해요`, good: false };
+    return { text: `${label}(${price})와 비슷해요`, good: false };
   }
   if (!g.lower) {
-    return { text: `최근 실거래(${price})보다 ${g.pct}% 높아요`, good: false };
+    return { text: `${label}(${price})보다 ${g.pct}% 높아요`, good: false };
   }
+  // 1건이면 평균이 그 거래와 같다
   const subject =
     a.recent_trade_count === 1
       ? `최근 거래 1건(${price})`
-      : `같은 평형 최근 실거래(${price})`;
+      : g.avg
+        ? `${label}(${price})`
+        : `같은 평형 최근 실거래(${price})`;
   return { text: `${subject}보다 ${g.pct}% 낮아요`, good: true };
 }
 
