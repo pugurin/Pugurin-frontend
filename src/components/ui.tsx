@@ -41,6 +41,7 @@ import {
   Gavel,
   GraduationCap,
   Hospital,
+  Construction,
   type LucideIcon,
 } from "lucide-react-native";
 import { C, FONT } from "../theme/tokens";
@@ -76,6 +77,7 @@ export const ICONS = {
   gavel: Gavel,
   school: GraduationCap,
   hospital: Hospital,
+  redev: Construction,
 };
 export type IconName = keyof typeof ICONS;
 export function Icon({
