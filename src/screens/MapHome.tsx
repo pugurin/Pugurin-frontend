@@ -19,6 +19,7 @@ import type { Repository } from "../api/repository";
 import type {
   Auction,
   BBox,
+  ComplexMarker,
   Filters,
   Hospital,
   Redevelopment,
@@ -70,7 +71,8 @@ import { ComplexContent, RegionContent } from "./MarketSheets";
 import { LandContent } from "./LandContent";
 import { AuctionContent } from "./AuctionContent";
 import { SCHOOL_PEEK, SchoolContent, type ZoneStatus } from "./SchoolContent";
-import { fitZoom, geometryBBox } from "../map/geometry";
+import { containsPoint, geometryBBox } from "../map/geometry";
+import { sheetStops } from "../components/sheetMotion";
 import type { Geometry } from "geojson";
 import { HospitalAreaContent } from "./HospitalAreaContent";
 import { RedevelopmentContent } from "./RedevelopmentContent";
@@ -80,6 +82,8 @@ import {
 } from "../state/redevelopment";
 // 병원 원이 없을 때 넘기는 빈 배열. 늘 같은 참조라 지도가 다시 그리지 않는다
 const NO_AREAS: HospitalArea[] = [];
+// 통학구역 안 단지를 부를 때 쓰는 줌. 지역 묶음이 아니라 단지 마커가 오는 줌이다
+const ZONE_COMPLEX_ZOOM = 16;
 export type Focus = { result: SearchResult; nonce: number };
 // 경매 목록에서 고른 줄. 좌표가 없으면 지도는 그대로 두고 시트만 연다
 export type AuctionFocus = {
@@ -166,8 +170,10 @@ export function MapHome({
   redevelopments?: boolean;
   onRedevelopments?: (on: boolean) => void;
 }) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const desktop = Platform.OS === "web" && width >= 1024;
+  // 지도 영역 높이. 통학구역을 맞출 때 시트가 가리는 몫을 정하는 데 쓴다
+  const [mapHeight, setMapHeight] = useState(0);
   const [hover, setHover] = useState<{
     marker: Marker;
     point: { x: number; y: number };
@@ -202,6 +208,10 @@ export function MapHome({
     status: ZoneStatus;
     geometry?: Geometry;
   } | null>(null);
+  // 통학구역 안 단지(거래 많은 순). 불러오는 중이면 null, 못 불러오면 undefined로 목록을 숨긴다
+  const [zoneComplexes, setZoneComplexes] = useState<
+    ComplexMarker[] | null | undefined
+  >(undefined);
   // 화면 안 재개발 구역과 그 응답 meta. meta는 재개발 시트에만 쓴다
   const [redevList, setRedevList] = useState<Redevelopment[]>([]);
   const [redevMeta, setRedevMeta] = useState<Meta>();
@@ -273,6 +283,14 @@ export function MapHome({
     auctionZoom &&
     (auction || (trades && withAuctions && auctionOverlay));
   const move = (c: MapCommand) => setCommand({ ...c, nonce: ++ref.current });
+  // 통학구역을 맞출 때 지도 가장자리 여백 [위, 오른쪽, 아래, 왼쪽]. 오른쪽은 버튼 묶음 자리다.
+  // 휴대폰은 학교 시트 peek 높이만큼 아래를 비우되, 지도 절반은 남긴다
+  const zonePadding = (): [number, number, number, number] => {
+    if (desktop) return [56, 76, 56, 56];
+    const peek = sheetStops(height - 54, SCHOOL_PEEK).peek;
+    const bottom = mapHeight ? Math.min(peek, mapHeight / 2) : peek;
+    return [32, 64, bottom + 16, 24];
+  };
   const landRequest = useRef<AbortController | null>(null);
   const pendingLand = useRef<{
     lat: number;
@@ -453,6 +471,15 @@ export function MapHome({
   }, [repo, camera, schools, outside, retry]);
   // 초등학교 시트를 열면 통학구역을 불러와 지도에 칠하고, 구역이 화면에 들어오게 옮긴다.
   // 통학구역이 없거나(404) 서버 준비 전(503)이면 칠하지 않고 시트에 안내만 둔다
+  // 지도에 올릴 학교. 고른 학교는 줌을 줄여 목록이 비어도 남겨 둔다(통학구역의 기준점이다)
+  const pickedSchool = selected?.kind === "school" ? selected.school : null;
+  const mapSchools = useMemo(
+    () =>
+      !pickedSchool || schoolList.some((x) => x.id === pickedSchool.id)
+        ? schoolList
+        : [...schoolList, pickedSchool],
+    [schoolList, pickedSchool],
+  );
   const zoneSchool =
     selected?.kind === "school" && selected.school.level === "elementary"
       ? selected.school.id
@@ -469,15 +496,9 @@ export function MapHome({
       .then((r) => {
         if (controller.signal.aborted) return;
         setZone({ schoolId: zoneSchool, status: "ok", geometry: r.data.geometry });
-        // 구역 가운데로 옮기고, 구역이 들어오는 줌을 고른다(학교 마커가 보이는 14 이상)
+        // 구역 전체가 보이게 맞춘다. 휴대폰은 아래 시트가 지도를 덮으니 그만큼 아래 여백을 둔다
         const bbox = geometryBBox(r.data.geometry);
-        if (bbox)
-          move({
-            type: "move",
-            lat: (bbox[1] + bbox[3]) / 2,
-            lng: (bbox[0] + bbox[2]) / 2,
-            zoom: fitZoom(bbox),
-          });
+        if (bbox) move({ type: "move", bbox, padding: zonePadding() });
       })
       .catch((e) => {
         if (controller.signal.aborted) return;
@@ -493,6 +514,36 @@ export function MapHome({
       });
     return () => controller.abort();
   }, [repo, zoneSchool]);
+  // 통학구역 안 단지. 구역 bbox를 단지 단위 줌으로 불러와 다각형 안 단지만 남긴다.
+  // 지금 고른 매물 유형·거래 조건을 그대로 쓴다
+  const zoneGeometry = zone?.status === "ok" ? zone.geometry : undefined;
+  useEffect(() => {
+    const bbox = zoneGeometry && geometryBBox(zoneGeometry);
+    if (!zoneGeometry || !bbox) {
+      setZoneComplexes(undefined);
+      return;
+    }
+    const controller = new AbortController();
+    setZoneComplexes(null);
+    repo
+      .markers(filters, bbox, ZONE_COMPLEX_ZOOM, controller.signal)
+      .then((r) => {
+        if (controller.signal.aborted) return;
+        setZoneComplexes(
+          r.data.markers
+            .filter(
+              (m): m is ComplexMarker =>
+                m.kind === "complex" &&
+                containsPoint(zoneGeometry, m.lng, m.lat),
+            )
+            .sort((a, b) => b.transaction_count - a.transaction_count),
+        );
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setZoneComplexes(undefined);
+      });
+    return () => controller.abort();
+  }, [repo, zoneGeometry, filters]);
   // 학교 시트가 열린 채 학교 레이어를 끄면 시트도 닫는다
   useEffect(() => {
     if (!schools && selected?.kind === "school") close();
@@ -1000,6 +1051,15 @@ export function MapHome({
           zone={
             zone?.schoolId === selected.school.id ? zone.status : undefined
           }
+          complexes={
+            zone?.schoolId === selected.school.id ? zoneComplexes : undefined
+          }
+          property={filters.property_type}
+          unit={unit}
+          onComplex={(id) => {
+            setSelected({ kind: "complex", id });
+            setStage("peek");
+          }}
         />
       ) : selected.kind === "hospitals" ? (
         <HospitalAreaContent area={selected.area} meta={selected.meta} />
@@ -1328,6 +1388,7 @@ export function MapHome({
       <View style={{ flex: 1, minHeight: 100, position: "relative" }}>
         <View
           testID="map-viewport"
+          onLayout={(e) => setMapHeight(e.nativeEvent.layout.height)}
           style={{
             flex: 1,
             marginLeft: panelVisible ? panelWidth : 0,
@@ -1339,7 +1400,7 @@ export function MapHome({
             markers={markers}
             property={filters.property_type}
             auctions={auctions}
-            schools={schoolList}
+            schools={mapSchools}
             hospitalAreas={areas}
             redevelopments={redevList}
             selected={

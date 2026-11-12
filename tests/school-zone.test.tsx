@@ -6,7 +6,8 @@ import { DEFAULT_FILTERS } from "../src/state/market";
 import { ApiError } from "../src/api/client";
 import { Repository } from "../src/api/repository";
 import { SCHOOLS, SCHOOL_META, SCHOOL_ZONES, SCHOOL_ZONE_META } from "../src/api/fixtures";
-import { fitZoom, geometryBBox } from "../src/map/geometry";
+import { containsPoint, geometryBBox } from "../src/map/geometry";
+import type { ComplexMarker } from "../src/api/types";
 vi.mock("react-native", async () => ({
   ...(await vi.importActual("react-native")),
   useWindowDimensions: () => ({ width: 390, height: 800, scale: 1, fontScale: 1 }),
@@ -37,13 +38,30 @@ vi.mock("../src/map/MapCanvas", () => ({
 afterEach(cleanup);
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+const complexAt = (id: string, lng: number, lat: number, count: number): ComplexMarker => ({
+  kind: "complex",
+  complex_id: id,
+  name: `단지 ${id}`,
+  lat,
+  lng,
+  transaction_count: count,
+  latest: { deal_type: "sale", price: 9e8, exclusive_area_pyeong: 25.7, supply_area_pyeong: 34, contract_date: "2026-09-14" },
+});
+// 우동초 구역 안 두 곳과 밖 한 곳
+const ZONE_MARKERS = [
+  complexAt("in-few", 129.145, 35.16, 3),
+  complexAt("out", 129.16, 35.17, 50),
+  complexAt("in-many", 129.146, 35.163, 9),
+];
+
 function setup(zoneImpl?: (...a: any[]) => Promise<any>) {
   const schoolZone = vi.fn(
     zoneImpl ?? (async (id: string) => ({ data: SCHOOL_ZONES.find((z) => z.school_id === id), meta: SCHOOL_ZONE_META })),
   );
   const repo = {
     mode: "api",
-    markers: vi.fn(async () => ({ data: { markers: [] }, meta: {} })),
+    // 지도 화면 마커는 비우고, 통학구역 bbox를 단지 줌(16)으로 부르면 단지를 준다
+    markers: vi.fn(async (_f: any, _b: any, z: number) => ({ data: { markers: z === 16 ? ZONE_MARKERS : [] }, meta: {} })),
     auctions: vi.fn(async () => ({ data: [], meta: {} })),
     schools: vi.fn(async () => ({ data: SCHOOLS, meta: SCHOOL_META })),
     schoolZone,
@@ -77,7 +95,7 @@ function setup(zoneImpl?: (...a: any[]) => Promise<any>) {
     act(() => map.props.onEvent({ type: "marker", id: `school:${id}` }));
     await act(() => wait(20));
   };
-  return { schoolZone, pick };
+  return { schoolZone, pick, repo };
 }
 
 describe("초등학교 통학구역", () => {
@@ -86,9 +104,12 @@ describe("초등학교 통학구역", () => {
     await pick("s-udong-elem");
     expect(schoolZone).toHaveBeenCalledWith("s-udong-elem", expect.anything());
     await waitFor(() => expect(map.props.schoolZone).toEqual(SCHOOL_ZONES[0].geometry));
-    // 구역 가운데로, 학교 마커가 보이는 줌(14 이상)으로 옮긴다
-    const [w, s, e, n] = geometryBBox(SCHOOL_ZONES[0].geometry)!;
-    expect(map.props.command).toMatchObject({ type: "move", lat: (s + n) / 2, lng: (w + e) / 2, zoom: 14 });
+    // 구역 bbox 전체가 보이게 맞추고, 휴대폰은 학교 시트(peek 336 = 800-54의 42%)만큼 아래를 비운다
+    expect(map.props.command).toMatchObject({
+      type: "move",
+      bbox: geometryBBox(SCHOOL_ZONES[0].geometry),
+      padding: [32, 64, Math.min(360, (800 - 54) * 0.42) + 16, 24],
+    });
     const sheet = screen.getByTestId("sheet");
     expect(sheet.textContent).toContain("이 학교 통학구역이에요");
     expect(sheet.textContent).toContain("한국교육시설안전원 학구도");
@@ -96,6 +117,27 @@ describe("초등학교 통학구역", () => {
     act(() => map.props.onEvent({ type: "marker", id: "school:s-haeundae-girls-high" }));
     await act(() => wait(20));
     expect(map.props.schoolZone).toBeNull();
+  });
+
+  it("통학구역 안 단지를 거래 많은 순으로 보여 주고, 누르면 단지 시트를 연다", async () => {
+    const { pick, repo } = setup();
+    await pick("s-udong-elem");
+    expect(await screen.findByText("통학구역 안 아파트 2곳")).toBeTruthy();
+    expect(repo.markers).toHaveBeenCalledWith(DEFAULT_FILTERS, geometryBBox(SCHOOL_ZONES[0].geometry), 16, expect.anything());
+    const names = screen.getAllByRole("button", { name: /^단지 .+ 보기$/ }).map((b) => b.getAttribute("aria-label"));
+    expect(names).toEqual(["단지 in-many 보기", "단지 in-few 보기"]);
+    fireEvent.click(screen.getByRole("button", { name: "단지 in-many 보기" }));
+    await act(() => wait(20));
+    expect(map.props.selected).toBe("in-many");
+  });
+
+  it("줌을 줄여 학교 목록이 비어도 고른 학교 마커는 남긴다", async () => {
+    const { pick } = setup();
+    await pick("s-udong-elem");
+    act(() => map.props.onEvent({ type: "camera", lat: 35.16, lng: 129.14, zoom: 12, bbox: [129.0, 35.0, 129.3, 35.3] }));
+    await act(() => wait(300));
+    expect(map.props.schools.map((x: any) => x.id)).toEqual(["s-udong-elem"]);
+    expect(map.props.selected).toBe("school:s-udong-elem");
   });
 
   it("중·고등학교는 통학구역을 부르지 않는다", async () => {
@@ -125,19 +167,27 @@ describe("초등학교 통학구역", () => {
 
 describe("통학구역 데이터", () => {
   it("geometryBBox는 Polygon·MultiPolygon의 꼭짓점 범위다", () => {
-    expect(geometryBBox(SCHOOL_ZONES[0].geometry)).toEqual([129.137, 35.1555, 129.15, 35.169]);
+    expect(geometryBBox({ type: "Polygon", coordinates: [[[1, 2], [3, 0], [2, 5], [1, 2]]] })).toEqual([1, 0, 3, 5]);
     expect(
       geometryBBox({ type: "MultiPolygon", coordinates: [[[[1, 2], [3, 4], [1, 2]]], [[[5, 0], [6, 1], [5, 0]]]] }),
     ).toEqual([1, 0, 6, 4]);
   });
 
-  it("fitZoom은 구역이 640px 안에 드는 가장 큰 줌이고 14~16 사이다", () => {
-    // 약 1.5km 구역: 줌 15(1px=1m)에서는 넘치고 14(2m)에서 들어온다
-    expect(fitZoom(geometryBBox(SCHOOL_ZONES[0].geometry)!)).toBe(14);
-    // 약 200m 구역은 16
-    expect(fitZoom([129.14, 35.16, 129.142, 35.161])).toBe(16);
-    // 아주 큰 구역도 14 아래로 내리지 않는다
-    expect(fitZoom([129.0, 35.0, 129.3, 35.3])).toBe(14);
+  it("containsPoint는 바깥 고리 안이면서 구멍 밖인 점만 참이다", () => {
+    const square = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]];
+    const hole = [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]];
+    const g = { type: "Polygon" as const, coordinates: [square, hole] };
+    expect(containsPoint(g, 2, 2)).toBe(true);
+    expect(containsPoint(g, 5, 5)).toBe(false);
+    expect(containsPoint(g, 11, 5)).toBe(false);
+    expect(containsPoint({ type: "MultiPolygon", coordinates: [[hole], [square.map(([x, y]) => [x + 20, y])]] }, 25, 5)).toBe(true);
+  });
+
+  it("샘플 통학구역은 자기 학교를 품는다", () => {
+    for (const z of SCHOOL_ZONES) {
+      const school = SCHOOLS.find((x) => x.id === z.school_id)!;
+      expect(containsPoint(z.geometry, school.lng!, school.lat!)).toBe(true);
+    }
   });
 
   it("샘플 Repository는 통학구역이 없는 학교에 RESOURCE_NOT_FOUND를 준다", async () => {

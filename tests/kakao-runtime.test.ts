@@ -48,7 +48,9 @@ function fakeKakao() {
     setCenter(c: LatLng) { this.center = c; }
     panTo(c: LatLng) { this.center = c; trigger(this, "idle"); }
     setLevel(l: number) { this.level = l; trigger(this, "idle"); }
-    setBounds(b: LatLngBounds) {
+    padding: number[] = [];
+    setBounds(b: LatLngBounds, ...padding: number[]) {
+      this.padding = padding;
       this.center = new LatLng((b.sw.lat + b.ne.lat) / 2, (b.sw.lng + b.ne.lng) / 2);
       trigger(this, "idle");
     }
@@ -206,9 +208,19 @@ describe("카카오 지도 런타임", () => {
     const { receive } = start("test-key", props({ schoolZone: zone }));
     const polys = () => fake.shapes.filter((s) => s.map && s.options.strokeColor === "#D08A00");
     expect(polys()).toHaveLength(2);
-    expect(polys()[0].options).toMatchObject({ fillOpacity: 0.14, zIndex: 0 });
+    expect(polys()[0].options).toMatchObject({ fillOpacity: 0.24, strokeWeight: 3.5, zIndex: 0 });
     receive({ type: "state", zone: null } as any);
     expect(polys()).toHaveLength(0);
+  });
+
+  it("bbox 이동은 여백 [위, 오른쪽, 아래, 왼쪽]을 setBounds에 넘긴다", () => {
+    const { receive, map } = start();
+    receive({ type: "move", bbox: [129.1, 35.1, 129.2, 35.2], padding: [32, 64, 300, 24] });
+    expect(map.center.lat).toBeCloseTo(35.15);
+    expect(map.center.lng).toBeCloseTo(129.15);
+    expect(map.padding).toEqual([32, 64, 300, 24]);
+    receive({ type: "move", bbox: [129.1, 35.1, 129.2, 35.2] });
+    expect(map.padding).toEqual([]);
   });
 
   it("이동·확대 명령을 카카오 레벨로 바꿔 적용한다", () => {

@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Linking, Platform, Pressable, View } from "react-native";
-import type { Meta, School } from "../api/types";
+import type { ComplexMarker, Meta, Property, School } from "../api/types";
+import { PROPERTY, formatArea, priceLabel } from "../state/market";
 import { Btn, T, s } from "../components/ui";
 import {
   ASSIGNMENT_NOTICE,
@@ -43,16 +44,28 @@ const ZONE_LINE: Record<ZoneStatus, string> = {
   error: "통학구역을 불러오지 못했어요",
 };
 
+// 통학구역 안 단지 목록을 처음 펼쳐 두는 건수. 나머지는 더보기로 연다
+export const ZONE_COMPLEX_PREVIEW = 5;
+
 // 학교 시트 내용. 목록 응답의 값을 그대로 쓰며 따로 부르지 않는다. 짧아서 단계와 상관없이 같은 내용이다.
-// 초등학교는 MapHome이 통학구역을 불러와 zone으로 상태를 넘긴다
+// 초등학교는 MapHome이 통학구역과 그 안 단지를 불러와 zone·complexes로 넘긴다
 export function SchoolContent({
   school,
   meta,
   zone,
+  complexes,
+  property = "apartment",
+  unit = "평",
+  onComplex,
 }: {
   school: School;
   meta?: Meta;
   zone?: ZoneStatus;
+  // 통학구역 안 단지. null이면 불러오는 중, undefined면 목록을 숨긴다
+  complexes?: ComplexMarker[] | null;
+  property?: Property;
+  unit?: "평" | "㎡";
+  onComplex?: (id: string) => void;
 }) {
   const level = SCHOOL_LEVEL[school.level];
   const address = school.address.replace(/^부산광역시\s+/, "");
@@ -102,6 +115,16 @@ export function SchoolContent({
           </T>
         )}
       </View>
+      {/* 토지는 단지가 아니라 필지 거래라 목록을 두지 않는다 */}
+      {zone === "ok" && complexes !== undefined && property !== "land" && (
+        <ZoneComplexes
+          key={school.id}
+          complexes={complexes}
+          property={property}
+          unit={unit}
+          onComplex={onComplex}
+        />
+      )}
       {school.opened_on && (
         <T size={14} color={C.muted}>
           {openedLine(school.opened_on)}
@@ -137,5 +160,74 @@ export function SchoolContent({
         {sourceLine}
       </T>
     </>
+  );
+}
+
+// 통학구역 안 단지. 이 안에 살면 이 학교로 배정되니, 학교에서 집으로 거꾸로 찾아가는 목록이다
+function ZoneComplexes({
+  complexes,
+  property,
+  unit,
+  onComplex,
+}: {
+  complexes: ComplexMarker[] | null;
+  property: Property;
+  unit: "평" | "㎡";
+  onComplex?: (id: string) => void;
+}) {
+  const [all, setAll] = useState(false);
+  useEffect(() => setAll(false), [complexes]);
+  const kind = PROPERTY[property];
+  if (!complexes)
+    return (
+      <T size={14} color={C.light} style={{ paddingVertical: 8 }}>
+        통학구역 안 단지를 찾는 중…
+      </T>
+    );
+  const shown = all ? complexes : complexes.slice(0, ZONE_COMPLEX_PREVIEW);
+  return (
+    <View style={{ marginTop: 8, marginBottom: 8 }}>
+      <T size={16} bold>
+        통학구역 안 {kind} {complexes.length}곳
+      </T>
+      <T size={13} color={C.muted}>
+        {complexes.length
+          ? "지금 조건으로 거래가 있는 곳이에요. 거래 많은 순"
+          : "지금 조건으로 거래가 있는 곳이 없어요"}
+      </T>
+      {shown.map((c) => (
+        <Pressable
+          key={c.complex_id}
+          accessibilityRole="button"
+          accessibilityLabel={`${c.name} 보기`}
+          onPress={() => onComplex?.(c.complex_id)}
+          style={{
+            paddingVertical: 10,
+            borderBottomWidth: 1,
+            borderColor: C.rule,
+            gap: 2,
+          }}
+        >
+          <View style={s.between}>
+            <T size={15} bold style={{ flexShrink: 1 }}>
+              {c.name}
+            </T>
+            <T size={15} bold>
+              {priceLabel(c.latest)}
+            </T>
+          </View>
+          <T size={13} color={C.muted}>
+            최근 {formatArea(c.latest, unit)} · 거래 {c.transaction_count}건
+          </T>
+        </Pressable>
+      ))}
+      {!all && complexes.length > ZONE_COMPLEX_PREVIEW && (
+        <View style={{ marginTop: 8 }}>
+          <Btn secondary onPress={() => setAll(true)}>
+            {`더보기 (${complexes.length - ZONE_COMPLEX_PREVIEW}곳)`}
+          </Btn>
+        </View>
+      )}
+    </View>
   );
 }
