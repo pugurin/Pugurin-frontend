@@ -28,6 +28,7 @@ const base: Auction = {
   appraisal_price: 520000000,
   min_price_ratio: 69,
   recent_trade_price: 520000000,
+  recent_trade_avg_price: null,
   fail_count: 2,
   sale_date: "2026-11-14",
   building_area_m2: 84.97,

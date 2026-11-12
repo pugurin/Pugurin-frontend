@@ -153,6 +153,34 @@ describe("경매 문구 함수", () => {
     expect(compareLine({ ...t, min_price: null })).toBeNull();
   });
 
+  it("같은 평형 평균가가 있으면 평균과 견준다", () => {
+    const t = {
+      ...base,
+      recent_trade_price: 300000000,
+      recent_trade_count: 4,
+      recent_trade_avg_price: 409000000,
+    };
+    expect(compareLine(t)).toEqual({
+      text: "같은 평형 평균 실거래(4.1억)보다 12% 낮아요",
+      good: true,
+    });
+    expect(auctionSub(t, today)).toBe("실거래보다 12%↓");
+    expect(compareLine({ ...t, recent_trade_avg_price: 300000000 })?.text).toBe(
+      "같은 평형 평균 실거래(3억)보다 20% 높아요",
+    );
+    expect(compareLine({ ...t, recent_trade_avg_price: 360000000 })?.text).toBe(
+      "같은 평형 평균 실거래(3.6억)와 비슷해요",
+    );
+    // 1건이면 평균이 그 거래와 같다
+    expect(
+      compareLine({ ...t, recent_trade_count: 1, recent_trade_price: 409000000 })?.text,
+    ).toBe("최근 거래 1건(4.1억)보다 12% 낮아요");
+    // 평균이 없으면 최근 1건과 견준다
+    expect(compareLine({ ...t, recent_trade_avg_price: null })?.text).toBe(
+      "최근 실거래(3억)보다 20% 높아요",
+    );
+  });
+
   it("제목", () => {
     expect(
       auctionTitle({

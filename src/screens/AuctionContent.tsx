@@ -11,7 +11,9 @@ import {
   dday,
   formatWon,
   ratioLine,
+  tradeBase,
 } from "../state/auction";
+import { pyeongType } from "../state/market";
 import { C } from "../theme/tokens";
 
 const KST_OFFSET_MS = 9 * 3600000;
@@ -94,14 +96,16 @@ function InfoRow({
 
 // 가격 비교 막대. 가장 큰 값을 100%로 둔다
 function PriceBars({ a }: { a: AuctionDetail }) {
+  const trade = tradeBase(a);
   const rows = [
     { label: "감정가", value: a.appraisal_price, color: C.disabled },
     {
-      label: "최근 실거래",
-      value:
-        a.recent_trade_price != null && a.recent_trade_price > 0
-          ? a.recent_trade_price
-          : null,
+      label: !trade?.avg
+        ? "최근 실거래"
+        : a.recent_trade_supply_area_pyeong != null
+          ? `같은 평형 평균 (${pyeongType(a.recent_trade_supply_area_pyeong)})`
+          : "같은 평형 평균",
+      value: trade?.price ?? null,
       color: C.apartment,
     },
     { label: "최저가", value: a.min_price, color: C.brown },
