@@ -6,6 +6,7 @@ export default defineConfig({
       "react-native": "react-native-web",
       "lucide-react-native": "lucide-react",
       "react-native-webview": "/tests/stubs/react-native-webview.tsx",
+      "react-native-svg": "/tests/stubs/react-native-svg.tsx",
     },
   },
 });

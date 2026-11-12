@@ -70,6 +70,12 @@ describe("로그인·가입 화면", () => {
     render(<LoginScreen auth={new SampleAuth(0)} onBack={() => {}} onSession={onSession} onSignup={onSignup} />);
     const buttons = screen.getAllByRole("button", { name: /로 시작하기$/ }).map((b) => b.getAttribute("aria-label"));
     expect(buttons).toEqual(["네이버로 시작하기", "카카오로 시작하기", "구글로 시작하기"]);
+    // 버튼마다 그 서비스 로고를 그린다
+    expect(screen.getAllByRole("img", { name: /^(네이버|카카오|구글) 로고$/ }).map((i) => i.getAttribute("aria-label"))).toEqual([
+      "네이버 로고",
+      "카카오 로고",
+      "구글 로고",
+    ]);
     fireEvent.click(screen.getByRole("button", { name: "구글로 시작하기" }));
     await flush();
     expect(onSignup).toHaveBeenCalledWith(expect.objectContaining({ kind: "signup", provider: "google" }));

@@ -11,11 +11,12 @@ export const PROVIDERS: Provider[] = ["naver", "kakao", "google"];
 // 소셜 로그인 버튼 색은 각 서비스 로그인 버튼 안내를 따른다
 export const PROVIDER: Record<
   Provider,
-  { name: string; letter: string; bg: string; ink: string; border?: string }
+  { name: string; bg: string; ink: string; border?: string }
 > = {
-  naver: { name: "네이버", letter: "N", bg: "#03C75A", ink: "#FFFFFF" },
-  kakao: { name: "카카오", letter: "K", bg: "#FEE500", ink: "#191919" },
-  google: { name: "구글", letter: "G", bg: "#FFFFFF", ink: "#1F1F1F", border: "#747775" },
+  naver: { name: "네이버", bg: "#03C75A", ink: "#FFFFFF" },
+  // 카카오 가이드: 글자는 검정 85%
+  kakao: { name: "카카오", bg: "#FEE500", ink: "rgba(0,0,0,0.85)" },
+  google: { name: "구글", bg: "#FFFFFF", ink: "#1F1F1F", border: "#747775" },
 };
 // 소셜 계정 이름 나열(안내 문구용)
 export const PROVIDER_NAMES = PROVIDERS.map((p) => PROVIDER[p].name).join("·");

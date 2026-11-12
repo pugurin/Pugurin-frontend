@@ -16,6 +16,7 @@ import {
 } from "../api/auth";
 import { Avatar } from "../components/Avatar";
 import { Brand } from "../components/Brand";
+import { ProviderLogo } from "../components/ProviderLogo";
 import { Btn, Header, Icon, Section, T, s } from "../components/ui";
 import { C } from "../theme/tokens";
 import { TermsScreen, type TermKind } from "./MoreScreen";
@@ -103,20 +104,7 @@ function ProviderButton({
         <ActivityIndicator color={p.ink} />
       ) : (
         <>
-          <View
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 6,
-              backgroundColor: p.ink,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <T bold size={13} color={p.bg}>
-              {p.letter}
-            </T>
-          </View>
+          <ProviderLogo provider={provider} />
           <T bold size={17} color={p.ink}>
             {p.name}로 시작하기
           </T>
