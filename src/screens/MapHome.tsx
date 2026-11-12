@@ -207,6 +207,7 @@ export function MapHome({
     schoolId: string;
     status: ZoneStatus;
     geometry?: Geometry;
+    source?: string;
   } | null>(null);
   // 통학구역 안 단지(거래 많은 순). 불러오는 중이면 null, 못 불러오면 undefined로 목록을 숨긴다
   const [zoneComplexes, setZoneComplexes] = useState<
@@ -495,7 +496,13 @@ export function MapHome({
       .schoolZone(zoneSchool, controller.signal)
       .then((r) => {
         if (controller.signal.aborted) return;
-        setZone({ schoolId: zoneSchool, status: "ok", geometry: r.data.geometry });
+        const source = r.meta?.source_attribution;
+        setZone({
+          schoolId: zoneSchool,
+          status: "ok",
+          geometry: r.data.geometry,
+          source: Array.isArray(source) ? source.join(", ") : source,
+        });
         // 구역 전체가 보이게 맞춘다. 휴대폰은 아래 시트가 지도를 덮으니 그만큼 아래 여백을 둔다
         const bbox = geometryBBox(r.data.geometry);
         if (bbox) move({ type: "move", bbox, padding: zonePadding() });
@@ -1056,6 +1063,9 @@ export function MapHome({
           meta={selected.meta}
           zone={
             zone?.schoolId === selected.school.id ? zone.status : undefined
+          }
+          zoneSource={
+            zone?.schoolId === selected.school.id ? zone.source : undefined
           }
           complexes={
             zone?.schoolId === selected.school.id ? zoneComplexes : undefined

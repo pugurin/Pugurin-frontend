@@ -45,6 +45,7 @@ import {
   sampleTransactions,
 } from "./fixtures";
 import { queryForFilters, TREND_MONTHS } from "../state/market";
+import { LOCAL_SCHOOL_ZONES, LOCAL_ZONE_META } from "./schoolZonesLocal";
 export type Mode = "api" | "sample";
 // 학교 이름 검색에 쓰는 부산 범위(min_lng, min_lat, max_lng, max_lat)
 const BUSAN_BBOX: BBox = [128.75, 34.85, 129.35, 35.4];
@@ -353,10 +354,15 @@ export class Repository {
         ? Promise.resolve({ data: zone, meta: SCHOOL_ZONE_META })
         : Promise.reject(new ApiError("통학구역 없음", "RESOURCE_NOT_FOUND"));
     }
-    return this.client.get<SchoolZone>(
-      `/schools/${encodeURIComponent(schoolId)}/zone`,
-      signal,
-    );
+    // 서버에 구역이 없으면(학구도 API 미배포 포함) 앱에 넣어 둔 참고용 경계를 쓴다
+    return this.client
+      .get<SchoolZone>(`/schools/${encodeURIComponent(schoolId)}/zone`, signal)
+      .catch((e) => {
+        const local = LOCAL_SCHOOL_ZONES.find((z) => z.school_id === schoolId);
+        if (e?.code === "RESOURCE_NOT_FOUND" && local)
+          return { data: local, meta: LOCAL_ZONE_META };
+        throw e;
+      });
   }
   // 화면 영역 안의 정비사업 구역. 좌표가 있는 구역 중 고른 단계만 받는다
   redevelopments(

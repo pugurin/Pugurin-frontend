@@ -54,6 +54,7 @@ export function SchoolContent({
   school,
   meta,
   zone,
+  zoneSource = ASSIGNMENT_SOURCE,
   complexes,
   property = "apartment",
   unit = "평",
@@ -62,6 +63,8 @@ export function SchoolContent({
   school: School;
   meta?: Meta;
   zone?: ZoneStatus;
+  // 통학구역 출처. 없으면 학구도로 적는다
+  zoneSource?: string;
   // 통학구역 안 단지. null이면 불러오는 중, undefined면 목록을 숨긴다
   complexes?: ComplexMarker[] | null;
   property?: Property;
@@ -73,7 +76,7 @@ export function SchoolContent({
   const notice = meta?.school_notice || SCHOOL_NOTICE;
   // 출처가 배열로 와도 학교 시트에는 학교 출처만 쓴다. 기준일은 날짜시간으로 와서 앞 10글자만 쓴다
   const asOf = meta?.data_as_of?.slice(0, 10).replaceAll("-", ".");
-  const sourceLine = `출처: ${SCHOOL_SOURCE}${zone === "ok" ? `, ${ASSIGNMENT_SOURCE}` : ""}${asOf ? ` · 기준일 ${asOf}` : ""}`;
+  const sourceLine = `출처: ${SCHOOL_SOURCE}${zone === "ok" ? `, ${zoneSource}` : ""}${asOf ? ` · 기준일 ${asOf}` : ""}`;
   const homepage = homepageUrl(school.homepage);
   const callTel = () => {
     if (school.tel) void Linking.openURL(`tel:${school.tel}`).catch(() => {});

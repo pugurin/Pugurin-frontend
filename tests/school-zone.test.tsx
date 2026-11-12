@@ -3,7 +3,7 @@ import { it, expect, vi, afterEach, describe } from "vitest";
 import { act, render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { MapHome } from "../src/screens/MapHome";
 import { DEFAULT_FILTERS } from "../src/state/market";
-import { ApiError } from "../src/api/client";
+import { ApiClient, ApiError } from "../src/api/client";
 import { Repository } from "../src/api/repository";
 import { SCHOOLS, SCHOOL_META, SCHOOL_ZONES, SCHOOL_ZONE_META } from "../src/api/fixtures";
 import { containsPoint, geometryBBox } from "../src/map/geometry";
@@ -211,5 +211,33 @@ describe("통학구역 데이터", () => {
     const repo = new Repository("sample", {} as never);
     expect((await repo.schoolZone("s-udong-elem")).data.kind).toBe("elementary");
     await expect(repo.schoolZone("s-haeundae-mid")).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
+  });
+});
+
+describe("참고용 통학구역", () => {
+  const api = (status: number) =>
+    new Repository(
+      "api",
+      new ApiClient("http://api", "d", async () =>
+        new Response(JSON.stringify({ error: { code: status === 404 ? "RESOURCE_NOT_FOUND" : "INTERNAL_ERROR", message: "x" } }), { status }),
+      ),
+    );
+
+  it("서버가 404면 앱에 넣어 둔 연신초 참고용 경계를 쓰고, 출처를 공식 학구도가 아니라고 적는다", async () => {
+    const r = await api(404).schoolZone("7191087");
+    expect(r.data.school_id).toBe("7191087");
+    expect(String(r.meta?.source_attribution)).toContain("공식 학구도 아님");
+    // 연신초와 배정 단지(더샵파크시티·한양타워)는 안, 온천천 북쪽 단지·연일초는 밖
+    const g = r.data.geometry;
+    expect(containsPoint(g, 129.09316, 35.19248)).toBe(true);
+    expect(containsPoint(g, 129.09724, 35.19101)).toBe(true);
+    expect(containsPoint(g, 129.09222, 35.19051)).toBe(true);
+    expect(containsPoint(g, 129.09106, 35.1943)).toBe(false);
+    expect(containsPoint(g, 129.09545, 35.18432)).toBe(false);
+  });
+
+  it("참고용 경계가 없는 학교나 404가 아닌 오류는 그대로 던진다", async () => {
+    await expect(api(404).schoolZone("other")).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
+    await expect(api(500).schoolZone("7191087")).rejects.toBeTruthy();
   });
 });
