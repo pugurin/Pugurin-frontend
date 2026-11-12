@@ -2,7 +2,13 @@ import React from "react";
 import { Linking, Platform, Pressable, View } from "react-native";
 import type { Meta, School } from "../api/types";
 import { Btn, T, s } from "../components/ui";
-import { SCHOOL_LEVEL, SCHOOL_NOTICE, SCHOOL_SOURCE } from "../state/school";
+import {
+  ASSIGNMENT_NOTICE,
+  ASSIGNMENT_SOURCE,
+  SCHOOL_LEVEL,
+  SCHOOL_NOTICE,
+  SCHOOL_SOURCE,
+} from "../state/school";
 import { C } from "../theme/tokens";
 import { Badge } from "./AuctionContent";
 
@@ -26,20 +32,34 @@ export function homepageUrl(v: string | null | undefined): string | null {
   return `http://${url}`;
 }
 
-// 학교 시트 내용. 목록 응답의 값을 그대로 쓰며 따로 부르지 않는다. 짧아서 단계와 상관없이 같은 내용이다
+// 초등학교 통학구역 상태. ok면 지도에 칠했고, none은 학구도에 구역이 없는 학교, notReady는 서버 준비 전이다
+export type ZoneStatus = "loading" | "ok" | "none" | "notReady" | "error";
+
+const ZONE_LINE: Record<ZoneStatus, string> = {
+  loading: "통학구역을 불러오는 중…",
+  ok: "지도에 칠한 곳이 이 학교 통학구역이에요. 이 안에 살면 이 학교로 배정돼요",
+  none: "학구도에서 이 학교 통학구역을 찾지 못했어요",
+  notReady: "통학구역 정보를 준비 중이에요",
+  error: "통학구역을 불러오지 못했어요",
+};
+
+// 학교 시트 내용. 목록 응답의 값을 그대로 쓰며 따로 부르지 않는다. 짧아서 단계와 상관없이 같은 내용이다.
+// 초등학교는 MapHome이 통학구역을 불러와 zone으로 상태를 넘긴다
 export function SchoolContent({
   school,
   meta,
+  zone,
 }: {
   school: School;
   meta?: Meta;
+  zone?: ZoneStatus;
 }) {
   const level = SCHOOL_LEVEL[school.level];
   const address = school.address.replace(/^부산광역시\s+/, "");
   const notice = meta?.school_notice || SCHOOL_NOTICE;
   // 출처가 배열로 와도 학교 시트에는 학교 출처만 쓴다. 기준일은 날짜시간으로 와서 앞 10글자만 쓴다
   const asOf = meta?.data_as_of?.slice(0, 10).replaceAll("-", ".");
-  const sourceLine = `출처: ${SCHOOL_SOURCE}${asOf ? ` · 기준일 ${asOf}` : ""}`;
+  const sourceLine = `출처: ${SCHOOL_SOURCE}${zone === "ok" ? `, ${ASSIGNMENT_SOURCE}` : ""}${asOf ? ` · 기준일 ${asOf}` : ""}`;
   const homepage = homepageUrl(school.homepage);
   const callTel = () => {
     if (school.tel) void Linking.openURL(`tel:${school.tel}`).catch(() => {});
@@ -62,11 +82,25 @@ export function SchoolContent({
       <T size={14} color={C.muted}>
         {address}
       </T>
-      {/* 안내는 제목·주소 바로 뒤에 둬서 작은 화면의 peek에서도 보이게 한다 */}
-      <View style={[s.card, { marginTop: 8, marginBottom: 4 }]}>
-        <T size={14} color={C.ink2}>
-          {notice}
-        </T>
+      {/* 안내는 제목·주소 바로 뒤에 둬서 작은 화면의 peek에서도 보이게 한다.
+          통학구역을 칠했으면 직선거리 안내 대신 통학구역 안내를 쓴다 */}
+      <View style={[s.card, { marginTop: 8, marginBottom: 4, gap: 4 }]}>
+        {zone ? (
+          <>
+            <T size={14} bold={zone === "ok"} color={C.ink2}>
+              {ZONE_LINE[zone]}
+            </T>
+            {zone === "ok" && (
+              <T size={13} color={C.muted}>
+                {meta?.assignment_notice || ASSIGNMENT_NOTICE}
+              </T>
+            )}
+          </>
+        ) : (
+          <T size={14} color={C.ink2}>
+            {notice}
+          </T>
+        )}
       </View>
       {school.opened_on && (
         <T size={14} color={C.muted}>

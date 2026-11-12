@@ -69,7 +69,9 @@ import type { Camera, MapCommand, MapEvent } from "../map/types";
 import { ComplexContent, RegionContent } from "./MarketSheets";
 import { LandContent } from "./LandContent";
 import { AuctionContent } from "./AuctionContent";
-import { SCHOOL_PEEK, SchoolContent } from "./SchoolContent";
+import { SCHOOL_PEEK, SchoolContent, type ZoneStatus } from "./SchoolContent";
+import { fitZoom, geometryBBox } from "../map/geometry";
+import type { Geometry } from "geojson";
 import { HospitalAreaContent } from "./HospitalAreaContent";
 import { RedevelopmentContent } from "./RedevelopmentContent";
 import {
@@ -194,6 +196,12 @@ export function MapHome({
   const [hospitalMeta, setHospitalMeta] = useState<Meta>();
   // 병원 API가 404·503이면 원 없이 준비 중 안내만 띄운다
   const [hospitalNotReady, setHospitalNotReady] = useState(false);
+  // 고른 초등학교의 통학구역. 학교 시트가 열려 있는 동안만 둔다
+  const [zone, setZone] = useState<{
+    schoolId: string;
+    status: ZoneStatus;
+    geometry?: Geometry;
+  } | null>(null);
   // 화면 안 재개발 구역과 그 응답 meta. meta는 재개발 시트에만 쓴다
   const [redevList, setRedevList] = useState<Redevelopment[]>([]);
   const [redevMeta, setRedevMeta] = useState<Meta>();
@@ -443,6 +451,48 @@ export function MapHome({
       clearTimeout(timer);
     };
   }, [repo, camera, schools, outside, retry]);
+  // 초등학교 시트를 열면 통학구역을 불러와 지도에 칠하고, 구역이 화면에 들어오게 옮긴다.
+  // 통학구역이 없거나(404) 서버 준비 전(503)이면 칠하지 않고 시트에 안내만 둔다
+  const zoneSchool =
+    selected?.kind === "school" && selected.school.level === "elementary"
+      ? selected.school.id
+      : null;
+  useEffect(() => {
+    if (!zoneSchool) {
+      setZone(null);
+      return;
+    }
+    const controller = new AbortController();
+    setZone({ schoolId: zoneSchool, status: "loading" });
+    repo
+      .schoolZone(zoneSchool, controller.signal)
+      .then((r) => {
+        if (controller.signal.aborted) return;
+        setZone({ schoolId: zoneSchool, status: "ok", geometry: r.data.geometry });
+        // 구역 가운데로 옮기고, 구역이 들어오는 줌을 고른다(학교 마커가 보이는 14 이상)
+        const bbox = geometryBBox(r.data.geometry);
+        if (bbox)
+          move({
+            type: "move",
+            lat: (bbox[1] + bbox[3]) / 2,
+            lng: (bbox[0] + bbox[2]) / 2,
+            zoom: fitZoom(bbox),
+          });
+      })
+      .catch((e) => {
+        if (controller.signal.aborted) return;
+        setZone({
+          schoolId: zoneSchool,
+          status:
+            e?.code === "RESOURCE_NOT_FOUND"
+              ? "none"
+              : e?.code === "DATA_NOT_READY"
+                ? "notReady"
+                : "error",
+        });
+      });
+    return () => controller.abort();
+  }, [repo, zoneSchool]);
   // 학교 시트가 열린 채 학교 레이어를 끄면 시트도 닫는다
   useEffect(() => {
     if (!schools && selected?.kind === "school") close();
@@ -944,7 +994,13 @@ export function MapHome({
           unit={unit}
         />
       ) : selected.kind === "school" ? (
-        <SchoolContent school={selected.school} meta={selected.meta} />
+        <SchoolContent
+          school={selected.school}
+          meta={selected.meta}
+          zone={
+            zone?.schoolId === selected.school.id ? zone.status : undefined
+          }
+        />
       ) : selected.kind === "hospitals" ? (
         <HospitalAreaContent area={selected.area} meta={selected.meta} />
       ) : selected.kind === "redev" ? (
@@ -1308,6 +1364,7 @@ export function MapHome({
                 ? (selected.parcel?.geometry as any)
                 : null
             }
+            schoolZone={zone?.geometry ?? null}
             base={base}
             cadastral={isLand || cadastral}
             roadview={roadview}

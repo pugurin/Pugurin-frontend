@@ -255,6 +255,12 @@ export type Hospital = {
   doctors: number | null;
   distance_m: number | null;
 };
+// 초등학교 통학구역(학구도) 경계(`/schools/{id}/zone`). geometry는 WGS84 GeoJSON이다
+export type SchoolZone = {
+  school_id: string;
+  kind: string;
+  geometry: import("geojson").Polygon | import("geojson").MultiPolygon;
+};
 // 단지 주변 학교 요약(`/complexes/{id}/nearby`). 학교급별 반경 안 가까운 순 최대 3곳이다
 // 병원 요약도 같이 오지만 화면에서 쓰지 않아 타입에 넣지 않는다
 export type NearbySchools = {

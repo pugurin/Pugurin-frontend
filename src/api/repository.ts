@@ -17,6 +17,7 @@ import type {
   Nearby,
   Parcel,
   School,
+  SchoolZone,
   SearchResult,
   Sort,
   Stats,
@@ -24,6 +25,8 @@ import type {
   Transaction,
 } from "./types";
 import {
+  SCHOOL_ZONES,
+  SCHOOL_ZONE_META,
   REDEVELOPMENTS,
   REDEVELOPMENT_META,
   AUCTIONS,
@@ -296,6 +299,22 @@ export class Repository {
       tier: HOSPITAL_TIERS.join(","),
     });
     return this.client.get<Hospital[]>(`/hospitals?${p}`, signal);
+  }
+  // 초등학교 통학구역 경계. 통학구역이 없는 학교는 404(RESOURCE_NOT_FOUND)다
+  schoolZone(
+    schoolId: string,
+    signal?: AbortSignal,
+  ): Promise<Envelope<SchoolZone>> {
+    if (this.mode === "sample") {
+      const zone = SCHOOL_ZONES.find((z) => z.school_id === schoolId);
+      return zone
+        ? Promise.resolve({ data: zone, meta: SCHOOL_ZONE_META })
+        : Promise.reject(new ApiError("통학구역 없음", "RESOURCE_NOT_FOUND"));
+    }
+    return this.client.get<SchoolZone>(
+      `/schools/${encodeURIComponent(schoolId)}/zone`,
+      signal,
+    );
   }
   // 화면 영역 안의 정비사업 구역. 좌표가 있는 구역 중 고른 단계만 받는다
   redevelopments(

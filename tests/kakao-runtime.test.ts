@@ -201,6 +201,16 @@ describe("카카오 지도 런타임", () => {
     expect(user.options.content.innerHTML).toContain("rgb(26, 115, 232)");
   });
 
+  it("초등학교 통학구역은 초등학교 색 다각형으로 그리고, null을 받으면 지운다", () => {
+    const zone = { type: "MultiPolygon" as const, coordinates: [[[[129.1, 35.1], [129.2, 35.1], [129.2, 35.2], [129.1, 35.1]]], [[[129.3, 35.3], [129.4, 35.3], [129.4, 35.4], [129.3, 35.3]]]] };
+    const { receive } = start("test-key", props({ schoolZone: zone }));
+    const polys = () => fake.shapes.filter((s) => s.map && s.options.strokeColor === "#D08A00");
+    expect(polys()).toHaveLength(2);
+    expect(polys()[0].options).toMatchObject({ fillOpacity: 0.14, zIndex: 0 });
+    receive({ type: "state", zone: null } as any);
+    expect(polys()).toHaveLength(0);
+  });
+
   it("이동·확대 명령을 카카오 레벨로 바꿔 적용한다", () => {
     const { receive, map, events } = start();
     receive({ type: "move", lat: 35.2, lng: 129.2, zoom: 15 });
