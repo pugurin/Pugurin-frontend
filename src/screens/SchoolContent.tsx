@@ -39,7 +39,8 @@ export type ZoneStatus = "loading" | "ok" | "none" | "notReady" | "error";
 const ZONE_LINE: Record<ZoneStatus, string> = {
   loading: "통학구역을 불러오는 중…",
   ok: "지도에 칠한 곳이 이 학교 통학구역이에요. 이 안에 살면 이 학교로 배정돼요",
-  none: "학구도에서 이 학교 통학구역을 찾지 못했어요",
+  // 404는 학구도에 구역이 없는 학교와 서버에 학구도 API가 아직 없는 경우 둘 다라 둘에 맞는 말로 쓴다
+  none: "이 학교 통학구역 정보가 아직 없어요",
   notReady: "통학구역 정보를 준비 중이에요",
   error: "통학구역을 불러오지 못했어요",
 };

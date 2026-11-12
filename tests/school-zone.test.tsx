@@ -54,7 +54,7 @@ const ZONE_MARKERS = [
   complexAt("in-many", 129.146, 35.163, 9),
 ];
 
-function setup(zoneImpl?: (...a: any[]) => Promise<any>) {
+function setup(zoneImpl?: (...a: any[]) => Promise<any>, extra: Record<string, unknown> = {}) {
   const schoolZone = vi.fn(
     zoneImpl ?? (async (id: string) => ({ data: SCHOOL_ZONES.find((z) => z.school_id === id), meta: SCHOOL_ZONE_META })),
   );
@@ -86,6 +86,7 @@ function setup(zoneImpl?: (...a: any[]) => Promise<any>) {
       onMeta={() => {}}
       schools
       onSchools={() => {}}
+      {...extra}
     />,
   );
   const pick = async (id: string) => {
@@ -140,6 +141,22 @@ describe("초등학교 통학구역", () => {
     expect(map.props.selected).toBe("school:s-udong-elem");
   });
 
+  it("검색에서 학교를 고르면 학교 레이어를 켜고 그 학교 시트를 연다", async () => {
+    const onSchools = vi.fn();
+    const school = SCHOOLS.find((x) => x.id === "s-udong-elem")!;
+    setup(undefined, {
+      onSchools,
+      focus: { result: { type: "school", name: school.name, lat: school.lat, lng: school.lng, school }, nonce: 1 },
+    });
+    await act(() => wait(20));
+    expect(onSchools).toHaveBeenCalledWith(true);
+    expect(map.props.selected).toBe("school:s-udong-elem");
+    expect(screen.getByTestId("sheet").textContent).toContain("우동초등학교");
+    // 초등학교라 통학구역도 칠하고 구역에 맞춘다
+    await waitFor(() => expect(map.props.schoolZone).toEqual(SCHOOL_ZONES[0].geometry));
+    expect(map.props.command).toMatchObject({ type: "move", bbox: geometryBBox(SCHOOL_ZONES[0].geometry) });
+  });
+
   it("중·고등학교는 통학구역을 부르지 않는다", async () => {
     const { schoolZone, pick } = setup();
     await pick("s-haeundae-girls-high");
@@ -152,7 +169,7 @@ describe("초등학교 통학구역", () => {
       throw new ApiError("없음", "RESOURCE_NOT_FOUND");
     });
     await pick("s-udong-elem");
-    expect(await screen.findByText("학구도에서 이 학교 통학구역을 찾지 못했어요")).toBeTruthy();
+    expect(await screen.findByText("이 학교 통학구역 정보가 아직 없어요")).toBeTruthy();
     expect(map.props.schoolZone).toBeNull();
   });
 

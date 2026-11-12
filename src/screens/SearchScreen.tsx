@@ -72,7 +72,9 @@ export function SearchScreen({
           <T size={12} color={C.light}>
             {r.type === "complex"
               ? "단지"
-              : r.type === "region"
+              : r.type === "school"
+                ? "학교"
+                : r.type === "region"
                 ? "동네"
                 : "주소"}
           </T>
@@ -110,7 +112,7 @@ export function SearchScreen({
           autoFocus
           value={q}
           onChangeText={setQ}
-          placeholder="단지·주소·동네 검색"
+          placeholder="단지·동네·학교 검색"
           style={[s.input, { flex: 1, borderWidth: 0, paddingLeft: 0 }]}
         />
         {q !== "" && (

@@ -46,6 +46,10 @@ import {
 } from "./fixtures";
 import { queryForFilters, TREND_MONTHS } from "../state/market";
 export type Mode = "api" | "sample";
+// 학교 이름 검색에 쓰는 부산 범위(min_lng, min_lat, max_lng, max_lat)
+const BUSAN_BBOX: BBox = [128.75, 34.85, 129.35, 35.4];
+// 학교 검색 결과 최대 개수
+const SCHOOL_SEARCH_LIMIT = 10;
 export class Repository {
   constructor(
     public mode: Mode,
@@ -118,13 +122,51 @@ export class Repository {
       signal,
     );
   }
-  search(q: string, signal?: AbortSignal) {
-    return this.mode === "sample"
-      ? Promise.resolve({ data: sampleSearch(q) })
-      : this.client.get<SearchResult[]>(
-          `/search?q=${encodeURIComponent(q)}&limit=30`,
-          signal,
-        );
+  // 단지·동네·주소 검색에 학교 이름 검색을 붙인다. 학교를 못 찾아도 나머지 결과는 그대로 준다
+  async search(q: string, signal?: AbortSignal) {
+    const [base, schools] = await Promise.all([
+      this.mode === "sample"
+        ? Promise.resolve({ data: sampleSearch(q) })
+        : this.client.get<SearchResult[]>(
+            `/search?q=${encodeURIComponent(q)}&limit=30`,
+            signal,
+          ),
+      this.searchSchools(q).catch(() => []),
+    ]);
+    return { ...base, data: [...base.data, ...schools] };
+  }
+  // 학교 이름 검색. 서버에 학교 검색이 없어 부산 학교 목록을 한 번 받아 두고 이름으로 거른다.
+  // /schools는 한 번에 500곳까지라 초등학교와 나머지를 나눠 받는다
+  private schoolDirectory?: Promise<School[]>;
+  private async searchSchools(q: string): Promise<SearchResult[]> {
+    if (!this.schoolDirectory) {
+      const p = (level: string) =>
+        new URLSearchParams({ bbox: BUSAN_BBOX.join(","), level });
+      this.schoolDirectory =
+        this.mode === "sample"
+          ? Promise.resolve(SCHOOLS)
+          : Promise.all(
+              ["elementary", "middle,high,special,other"].map((level) =>
+                this.client.get<School[]>(`/schools?${p(level)}`),
+              ),
+            ).then((r) => r.flatMap((x) => x.data));
+      // 실패하면 다음 검색에서 다시 받는다
+      this.schoolDirectory.catch(() => (this.schoolDirectory = undefined));
+    }
+    const key = q.replace(/\s+/g, "");
+    return (await this.schoolDirectory)
+      .filter(
+        (x) => x.lat != null && x.lng != null && x.name.replace(/\s+/g, "").includes(key),
+      )
+      .slice(0, SCHOOL_SEARCH_LIMIT)
+      .map((x) => ({
+        type: "school" as const,
+        name: x.name,
+        address: x.address,
+        lat: x.lat!,
+        lng: x.lng!,
+        school: x,
+      }));
   }
   glossary(signal?: AbortSignal) {
     return this.mode === "sample"

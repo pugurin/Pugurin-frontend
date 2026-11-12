@@ -151,7 +151,7 @@ export type Term = {
   example: string;
 };
 export type SearchResult = {
-  type: "complex" | "region" | "address";
+  type: "complex" | "region" | "address" | "school";
   name?: string;
   address?: string;
   complex_id?: string;
@@ -161,6 +161,8 @@ export type SearchResult = {
   lat: number;
   lng: number;
   bbox?: BBox;
+  // type이 school이면 그 학교. 백엔드 통합 검색에는 학교가 없어 앱이 학교 목록에서 찾아 붙인다
+  school?: School;
 };
 export type Metrics = {
   median_price_per_pyeong?: number | null;

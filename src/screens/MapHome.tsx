@@ -637,7 +637,13 @@ export function MapHome({
     if (!focus) return;
     close();
     const r = focus.result;
-    if (r.type === "complex" && r.complex_id) {
+    if (r.type === "school" && r.school) {
+      // 학교 레이어를 켜고 그 학교 시트를 연다. 초등학교면 통학구역 효과가 구역에 맞춰 다시 옮긴다
+      onSchools?.(true);
+      setSelected({ kind: "school", school: r.school, meta: schoolMeta });
+      setStage("peek");
+      move({ type: "move", lat: r.lat, lng: r.lng, zoom: 15 });
+    } else if (r.type === "complex" && r.complex_id) {
       setSelected({ kind: "complex", id: r.complex_id });
       setStage("peek");
       move({ type: "move", lat: r.lat, lng: r.lng, zoom: 15 });
@@ -1144,7 +1150,7 @@ export function MapHome({
           <Brand size={34} />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="단지·주소·동네 검색"
+            accessibilityLabel="단지·동네·학교 검색"
             onPress={onSearch}
             style={[
               s.row,
@@ -1163,7 +1169,7 @@ export function MapHome({
           >
             <Icon name="search" color={C.light} />
             <T size={15} color={C.muted}>
-              단지·주소·동네 검색
+              단지·동네·학교 검색
             </T>
           </Pressable>
           <View
@@ -1258,12 +1264,12 @@ export function MapHome({
               <Brand size={32} />
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="단지·주소·동네 검색"
+                accessibilityLabel="단지·동네·학교 검색"
                 onPress={onSearch}
                 style={[s.row, { flex: 1, height: 40 }]}
               >
                 <Icon name="search" color={C.light} />
-                <T color={C.light}>단지·주소·동네 검색</T>
+                <T color={C.light}>단지·동네·학교 검색</T>
               </Pressable>
               {onToday && (
                 <Pressable

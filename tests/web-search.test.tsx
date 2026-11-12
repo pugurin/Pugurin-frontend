@@ -25,6 +25,13 @@ const region: SearchResult = {
   lat: 35.16,
   lng: 129.16,
 };
+const school: SearchResult = {
+  type: "school",
+  name: "연신초등학교",
+  address: "부산광역시 연제구 신금로23번길 30",
+  lat: 35.18,
+  lng: 129.08,
+};
 function setup(search = async () => ({ data: [region, complex] })) {
   const onSelect = vi.fn(),
     onClose = vi.fn(),
@@ -71,6 +78,14 @@ describe("웹 검색 드롭다운", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onSelect).toHaveBeenCalledWith(region);
     expect(onClose).toHaveBeenCalledOnce();
+  });
+  it("학교 결과는 단지 다음 학교 묶음으로 보여 준다", async () => {
+    const { onSelect } = setup(async () => ({ data: [region, school, complex] }));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "연신" } });
+    await screen.findByRole("option", { name: "연신초등학교" });
+    expect(screen.getAllByRole("group").map((g) => g.getAttribute("aria-label"))).toEqual(["단지", "학교", "동네"]);
+    fireEvent.click(screen.getByRole("option", { name: "연신초등학교" }));
+    expect(onSelect).toHaveBeenCalledWith(school);
   });
   it("늦게 도착한 이전 검색 결과가 새 검색 결과를 덮어쓰지 않는다", async () => {
     let finish: (value: { data: SearchResult[] }) => void = () => {};
