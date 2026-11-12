@@ -268,6 +268,39 @@ describe("경매 시트", () => {
     expect(screen.getByText("최근 실거래")).toBeTruthy();
   });
 
+  it("같은 평형 평균가가 있으면 평균과 공급 평형으로 견준다", async () => {
+    show(
+      repoOf({
+        ...base,
+        recent_trade_price: 400000000,
+        recent_trade_count: 4,
+        recent_trade_avg_price: 450000000,
+        recent_trade_supply_area_pyeong: 34,
+      }),
+      "full",
+    );
+    expect(
+      await screen.findByText("같은 평형 평균 실거래(4.5억)보다 20% 낮아요"),
+    ).toBeTruthy();
+    expect(screen.getByText("같은 평형 평균 (34평형)")).toBeTruthy();
+    expect(screen.getByText("4억 5,000만")).toBeTruthy();
+    expect(screen.queryByText("최근 실거래")).toBeNull();
+  });
+
+  it("공급 평형이 없으면 평형 없이 '같은 평형 평균'", async () => {
+    show(
+      repoOf({
+        ...base,
+        recent_trade_price: 400000000,
+        recent_trade_count: 4,
+        recent_trade_avg_price: 450000000,
+        recent_trade_supply_area_pyeong: null,
+      }),
+      "full",
+    );
+    expect(await screen.findByText("같은 평형 평균")).toBeTruthy();
+  });
+
   it("location_precise가 false면 '지도 위치는 대략적이에요'", async () => {
     show(repoOf({ ...base, location_precise: false }));
     expect(await screen.findByText("지도 위치는 대략적이에요")).toBeTruthy();
@@ -329,6 +362,9 @@ describe("경매 시트", () => {
       />,
     );
     expect(await screen.findByText("해운대아이파크 84㎡")).toBeTruthy();
-    expect(screen.getByText("최근 실거래")).toBeTruthy();
+    expect(screen.getByText("같은 평형 평균 (34평형)")).toBeTruthy();
+    expect(
+      screen.getByText("같은 평형 평균 실거래(13.5억)보다 25% 낮아요"),
+    ).toBeTruthy();
   });
 });

@@ -69,6 +69,17 @@ export type RegionMarker = {
     median_monthly_rent?: number | null;
   };
 };
+// 같은 필터에서 거래가 가장 많은 평형과 그 평균가. 매매는 avg_price, 전세는 avg_deposit,
+// 월세는 avg_deposit + avg_monthly_rent만 채워진다
+export type TypicalArea = {
+  exclusive_area_m2: number;
+  exclusive_area_pyeong: number;
+  supply_area_pyeong: number | null;
+  transaction_count: number;
+  avg_price: number | null;
+  avg_deposit: number | null;
+  avg_monthly_rent: number | null;
+};
 export type ComplexMarker = {
   kind: "complex";
   complex_id: string;
@@ -77,6 +88,8 @@ export type ComplexMarker = {
   lng: number;
   transaction_count: number;
   latest: Latest;
+  // 서버가 오래된 버전이면 없다
+  typical?: TypicalArea | null;
 };
 export type ParcelMarker = {
   kind: "parcel";
@@ -296,6 +309,9 @@ export type Auction = {
   recent_trade_date?: string | null;
   recent_trade_area_m2?: number | null;
   recent_trade_count?: number | null;
+  // 같은 평형 최근 12개월 매매 평균가와 그 평형의 공급 평형. 오래된 서버는 보내지 않는다
+  recent_trade_avg_price?: number | null;
+  recent_trade_supply_area_pyeong?: number | null;
 };
 export type AuctionSchedule = {
   date: string | null;

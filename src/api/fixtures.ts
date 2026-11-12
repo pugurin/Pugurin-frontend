@@ -14,6 +14,7 @@ import type {
   School,
   Hospital,
   SchoolZone,
+  TypicalArea,
 } from "./types";
 import { TERMS } from "./terms";
 export { TERMS };
@@ -175,6 +176,37 @@ export function sampleTransactions(
     },
   };
 }
+// 거래가 가장 많은 평형과 평균가(서버 typical 규칙). 건수가 같으면 최근 거래, 그다음 작은 평형.
+// noSupply면 건축물대장을 아직 못 채운 단지처럼 공급 평형을 비운다
+function sampleTypical(tx: Transaction[], noSupply: boolean): TypicalArea | null {
+  const groups = new Map<number, Transaction[]>();
+  for (const t of tx) {
+    if (t.exclusive_area_m2 == null) continue;
+    const key = Math.round(t.exclusive_area_m2);
+    groups.set(key, [...(groups.get(key) ?? []), t]);
+  }
+  const best = [...groups.entries()].sort(
+    ([ka, a], [kb, b]) =>
+      b.length - a.length ||
+      b[0].contract_date.localeCompare(a[0].contract_date) ||
+      ka - kb,
+  )[0]?.[1];
+  if (!best) return null;
+  const avg = (v: (t: Transaction) => number | null | undefined) => {
+    const xs = best.map(v).filter((x): x is number => x != null);
+    return xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null;
+  };
+  const t = best[0];
+  return {
+    exclusive_area_m2: t.exclusive_area_m2!,
+    exclusive_area_pyeong: t.exclusive_area_pyeong!,
+    supply_area_pyeong: noSupply ? null : (t.supply_area_pyeong ?? null),
+    transaction_count: best.length,
+    avg_price: avg((x) => x.price),
+    avg_deposit: avg((x) => x.deposit),
+    avg_monthly_rent: avg((x) => x.monthly_rent),
+  };
+}
 export function sampleMarkers(
   f: Filters,
   b: BBox,
@@ -223,6 +255,7 @@ export function sampleMarkers(
               lng: c.lng,
               transaction_count: tx.length,
               latest: tx[0],
+              typical: sampleTypical(tx, c.area_types[0].supply_area_pyeong == null),
             },
           ];
         })
@@ -328,6 +361,8 @@ export const AUCTIONS: AuctionDetail[] = [
     recent_trade_date: "2026-09-21",
     recent_trade_area_m2: 84.97,
     recent_trade_count: 6,
+    recent_trade_avg_price: 1352000000,
+    recent_trade_supply_area_pyeong: 34,
     schedule: [
       {
         date: "2026-08-29",
