@@ -73,6 +73,7 @@ import { SCHOOL_PEEK, SchoolContent, type ZoneStatus } from "./SchoolContent";
 import { fitZoom, geometryBBox } from "../map/geometry";
 import type { Geometry } from "geojson";
 import { HospitalAreaContent } from "./HospitalAreaContent";
+import { AdSlot } from "../components/AdSlot";
 import { RedevelopmentContent } from "./RedevelopmentContent";
 import {
   REDEVELOPMENT_MAP_STAGES,
@@ -244,6 +245,8 @@ export function MapHome({
     | null
   >(null);
   const [stage, setStage] = useState<SheetStage>("peek");
+  // 광고 닫기는 이번 실행 동안만 기억한다. 앱을 다시 열면 다시 보인다
+  const [adClosed, setAdClosed] = useState({ map: false, sheet: false });
   const [command, setCommand] = useState<MapCommand & { nonce: number }>();
   const [locating, setLocating] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
@@ -912,6 +915,8 @@ export function MapHome({
   const errorShown =
     !busy && !!(error || mapError || (auction && auctionError));
   const auctionCard = !busy && !errorShown && auction && !!auctionNotice;
+  // 지도 하단 작은 광고창(#129). 시트가 열리면 시트 아래쪽 광고로 넘긴다
+  const mapAd = !selected && !errorShown && !adClosed.map;
   const emptyCard =
     !busy &&
     !errorShown &&
@@ -1062,6 +1067,16 @@ export function MapHome({
           />
         </>
       )}
+      {/* 단지·경매 상세 시트 맨 아래 광고 자리. 내용 끝에 붙어 스크롤해야 보인다 */}
+      {(selected.kind === "complex" || selected.kind === "auction") &&
+        !adClosed.sheet && (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 }}>
+            <AdSlot
+              placement="sheet"
+              onClose={() => setAdClosed((a) => ({ ...a, sheet: true }))}
+            />
+          </View>
+        )}
     </Sheet>
   ) : null;
   return (
@@ -1689,6 +1704,26 @@ export function MapHome({
               )}
             </View>
           )}
+          {mapAd && (
+            <View
+              pointerEvents="box-none"
+              style={{
+                position: "absolute",
+                left: 12,
+                right: 12,
+                // 목록 보기·내 위치 버튼(높이 38) 위에 띄워 지도 조작을 가리지 않는다
+                bottom: 62,
+                alignItems: "center",
+              }}
+            >
+              <View style={{ width: "100%", maxWidth: 340 }}>
+                <AdSlot
+                  placement="map"
+                  onClose={() => setAdClosed((a) => ({ ...a, map: true }))}
+                />
+              </View>
+            </View>
+          )}
           {schoolLegend && (
             <View
               accessibilityLabel="학교 범례"
@@ -1696,8 +1731,8 @@ export function MapHome({
               style={{
                 position: "absolute",
                 left: 12,
-                // 목록 보기 버튼(높이 38) 위에 둔다
-                bottom: selected ? 16 : 62,
+                // 목록 보기 버튼(높이 38) 위, 광고창이 있으면 그 위에 둔다
+                bottom: selected ? 16 : mapAd ? 62 + AD_HEIGHT + 8 : 62,
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 8,
@@ -2061,6 +2096,8 @@ function RailBtn({
     </Pressable>
   );
 }
+// 광고창 높이(닫기 버튼 44 + 위아래 여백 12 + 테두리). 학교 범례를 그 위로 올릴 때 쓴다
+const AD_HEIGHT = 58;
 const float = {
   backgroundColor: C.surface,
   borderWidth: 1,
