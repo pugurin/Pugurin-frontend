@@ -59,7 +59,13 @@ import {
   type MatchingRecord,
 } from "./src/glossary/matching";
 import { kstDateKey, todayLabel } from "./src/glossary/today";
+import { SampleAuth, type Session, type SignInResult } from "./src/api/auth";
+import { AccountScreen, LoginScreen, SignupScreen } from "./src/screens/AuthScreens";
 type Route =
+  | { kind: "login" }
+  // 처음 로그인한 사람의 가입 마무리
+  | { kind: "signup"; signup: Extract<SignInResult, { kind: "signup" }> }
+  | { kind: "account" }
   | { kind: "matching" }
   | { kind: "filter" }
   | { kind: "search" }
@@ -101,6 +107,10 @@ export default function App() {
   // 지도 재개발 레이어. 처음엔 꺼짐이고 켠 상태를 저장한다
   const [redevelopments, setRedevelopments] = useState(false);
   const [recent, setRecent] = useState<Recent[]>([]);
+  // 로그인 세션. 기기에 저장해 다음에 열어도 로그인이 유지된다(F-AUTH-02).
+  // 백엔드 인증 API 전이라 앱 안 가짜 서버(SampleAuth)를 쓴다
+  const [session, setSession] = useState<Session | null>(null);
+  const auth = useMemo(() => new SampleAuth(), []);
   const [focus, setFocus] = useState<Focus>();
   // 경매 목록에서 고른 줄. 지도가 그 경매로 이동해 시트를 연다
   const [auctionFocus, setAuctionFocus] = useState<AuctionFocus | null>(null);
@@ -172,6 +182,7 @@ export default function App() {
         setInitError("기기 정보를 저장할 수 없어요. 다시 시도해 주세요"),
       );
     loadStored<Recent[]>("recent", []).then(setRecent);
+    loadStored<Session | null>("session", null).then(setSession);
     loadStored<"평" | "㎡">("unit", "평").then(setUnit);
     loadStored<"normal" | "satellite">("base", "normal").then(setBase);
     loadStored<boolean>("cad", false).then(setCad);
@@ -398,6 +409,55 @@ export default function App() {
         }}
       />
     );
+  const signedIn = (next: Session, joined: boolean) => {
+    setSession(next);
+    void store("session", next);
+    setRoute(null);
+    setTab("more");
+    notify(
+      joined
+        ? `가입을 마쳤어요. 반가워요, ${next.user.nickname}님`
+        : `${next.user.nickname}님, 다시 만나 반가워요`,
+    );
+  };
+  if (route?.kind === "login")
+    overlay = (
+      <LoginScreen
+        auth={auth}
+        onBack={() => setRoute(null)}
+        onSession={(next) => signedIn(next, false)}
+        onSignup={(signup) => setRoute({ kind: "signup", signup })}
+      />
+    );
+  if (route?.kind === "signup")
+    overlay = (
+      <SignupScreen
+        auth={auth}
+        signup={route.signup}
+        onBack={() => setRoute({ kind: "login" })}
+        onSession={(next) => signedIn(next, true)}
+      />
+    );
+  if (route?.kind === "account" && session)
+    overlay = (
+      <AccountScreen
+        auth={auth}
+        session={session}
+        onBack={() => setRoute(null)}
+        notify={notify}
+        onUser={(user) => {
+          const next = { ...session, user };
+          setSession(next);
+          void store("session", next);
+        }}
+        onSignedOut={(withdrawn) => {
+          setSession(null);
+          void store("session", null);
+          setRoute(null);
+          notify(withdrawn ? "탈퇴했어요. 그동안 고마웠어요" : "로그아웃했어요");
+        }}
+      />
+    );
   if (route?.kind === "terms")
     overlay = <TermsScreen kind={route.name} onBack={() => setRoute(null)} />;
   if (route?.kind === "date")
@@ -546,6 +606,9 @@ export default function App() {
             )}
             {tab === "more" && (
               <MoreScreen
+                user={session?.user ?? null}
+                onLogin={() => setRoute({ kind: "login" })}
+                onAccount={() => setRoute({ kind: "account" })}
                 mode={mode}
                 date={
                   dataMeta?.data_as_of ??

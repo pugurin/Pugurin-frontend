@@ -3,6 +3,8 @@ import { Linking, Pressable, ScrollView, Switch, View } from "react-native";
 import type { Mode } from "../api/repository";
 import { C } from "../theme/tokens";
 import { Btn, Header, Icon, Section, T, s } from "../components/ui";
+import { PROVIDER, PROVIDER_NAMES, type User } from "../api/auth";
+import { Avatar } from "../components/Avatar";
 export type TermKind =
   | "서비스 이용약관"
   | "위치기반서비스 이용약관"
@@ -18,7 +20,14 @@ export function MoreScreen({
   onTodayEnabled,
   tipsEnabled = true,
   onTipsEnabled,
+  user,
+  onLogin,
+  onAccount,
 }: {
+  // 로그인한 사용자. 없으면 로그인 카드를 보여 준다
+  user?: User | null;
+  onLogin?: () => void;
+  onAccount?: () => void;
   date?: string;
   mode: Mode;
   onMode: (m: Mode) => void;
@@ -57,21 +66,44 @@ export function MoreScreen({
         더보기
       </T>
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 32 }}>
-        <View
-          style={[
-            s.card,
-            {
-              backgroundColor: C.bg2,
-              borderStyle: "dashed",
-              marginVertical: 14,
-            },
-          ]}
-        >
-          <T bold>로그인 · 회원가입</T>
-          <T size={14} color={C.light}>
-            로그인과 관심 기능은 다음 단계에서 준비하고 있어요
-          </T>
-        </View>
+        {user ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${user.nickname} 내 정보`}
+            onPress={onAccount}
+            style={[s.card, s.row, { marginVertical: 14, gap: 12 }]}
+          >
+            <Avatar name={user.nickname} />
+            <View style={{ flex: 1 }}>
+              <T bold size={18}>
+                {user.nickname}
+              </T>
+              <T size={14} color={C.muted}>
+                {PROVIDER[user.provider].name} 계정으로 로그인했어요
+              </T>
+            </View>
+            <Icon name="right" size={18} color={C.light} />
+          </Pressable>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="로그인 · 회원가입"
+            onPress={onLogin}
+            style={[s.card, { marginVertical: 14, gap: 10 }]}
+          >
+            <View style={s.between}>
+              <View style={{ flex: 1 }}>
+                <T bold size={18}>
+                  로그인 · 회원가입
+                </T>
+                <T size={14} color={C.muted}>
+                  {PROVIDER_NAMES} 계정으로 바로 시작해요
+                </T>
+              </View>
+              <Icon name="right" size={18} color={C.light} />
+            </View>
+          </Pressable>
+        )}
         <Section title="용어">
           <View style={[s.between, { minHeight: 48 }]}>
             <T>로딩 중 용어 팁</T>
