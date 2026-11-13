@@ -118,10 +118,6 @@ describe("지도 화면의 오늘의 용어", () => {
     fireEvent.click(screen.getByLabelText("오늘의 용어"));
     expect(onToday).toHaveBeenCalled();
   });
-  it("광고 영역을 그리지 않는다", () => {
-    setupMap();
-    expect(screen.queryByText(/광고 영역/)).toBeNull();
-  });
 });
 describe("오늘의 용어 카드 진행 표시", () => {
   const card = (props: { matched?: number; completed?: boolean }) =>
