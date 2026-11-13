@@ -4,8 +4,8 @@ import type { SearchResult } from "../api/types";
 import type { Recent } from "../state/storage";
 import { C, FONT } from "../theme/tokens";
 
-const groupLabels = { complex: "단지", region: "동네", address: "주소" };
-const types = ["complex", "region", "address"] as const;
+const groupLabels = { complex: "단지", region: "동네", address: "주소", school: "학교" };
+const types = ["complex", "school", "region", "address"] as const;
 const label = (result: SearchResult) =>
   result.name ?? result.address ?? "검색 결과";
 
@@ -38,6 +38,8 @@ export function WebSearch({
 
   useEffect(() => {
     input.current?.focus();
+    // 학교 이름 검색이 첫 검색에서 늦지 않게 학교 목록을 미리 받는다. 테스트 대역에는 없을 수 있다
+    repo.prefetchSchools?.();
   }, []);
   useEffect(() => {
     const escape = (event: KeyboardEvent) => {
@@ -106,7 +108,7 @@ export function WebSearch({
   };
   const resultRow = (result: SearchResult, index: number) => (
     <button
-      key={`${result.type}-${result.complex_id ?? result.region_code ?? result.address}-${index}`}
+      key={`${result.type}-${result.complex_id ?? result.school?.id ?? result.region_code ?? result.address}-${index}`}
       id={optionId(index)}
       type="button"
       role="option"
@@ -151,7 +153,7 @@ export function WebSearch({
         <input
           ref={input}
           role="combobox"
-          aria-label="단지·주소·동네 검색"
+          aria-label="단지·동네·학교 검색"
           aria-autocomplete="list"
           aria-expanded="true"
           aria-controls={listId}
@@ -161,7 +163,7 @@ export function WebSearch({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={keyDown}
-          placeholder="단지·주소·동네 검색"
+          placeholder="단지·동네·학교 검색"
           style={{
             flex: 1,
             minWidth: 0,
@@ -239,7 +241,7 @@ export function WebSearch({
           </div>
         ) : searching && !options.length ? (
           <p style={message}>
-            검색 결과가 없어요. 다른 단지나 동네 이름을 입력해 주세요.
+            검색 결과가 없어요. 다른 단지·동네·학교 이름을 입력해 주세요.
           </p>
         ) : (
           <div

@@ -12,7 +12,15 @@ import type {
 } from "../api/types";
 export type Camera = { lat: number; lng: number; zoom: number; bbox: BBox };
 export type MapCommand =
-  | { type: "move"; lat?: number; lng?: number; zoom?: number; bbox?: BBox }
+  | {
+      type: "move";
+      lat?: number;
+      lng?: number;
+      zoom?: number;
+      bbox?: BBox;
+      // bbox를 맞출 때 지도 가장자리에 남길 px [위, 오른쪽, 아래, 왼쪽]. 시트·버튼에 가리지 않게 한다
+      padding?: [number, number, number, number];
+    }
   | { type: "zoom"; delta: number };
 export type MapEvent =
   | { type: "camera"; lat: number; lng: number; zoom: number; bbox: BBox }

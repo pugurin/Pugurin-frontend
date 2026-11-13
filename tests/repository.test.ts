@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Repository } from "../src/api/repository";
+import { Repository, SCHOOL_SEARCH_WAIT_MS } from "../src/api/repository";
 import { ApiClient } from "../src/api/client";
 import { DEFAULT_FILTERS, HOME } from "../src/state/market";
 describe("메인 API 계약", () => {
@@ -52,9 +52,10 @@ describe("메인 API 계약", () => {
       sort: "price_asc",
     });
     expect(urls[0]).toContain("/search?q=");
-    expect(urls[1]).toContain("/complexes/id/transactions?");
-    expect(urls[1]).toContain("include_cancelled=true");
-    expect(urls[1]).not.toContain("period_months");
+    const tx = urls.find((u) => u.includes("/transactions?"))!;
+    expect(tx).toContain("/complexes/id/transactions?");
+    expect(tx).toContain("include_cancelled=true");
+    expect(tx).not.toContain("period_months");
   });
 });
 
@@ -118,4 +119,99 @@ it("토지 거래는 머지된 지도 영역 목록 API로 요청한다", async 
   expect(urls[0]).toContain("/transactions?");
   expect(urls[0]).toContain("property_type=land");
   expect(urls[0]).toContain("bbox=");
+});
+
+describe("학교 이름 검색", () => {
+  const school = (id: string, name: string, lat: number | null = 35.17) => ({
+    id, name, kind: null, level: "elementary", foundation: null, coed: null,
+    address: `부산광역시 ${name}`, lat, lng: 129.08, tel: null, homepage: null, opened_on: null, distance_m: null,
+  });
+  const api = (schools: (u: string) => Response) => {
+    const urls: string[] = [];
+    const repo = new Repository(
+      "api",
+      new ApiClient("http://api", "d", async (value) => {
+        const u = decodeURIComponent(String(value));
+        urls.push(u);
+        return u.includes("/schools?")
+          ? schools(u)
+          : new Response(JSON.stringify({ data: [{ type: "region", name: "연산동", lat: 35.18, lng: 129.08 }] }));
+      }),
+    );
+    return { repo, urls };
+  };
+
+  it("부산 학교 목록을 초등·그 밖으로 나눠 한 번 받아 두고, 이름이 맞는 학교를 통합 검색 뒤에 붙인다", async () => {
+    const { repo, urls } = api((u) =>
+      new Response(JSON.stringify({
+        data: u.includes("level=elementary")
+          ? [school("e1", "연신초등학교"), school("e2", "연산초등학교"), school("e3", "연신 좌표없는초", null)]
+          : [school("m1", "연신중학교")],
+      })),
+    );
+    const r = await repo.search("연신");
+    expect(r.data.map((x) => x.name)).toEqual(["연산동", "연신초등학교", "연신중학교"]);
+    expect(r.data[1]).toMatchObject({ type: "school", school: { id: "e1" } });
+    const schoolUrls = urls.filter((u) => u.includes("/schools?"));
+    expect(schoolUrls).toHaveLength(2);
+    expect(schoolUrls[0]).toContain("bbox=128.75,34.85,129.35,35.4");
+    expect(schoolUrls.map((u) => u.split("level=")[1])).toEqual(["elementary", "middle,high,special,other"]);
+    // 띄어쓰기는 무시하고, 두 번째 검색은 받아 둔 목록을 쓴다
+    expect((await repo.search("연신 초")).data.map((x) => x.name)).toContain("연신초등학교");
+    expect(urls.filter((u) => u.includes("/schools?"))).toHaveLength(2);
+  });
+
+  it("학교 목록을 못 받아도 통합 검색 결과는 그대로 주고, 다음 검색에서 다시 받는다", async () => {
+    let fail = true;
+    const { repo, urls } = api(() =>
+      fail
+        ? new Response(JSON.stringify({ error: { code: "INTERNAL_ERROR", message: "x" } }), { status: 500 })
+        : new Response(JSON.stringify({ data: [school("e1", "연신초등학교")] })),
+    );
+    expect((await repo.search("연신")).data.map((x) => x.name)).toEqual(["연산동"]);
+    fail = false;
+    expect((await repo.search("연신")).data.map((x) => x.name)).toContain("연신초등학교");
+    expect(urls.filter((u) => u.includes("/schools?")).length).toBeGreaterThan(2);
+  });
+
+  it("학교 목록이 늦으면 기다리지 않고 통합 검색 결과만 준다", async () => {
+    const urls: string[] = [];
+    const repo = new Repository(
+      "api",
+      new ApiClient("http://api", "d", async (value) => {
+        const u = decodeURIComponent(String(value));
+        urls.push(u);
+        // 학교 목록은 끝나지 않는다
+        if (u.includes("/schools?")) return new Promise<Response>(() => {});
+        return new Response(JSON.stringify({ data: [{ type: "region", name: "연산동", lat: 35.18, lng: 129.08 }] }));
+      }),
+    );
+    const start = Date.now();
+    expect((await repo.search("연신")).data.map((x) => x.name)).toEqual(["연산동"]);
+    expect(Date.now() - start).toBeLessThan(SCHOOL_SEARCH_WAIT_MS + 500);
+    // 검색이 취소되면 학교를 기다리지 않고 바로 끝낸다
+    const controller = new AbortController();
+    const pending = repo.search("연신", controller.signal);
+    await new Promise((r) => setTimeout(r, 20));
+    const aborted = Date.now();
+    controller.abort();
+    await pending;
+    expect(Date.now() - aborted).toBeLessThan(SCHOOL_SEARCH_WAIT_MS);
+    // 받는 중인 목록은 다시 부르지 않는다
+    expect(urls.filter((u) => u.includes("/schools?"))).toHaveLength(2);
+  });
+
+  it("미리 받아 둔 학교 목록으로 첫 검색에서도 학교를 찾는다", async () => {
+    const { repo, urls } = api(() => new Response(JSON.stringify({ data: [school("e1", "연신초등학교")] })));
+    repo.prefetchSchools();
+    expect(urls.filter((u) => u.includes("/schools?"))).toHaveLength(2);
+    expect((await repo.search("연신")).data.map((x) => x.name)).toContain("연신초등학교");
+    expect(urls.filter((u) => u.includes("/schools?"))).toHaveLength(2);
+  });
+
+  it("샘플 모드는 샘플 학교에서 찾는다", async () => {
+    const repo = new Repository("sample", {} as never);
+    const r = await repo.search("우동초");
+    expect(r.data).toEqual([expect.objectContaining({ type: "school", name: "우동초등학교" })]);
+  });
 });

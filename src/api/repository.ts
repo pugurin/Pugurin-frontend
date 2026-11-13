@@ -45,7 +45,14 @@ import {
   sampleTransactions,
 } from "./fixtures";
 import { queryForFilters, TREND_MONTHS } from "../state/market";
+import { LOCAL_SCHOOL_ZONES, LOCAL_ZONE_META } from "./schoolZonesLocal";
 export type Mode = "api" | "sample";
+// 학교 이름 검색에 쓰는 부산 범위(min_lng, min_lat, max_lng, max_lat)
+const BUSAN_BBOX: BBox = [128.75, 34.85, 129.35, 35.4];
+// 학교 검색 결과 최대 개수
+const SCHOOL_SEARCH_LIMIT = 10;
+// 통합 검색이 끝난 뒤 학교 목록을 더 기다리는 시간(ms). 늦으면 학교 없이 결과를 준다
+export const SCHOOL_SEARCH_WAIT_MS = 800;
 export class Repository {
   constructor(
     public mode: Mode,
@@ -118,13 +125,71 @@ export class Repository {
       signal,
     );
   }
-  search(q: string, signal?: AbortSignal) {
-    return this.mode === "sample"
-      ? Promise.resolve({ data: sampleSearch(q) })
-      : this.client.get<SearchResult[]>(
-          `/search?q=${encodeURIComponent(q)}&limit=30`,
-          signal,
-        );
+  // 단지·동네·주소 검색에 학교 이름 검색을 붙인다. 학교를 못 찾아도 나머지 결과는 그대로 준다
+  // 학교 목록이 느려도 검색이 멈추지 않게, 통합 검색이 끝난 뒤 잠깐만 더 기다린다
+  async search(q: string, signal?: AbortSignal) {
+    const request =
+      this.mode === "sample"
+        ? Promise.resolve({ data: sampleSearch(q) })
+        : this.client.get<SearchResult[]>(
+            `/search?q=${encodeURIComponent(q)}&limit=30`,
+            signal,
+          );
+    const schools = this.searchSchools(q).catch(() => [] as SearchResult[]);
+    const base = await request;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+    // 시간이 지나거나 검색이 취소되면 학교 없이 끝낸다
+    const late = new Promise<SearchResult[]>((resolve) => {
+      timer = setTimeout(() => resolve([]), SCHOOL_SEARCH_WAIT_MS);
+      onAbort = () => resolve([]);
+      signal?.addEventListener("abort", onAbort);
+    });
+    try {
+      const found = await Promise.race([schools, late]);
+      return { ...base, data: [...base.data, ...found] };
+    } finally {
+      clearTimeout(timer);
+      if (onAbort) signal?.removeEventListener("abort", onAbort);
+    }
+  }
+  // 검색창을 열 때 학교 목록을 미리 받아 둔다. 실패해도 검색 때 다시 받는다
+  prefetchSchools() {
+    void this.searchSchools("").catch(() => {});
+  }
+  // 학교 이름 검색. 서버에 학교 검색이 없어 부산 학교 목록을 한 번 받아 두고 이름으로 거른다.
+  // /schools는 한 번에 500곳까지라 초등학교와 나머지를 나눠 받는다.
+  // 목록은 다음 검색에도 쓰니 검색 하나가 취소돼도 받기를 멈추지 않는다
+  private schoolDirectory?: Promise<School[]>;
+  private async searchSchools(q: string): Promise<SearchResult[]> {
+    if (!this.schoolDirectory) {
+      const p = (level: string) =>
+        new URLSearchParams({ bbox: BUSAN_BBOX.join(","), level });
+      this.schoolDirectory =
+        this.mode === "sample"
+          ? Promise.resolve(SCHOOLS)
+          : Promise.all(
+              ["elementary", "middle,high,special,other"].map((level) =>
+                this.client.get<School[]>(`/schools?${p(level)}`),
+              ),
+            ).then((r) => r.flatMap((x) => x.data));
+      // 실패하면 다음 검색에서 다시 받는다
+      this.schoolDirectory.catch(() => (this.schoolDirectory = undefined));
+    }
+    const key = q.replace(/\s+/g, "");
+    return (await this.schoolDirectory)
+      .filter(
+        (x) => x.lat != null && x.lng != null && x.name.replace(/\s+/g, "").includes(key),
+      )
+      .slice(0, SCHOOL_SEARCH_LIMIT)
+      .map((x) => ({
+        type: "school" as const,
+        name: x.name,
+        address: x.address,
+        lat: x.lat!,
+        lng: x.lng!,
+        school: x,
+      }));
   }
   glossary(signal?: AbortSignal) {
     return this.mode === "sample"
@@ -311,10 +376,15 @@ export class Repository {
         ? Promise.resolve({ data: zone, meta: SCHOOL_ZONE_META })
         : Promise.reject(new ApiError("통학구역 없음", "RESOURCE_NOT_FOUND"));
     }
-    return this.client.get<SchoolZone>(
-      `/schools/${encodeURIComponent(schoolId)}/zone`,
-      signal,
-    );
+    // 서버에 구역이 없으면(학구도 API 미배포 포함) 앱에 넣어 둔 참고용 경계를 쓴다
+    return this.client
+      .get<SchoolZone>(`/schools/${encodeURIComponent(schoolId)}/zone`, signal)
+      .catch((e) => {
+        const local = LOCAL_SCHOOL_ZONES.find((z) => z.school_id === schoolId);
+        if (e?.code === "RESOURCE_NOT_FOUND" && local)
+          return { data: local, meta: LOCAL_ZONE_META };
+        throw e;
+      });
   }
   // 화면 영역 안의 정비사업 구역. 좌표가 있는 구역 중 고른 단계만 받는다
   redevelopments(

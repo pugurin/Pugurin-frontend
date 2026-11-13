@@ -259,11 +259,11 @@ window.pugurinKakaoMap = function (el, config, send) {
       });
       if (g.type === 'LineString') shapes.push(new kakao.maps.Polyline(Object.assign({ path: paths([g.coordinates])[0] }, line)));
     });
-    // 초등학교 통학구역. 학교 색 테두리와 옅은 채움으로 마커·필지 아래에 그린다
+    // 초등학교 통학구역. 학교 색 굵은 테두리와 반투명 채움으로 마커·필지 아래에 그린다
     var zone = state.zone;
     var zonePolys = !zone ? [] : zone.type === 'Polygon' ? [zone.coordinates] : zone.type === 'MultiPolygon' ? zone.coordinates : [];
     zonePolys.forEach(function (poly) {
-      shapes.push(new kakao.maps.Polygon({ path: paths(poly), strokeColor: ZONE_COLOR, strokeWeight: 2.5, strokeOpacity: 0.9, fillColor: ZONE_COLOR, fillOpacity: 0.14, zIndex: 0 }));
+      shapes.push(new kakao.maps.Polygon({ path: paths(poly), strokeColor: ZONE_COLOR, strokeWeight: 3.5, strokeOpacity: 1, fillColor: ZONE_COLOR, fillOpacity: 0.24, zIndex: 0 }));
     });
     // 병원 원과 개수 라벨. 마커 겹침 계산에는 넣지 않는다
     (state.areas || []).forEach(function (a) {
@@ -301,7 +301,8 @@ window.pugurinKakaoMap = function (el, config, send) {
   function move(c) {
     if (c.bbox) {
       var b = c.bbox;
-      return map.setBounds(new kakao.maps.LatLngBounds(latLng(b[1], b[0]), latLng(b[3], b[2])));
+      var bounds = new kakao.maps.LatLngBounds(latLng(b[1], b[0]), latLng(b[3], b[2])), pad = c.padding;
+      return pad ? map.setBounds(bounds, pad[0], pad[1], pad[2], pad[3]) : map.setBounds(bounds);
     }
     var center = c.lat != null && c.lng != null ? latLng(c.lat, c.lng) : null;
     var level = c.zoom != null ? toLevel(c.zoom) : map.getLevel();
