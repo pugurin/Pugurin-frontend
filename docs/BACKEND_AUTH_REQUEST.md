@@ -65,7 +65,24 @@
 
 ## 6. 그대로 쓰는 것
 
-- `POST /auth/refresh`: 앱은 refresh token을 기기에 저장하고, 웹은 쿠키를 씁니다.
+- `POST /auth/refresh`: 앱은 refresh token을 기기 보안 저장소(SecureStore)에 두고, 웹은 httpOnly 쿠키로만 주고받습니다.
 - `POST /auth/logout`
 - `PATCH /users/me`: `nickname`
 - `DELETE /users/me`: 탈퇴 안내 문구는 명세의 탈퇴 규칙을 그대로 옮겼습니다.
+
+## 7. 토큰 저장 ⚠️
+
+- **웹은 refresh token을 응답 본문에 넣지 말고 `HttpOnly; Secure; SameSite=Lax` 쿠키로만 주세요.** `localStorage`에 두면 XSS 한 번에 탈취됩니다.
+- access token은 응답 본문으로 주시면 앱이 메모리에만 둡니다. 새로 열면 `POST /auth/refresh`로 다시 받습니다.
+- 앱은 시작할 때 저장한 세션을 `POST /auth/refresh` → `GET /users/me`로 확인하고, `401`이면 세션을 지웁니다. 토큰이 만료·폐기됐으면 `401 UNAUTHORIZED`를 주세요.
+- 로그아웃·탈퇴하면 그 refresh token을 서버에서 폐기하고 웹 쿠키도 지워 주세요.
+
+## 8. OAuth 보안 ⚠️
+
+웹 리다이렉트 로그인에서 CSRF와 open redirect를 막기 위해 아래를 지켜 주세요.
+
+- **`state`**: 로그인 시작할 때 서버가 추측할 수 없는 1회용 값을 만들어 세션(또는 서명한 쿠키)에 묶고, 콜백에서 같은 값인지 확인한 뒤 바로 버립니다. 다르거나 없으면 `400`으로 끊습니다.
+- **PKCE(S256)**: 인가 요청에 `code_challenge`를 넣고, 토큰 교환 때 `code_verifier`로 확인합니다. 구글·카카오·네이버 중 PKCE를 지원하는 곳은 모두 씁니다. 앱(SDK) 흐름도 SDK가 PKCE를 지원하면 켭니다.
+- **`redirect_uri` 허용 목록**: 서버에 정확히 일치하는 주소만 등록합니다(운영 웹 주소, PR 미리보기 주소 형식, 앱 스킴). 요청에서 받은 주소를 그대로 쓰지 말고, 목록에 없으면 거절합니다. 각 제공자 콘솔에도 같은 목록만 등록합니다.
+- 로그인 뒤 돌아갈 화면 경로를 받는다면 같은 출처의 상대 경로만 받습니다.
+- 인가 코드와 토큰은 서버 로그에 남기지 않습니다.

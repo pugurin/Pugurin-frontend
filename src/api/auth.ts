@@ -1,68 +1,23 @@
+
 import { ApiError } from "./client";
 import { loadStored, store } from "../state/storage";
+import {
+  PROVIDER,
+  PROVIDERS,
+  REQUIRED_AGREEMENTS,
+  nicknameError,
+  type Agreements,
+  type AuthApi,
+  type Provider,
+  type Session,
+  type SignInResult,
+  type StoredSession,
+  type User,
+} from "./authTypes";
+export * from "./authTypes";
 
-// 로그인·회원가입(기능명세 F-AUTH-01~05). 네이버·카카오·구글 소셜 로그인만 있고 이메일 가입은 없다.
-// 처음 로그인한 사람은 동의·닉네임을 받아 가입을 마친다.
 // 백엔드 인증 API가 아직 없어 지금은 SampleAuth(앱 안 가짜 서버)만 쓴다.
 // 요청할 API 모양은 docs/BACKEND_AUTH_REQUEST.md에 있다
-export type Provider = "naver" | "kakao" | "google";
-// 로그인 화면 버튼 순서
-export const PROVIDERS: Provider[] = ["naver", "kakao", "google"];
-// 소셜 로그인 버튼 색은 각 서비스 로그인 버튼 안내를 따른다
-export const PROVIDER: Record<
-  Provider,
-  { name: string; bg: string; ink: string; border?: string }
-> = {
-  naver: { name: "네이버", bg: "#03C75A", ink: "#FFFFFF" },
-  // 카카오 가이드: 글자는 검정 85%
-  kakao: { name: "카카오", bg: "#FEE500", ink: "rgba(0,0,0,0.85)" },
-  google: { name: "구글", bg: "#FFFFFF", ink: "#1F1F1F", border: "#747775" },
-};
-// 소셜 계정 이름 나열(안내 문구용)
-export const PROVIDER_NAMES = PROVIDERS.map((p) => PROVIDER[p].name).join("·");
-
-export type User = {
-  id: string;
-  nickname: string;
-  provider: Provider;
-  role: "buyer" | "admin";
-  marketing_push: boolean;
-  created_at: string;
-};
-export type Session = { user: User; access_token: string; refresh_token: string };
-// 가입 동의. terms·privacy·age14는 필수, marketing은 선택이다
-export type Agreements = {
-  terms: boolean;
-  privacy: boolean;
-  age14: boolean;
-  marketing: boolean;
-};
-export const REQUIRED_AGREEMENTS = ["terms", "privacy", "age14"] as const;
-// 소셜 로그인 결과. 가입한 사람이면 바로 세션, 처음이면 가입을 마칠 토큰과 소셜 프로필 닉네임
-export type SignInResult =
-  | { kind: "session"; session: Session }
-  | { kind: "signup"; signup_token: string; provider: Provider; nickname: string | null };
-
-export interface AuthApi {
-  signIn(provider: Provider): Promise<SignInResult>;
-  signUp(signupToken: string, nickname: string, agreements: Agreements): Promise<Session>;
-  updateNickname(session: Session, nickname: string): Promise<User>;
-  signOut(session: Session): Promise<void>;
-  withdraw(session: Session): Promise<void>;
-}
-
-export const NICKNAME_MIN = 2;
-export const NICKNAME_MAX = 12;
-// 닉네임 규칙. 맞으면 null, 아니면 안내 문구
-export function nicknameError(v: string): string | null {
-  const name = v.trim();
-  if (name.length < NICKNAME_MIN || name.length > NICKNAME_MAX)
-    return `닉네임은 ${NICKNAME_MIN}~${NICKNAME_MAX}자로 정해 주세요`;
-  if (!/^[가-힣a-zA-Z0-9]+$/.test(name))
-    return "한글·영문·숫자만 쓸 수 있어요(띄어쓰기·기호 없이)";
-  return null;
-}
-
 // 앱 안 가짜 인증 서버. 가입한 계정을 기기에 저장해서, 같은 소셜 계정으로 다시 로그인하면 바로 들어간다.
 // 실제 소셜 계정에는 연결하지 않는다
 type SampleAccount = { provider: Provider; user: User };
@@ -70,6 +25,7 @@ const ACCOUNTS_KEY = "sample_auth_accounts";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export class SampleAuth implements AuthApi {
+  readonly source = "sample" as const;
   constructor(private delay = 350) {}
   private accounts() {
     return loadStored<SampleAccount[]>(ACCOUNTS_KEY, []);
@@ -79,7 +35,12 @@ export class SampleAuth implements AuthApi {
   }
   private session(user: User): Session {
     const stamp = Date.now().toString(36);
-    return { user, access_token: `sample-access-${stamp}`, refresh_token: `sample-refresh-${stamp}` };
+    return {
+      source: this.source,
+      user,
+      access_token: `sample-access-${stamp}`,
+      refresh_token: `sample-refresh-${stamp}`,
+    };
   }
   async signIn(provider: Provider): Promise<SignInResult> {
     await wait(this.delay);
@@ -130,4 +91,17 @@ export class SampleAuth implements AuthApi {
     const list = await this.accounts();
     await this.save(list.filter((a) => a.provider !== session.user.provider));
   }
+  async restore(saved: StoredSession): Promise<Session> {
+    await wait(this.delay);
+    const found = (await this.accounts()).find((a) => a.user.id === saved.user.id);
+    if (saved.source !== this.source || !found)
+      throw new ApiError("다시 로그인해 주세요", "UNAUTHORIZED");
+    return this.session(found.user);
+  }
+}
+
+// 기기에 남길 모양으로 바꾼다. 웹은 refresh token도 남기지 않는다(쿠키로 받는다)
+export function toStored(session: Session, web: boolean): StoredSession {
+  const { source, user, refresh_token } = session;
+  return web ? { source, user } : { source, user, refresh_token };
 }

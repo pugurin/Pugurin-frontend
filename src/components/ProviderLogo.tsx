@@ -1,6 +1,6 @@
 import React from "react";
 import Svg, { Path } from "react-native-svg";
-import type { Provider } from "../api/auth";
+import type { Provider } from "../api/authTypes";
 
 // 소셜 로그인 로고. 각 서비스 로그인 버튼 가이드의 심볼 모양과 색을 따른다
 // (네이버 흰 N, 카카오 검정 말풍선, 구글 4색 G). 글자 없이 심볼만 그린다

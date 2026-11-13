@@ -13,7 +13,7 @@ import {
   type Session,
   type SignInResult,
   type User,
-} from "../api/auth";
+} from "../api/authTypes";
 import { Avatar } from "../components/Avatar";
 import { Brand } from "../components/Brand";
 import { ProviderLogo } from "../components/ProviderLogo";

@@ -1,7 +1,7 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { SampleAuth, nicknameError, type Session } from "../src/api/auth";
+import { SampleAuth, nicknameError, toStored, type Session } from "../src/api/auth";
 import { AccountScreen, LoginScreen, SignupScreen } from "../src/screens/AuthScreens";
 import { MoreScreen } from "../src/screens/MoreScreen";
 
@@ -60,6 +60,30 @@ describe("샘플 인증 서버", () => {
     expect(await auth.signIn("kakao")).toMatchObject({ session: { user: { nickname: "해운대주민" } } });
     await auth.withdraw(session);
     expect((await auth.signIn("kakao")).kind).toBe("signup");
+  });
+
+  it("저장한 세션은 계정이 있을 때만 새 토큰으로 되살리고, 출처가 다르거나 탈퇴했으면 거절한다", async () => {
+    const auth = new SampleAuth(0);
+    const r = await auth.signIn("kakao");
+    if (r.kind !== "signup") throw new Error();
+    const session = await auth.signUp(r.signup_token, "부산사람", all);
+    expect(session.source).toBe("sample");
+    const saved = toStored(session, false);
+    expect(await auth.restore(saved)).toMatchObject({ source: "sample", user: { nickname: "부산사람" } });
+    await expect(auth.restore({ ...saved, source: "api" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await auth.withdraw(session);
+    await expect(auth.restore(saved)).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  it("기기에는 access token을 남기지 않고, 웹은 refresh token도 남기지 않는다", () => {
+    const session: Session = {
+      source: "sample",
+      user: { id: "u", nickname: "부산사람", provider: "kakao", role: "buyer", marketing_push: false, created_at: "2026-11-13T00:00:00Z" },
+      access_token: "a",
+      refresh_token: "r",
+    };
+    expect(toStored(session, true)).toEqual({ source: "sample", user: session.user });
+    expect(toStored(session, false)).toEqual({ source: "sample", user: session.user, refresh_token: "r" });
   });
 });
 
@@ -162,5 +186,11 @@ describe("더보기 계정 카드", () => {
     expect(screen.getByText("구글 계정으로 로그인했어요")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "부산사람 내 정보" }));
     expect(onAccount).toHaveBeenCalled();
+  });
+
+  it("로그인을 열지 않은 빌드에서는 준비 중 카드만 보여 준다", () => {
+    render(<MoreScreen {...base} user={null} />);
+    expect(screen.getByText("로그인과 관심 기능은 다음 단계에서 준비하고 있어요")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "로그인 · 회원가입" })).toBeNull();
   });
 });
