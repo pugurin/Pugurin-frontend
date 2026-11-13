@@ -51,7 +51,11 @@ const newestFirst = <T extends { created_at: string }>(list: T[]) =>
 function latestOf(complexId: string): Transaction | null {
   let best: Transaction | null = null;
   for (const t of TRANSACTIONS)
-    if (t.complex_id === complexId && !t.is_cancelled && (!best || t.contract_date > best.contract_date))
+    if (
+      t.complex_id === complexId &&
+      !t.is_cancelled &&
+      (!best || t.contract_date > best.contract_date)
+    )
       best = t;
   return best;
 }
@@ -71,18 +75,30 @@ export class SampleInterests implements InterestsApi {
   async listComplexes(s: Session) {
     await wait(this.delay);
     const { complexes } = await this.load(s);
-    return newestFirst(complexes).map((c) => ({ ...c, latest: latestOf(c.complex_id) }));
+    return newestFirst(complexes).map((c) => ({
+      ...c,
+      latest: latestOf(c.complex_id),
+    }));
   }
   async addComplex(s: Session, c: ComplexInput) {
     await wait(this.delay);
     const v = await this.load(s);
     if (v.complexes.some((x) => x.complex_id === c.complex_id)) return;
-    await this.save(s, { ...v, complexes: [...v.complexes, { ...c, created_at: new Date().toISOString() }] });
+    await this.save(s, {
+      ...v,
+      complexes: [
+        ...v.complexes,
+        { ...c, created_at: new Date().toISOString() },
+      ],
+    });
   }
   async removeComplex(s: Session, complexId: string) {
     await wait(this.delay);
     const v = await this.load(s);
-    await this.save(s, { ...v, complexes: v.complexes.filter((x) => x.complex_id !== complexId) });
+    await this.save(s, {
+      ...v,
+      complexes: v.complexes.filter((x) => x.complex_id !== complexId),
+    });
   }
   async listRegions(s: Session) {
     await wait(this.delay);
@@ -93,13 +109,22 @@ export class SampleInterests implements InterestsApi {
     const v = await this.load(s);
     if (v.regions.some((x) => x.region_code === r.region_code)) return;
     if (v.regions.length >= REGION_LIMIT)
-      throw new ApiError(`관심 지역은 ${REGION_LIMIT}개까지예요`, "LIMIT_EXCEEDED");
-    await this.save(s, { ...v, regions: [...v.regions, { ...r, created_at: new Date().toISOString() }] });
+      throw new ApiError(
+        `관심 지역은 ${REGION_LIMIT}개까지예요`,
+        "LIMIT_EXCEEDED",
+      );
+    await this.save(s, {
+      ...v,
+      regions: [...v.regions, { ...r, created_at: new Date().toISOString() }],
+    });
   }
   async removeRegion(s: Session, regionCode: string) {
     await wait(this.delay);
     const v = await this.load(s);
-    await this.save(s, { ...v, regions: v.regions.filter((x) => x.region_code !== regionCode) });
+    await this.save(s, {
+      ...v,
+      regions: v.regions.filter((x) => x.region_code !== regionCode),
+    });
   }
   async clear(s: Session) {
     await wait(this.delay);

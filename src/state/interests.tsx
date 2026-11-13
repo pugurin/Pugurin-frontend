@@ -53,7 +53,10 @@ export function useInterestsState(
   const userId = session?.user.id;
   const reload = useCallback(
     async (s: Session) => {
-      const [c, r] = await Promise.all([api.listComplexes(s), api.listRegions(s)]);
+      const [c, r] = await Promise.all([
+        api.listComplexes(s),
+        api.listRegions(s),
+      ]);
       if (current.current?.user.id !== s.user.id) return;
       setComplexes(c);
       setRegions(r);
@@ -69,7 +72,11 @@ export function useInterestsState(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, reload]);
 
-  const run = async (key: string, action: (s: Session) => Promise<void>, done: string) => {
+  const run = async (
+    key: string,
+    action: (s: Session) => Promise<void>,
+    done: string,
+  ) => {
     const s = current.current;
     if (!s) {
       notify("로그인하면 관심 등록할 수 있어요");
@@ -89,7 +96,8 @@ export function useInterestsState(
     }
   };
   const hasComplex = (id: string) => complexes.some((c) => c.complex_id === id);
-  const hasRegion = (code: string) => regions.some((r) => r.region_code === code);
+  const hasRegion = (code: string) =>
+    regions.some((r) => r.region_code === code);
   return {
     signedIn: !!session,
     complexes,
@@ -99,11 +107,27 @@ export function useInterestsState(
     hasRegion,
     toggleComplex: (c) =>
       hasComplex(c.complex_id)
-        ? run(`complex:${c.complex_id}`, (s) => api.removeComplex(s, c.complex_id), "관심 단지에서 뺐어요")
-        : run(`complex:${c.complex_id}`, (s) => api.addComplex(s, c), "관심 단지에 담았어요"),
+        ? run(
+            `complex:${c.complex_id}`,
+            (s) => api.removeComplex(s, c.complex_id),
+            "관심 단지에서 뺐어요",
+          )
+        : run(
+            `complex:${c.complex_id}`,
+            (s) => api.addComplex(s, c),
+            "관심 단지에 담았어요",
+          ),
     toggleRegion: (r) =>
       hasRegion(r.region_code)
-        ? run(`region:${r.region_code}`, (s) => api.removeRegion(s, r.region_code), "관심 지역에서 뺐어요")
-        : run(`region:${r.region_code}`, (s) => api.addRegion(s, r), "관심 지역에 담았어요"),
+        ? run(
+            `region:${r.region_code}`,
+            (s) => api.removeRegion(s, r.region_code),
+            "관심 지역에서 뺐어요",
+          )
+        : run(
+            `region:${r.region_code}`,
+            (s) => api.addRegion(s, r),
+            "관심 지역에 담았어요",
+          ),
   };
 }

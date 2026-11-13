@@ -67,11 +67,13 @@ import {
 } from "./src/screens/AuthScreens";
 import { SampleInterests } from "./src/api/interests";
 import { InterestsProvider, useInterestsState } from "./src/state/interests";
+import { InterestsScreen } from "./src/screens/InterestsScreen";
 type Route =
   | { kind: "login" }
   // 처음 로그인한 사람의 가입 마무리
   | { kind: "signup"; signup: Extract<SignInResult, { kind: "signup" }> }
   | { kind: "account" }
+  | { kind: "interests" }
   | { kind: "matching" }
   | { kind: "filter" }
   | { kind: "search" }
@@ -473,6 +475,30 @@ export default function App() {
         }}
       />
     );
+  if (route?.kind === "interests" && session)
+    overlay = (
+      <InterestsScreen
+        unit={unit}
+        onBack={() => setRoute(null)}
+        onComplex={(id) => void openComplex(id)}
+        onRegion={(r) => {
+          // 검색 기록에는 남기지 않고 그 동으로 지도만 옮긴다
+          setFocus({
+            result: {
+              type: "region",
+              name: r.name,
+              region_code: r.region_code,
+              region_level: "dong",
+              lat: r.lat,
+              lng: r.lng,
+            },
+            nonce: Date.now(),
+          });
+          setTab("map");
+          setRoute(null);
+        }}
+      />
+    );
   if (route?.kind === "terms")
     overlay = <TermsScreen kind={route.name} onBack={() => setRoute(null)} />;
   if (route?.kind === "date")
@@ -627,6 +653,14 @@ export default function App() {
                   user={session?.user ?? null}
                   onLogin={() => setRoute({ kind: "login" })}
                   onAccount={() => setRoute({ kind: "account" })}
+                  onInterests={() => {
+                    if (session) return setRoute({ kind: "interests" });
+                    notify("로그인하면 관심 목록을 볼 수 있어요");
+                    setRoute({ kind: "login" });
+                  }}
+                  interestCount={
+                    interests.complexes.length + interests.regions.length
+                  }
                   mode={mode}
                   date={
                     dataMeta?.data_as_of ??

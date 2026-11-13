@@ -7,12 +7,19 @@ import { Icon } from "./ui";
 
 // 단지·지역 시트 제목 옆 관심 등록 ☆. 담겨 있으면 채운 별
 export function StarButton(
-  props: { kind: "complex"; item: ComplexInput } | { kind: "region"; item: RegionInput },
+  props:
+    | { kind: "complex"; item: ComplexInput }
+    | { kind: "region"; item: RegionInput },
 ) {
   const v = useContext(InterestsContext);
   const on =
-    props.kind === "complex" ? v.hasComplex(props.item.complex_id) : v.hasRegion(props.item.region_code);
-  const key = props.kind === "complex" ? `complex:${props.item.complex_id}` : `region:${props.item.region_code}`;
+    props.kind === "complex"
+      ? v.hasComplex(props.item.complex_id)
+      : v.hasRegion(props.item.region_code);
+  const key =
+    props.kind === "complex"
+      ? `complex:${props.item.complex_id}`
+      : `region:${props.item.region_code}`;
   const what = props.kind === "complex" ? "단지" : "지역";
   return (
     <Pressable
@@ -22,7 +29,9 @@ export function StarButton(
       aria-pressed={on}
       disabled={v.busy.includes(key)}
       onPress={() =>
-        props.kind === "complex" ? v.toggleComplex(props.item) : v.toggleRegion(props.item)
+        props.kind === "complex"
+          ? v.toggleComplex(props.item)
+          : v.toggleRegion(props.item)
       }
       style={({ pressed }) => ({
         padding: 12,
@@ -32,7 +41,11 @@ export function StarButton(
         borderRadius: 12,
       })}
     >
-      <Icon name="star" color={on ? C.primary : C.muted} fill={on ? C.primary : "none"} />
+      <Icon
+        name="star"
+        color={on ? C.primary : C.muted}
+        fill={on ? C.primary : "none"}
+      />
     </Pressable>
   );
 }
