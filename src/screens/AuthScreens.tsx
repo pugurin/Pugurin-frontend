@@ -20,6 +20,7 @@ import { ProviderLogo } from "../components/ProviderLogo";
 import { Btn, Header, Icon, Section, T, s } from "../components/ui";
 import { C } from "../theme/tokens";
 import { TermsScreen, type TermKind } from "./MoreScreen";
+import { kstDateKey } from "../glossary/today";
 
 const SAMPLE_NOTICE = `지금은 화면 확인용 샘플 로그인이에요. 실제 ${PROVIDER_NAMES} 계정에는 연결되지 않아요`;
 
@@ -160,7 +161,7 @@ export function LoginScreen({
           />
         ))}
         {error !== "" && (
-          <T color={C.brown} accessibilityRole="header">
+          <T color={C.brown} accessibilityRole="alert">
             {error}
           </T>
         )}
@@ -180,9 +181,11 @@ export function LoginScreen({
           <T size={14} color={C.muted}>
             지도·검색·용어사전은 로그인하지 않아도 쓸 수 있어요.
           </T>
-          <T size={13} color={C.light}>
-            {SAMPLE_NOTICE}
-          </T>
+          {auth.source === "sample" && (
+            <T size={13} color={C.light}>
+              {SAMPLE_NOTICE}
+            </T>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -323,7 +326,8 @@ export function AccountScreen({
   const [error, setError] = useState("");
   const changed = nickname.trim() !== user.nickname;
   const nameError = changed ? nicknameError(nickname) : null;
-  const joined = user.created_at.slice(0, 10).replaceAll("-", ".");
+  // 가입일은 한국 시간 날짜로 보여 준다
+  const joined = kstDateKey(new Date(user.created_at)).replaceAll("-", ".");
   const save = () => {
     setSaving(true);
     setError("");
@@ -429,9 +433,11 @@ export function AccountScreen({
             </View>
           </View>
         )}
-        <T size={13} color={C.light} style={{ marginTop: 16, textAlign: "center" }}>
-          {SAMPLE_NOTICE}
-        </T>
+        {auth.source === "sample" && (
+          <T size={13} color={C.light} style={{ marginTop: 16, textAlign: "center" }}>
+            {SAMPLE_NOTICE}
+          </T>
+        )}
       </ScrollView>
     </View>
   );

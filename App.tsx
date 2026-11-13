@@ -67,7 +67,8 @@ import {
   type SignInResult,
   type StoredSession,
 } from "./src/api/auth";
-import { ApiError } from "./src/api/client";
+import { restoreSession } from "./src/api/restoreSession";
+import { loadRefreshToken, saveRefreshToken } from "./src/state/secureToken";
 import { AccountScreen, LoginScreen, SignupScreen } from "./src/screens/AuthScreens";
 type Route =
   | { kind: "login" }
@@ -123,9 +124,13 @@ export default function App() {
     () => (process.env.EXPO_PUBLIC_AUTH_MODE === "sample" ? new SampleAuth() : null),
     [],
   );
+  // 세션을 바꿀 때마다 올린다. 늦게 끝난 복원이 더 새로운 로그인·로그아웃을 덮지 않게 한다
+  const sessionVersion = useRef(0);
   const saveSession = (next: Session | null) => {
+    sessionVersion.current += 1;
     setSession(next);
-    void store("session", next && toStored(next, Platform.OS === "web"));
+    void store("session", next && toStored(next));
+    void saveRefreshToken(next?.refresh_token ?? null);
   };
   const [focus, setFocus] = useState<Focus>();
   // 경매 목록에서 고른 줄. 지도가 그 경매로 이동해 시트를 연다
@@ -198,17 +203,32 @@ export default function App() {
         setInitError("기기 정보를 저장할 수 없어요. 다시 시도해 주세요"),
       );
     loadStored<Recent[]>("recent", []).then(setRecent);
-    // 저장한 세션은 인증 서버에 확인한 뒤에만 되살린다. 출처가 다르거나 계정이 없으면 지운다
-    loadStored<StoredSession | null>("session", null).then((saved) => {
+    // 저장한 세션은 인증 서버에 확인한 뒤에만 되살린다(src/api/restoreSession)
+    let stopRestore: (() => void) | undefined;
+    Promise.all([
+      loadStored<StoredSession | null>("session", null),
+      loadRefreshToken(),
+    ]).then(([saved, refreshToken]) => {
       if (!saved) return;
-      if (!auth) return void store("session", null);
-      auth
-        .restore(saved)
-        .then(saveSession)
-        .catch((e) => {
-          if (e instanceof ApiError && e.code === "UNAUTHORIZED")
-            void store("session", null);
-        });
+      if (!auth) {
+        void store("session", null);
+        void saveRefreshToken(null);
+        return;
+      }
+      const version = sessionVersion.current;
+      stopRestore = restoreSession({
+        auth,
+        saved,
+        refreshToken,
+        isCurrent: () => sessionVersion.current === version,
+        onSession: saveSession,
+        onClear: () => {
+          void store("session", null);
+          void saveRefreshToken(null);
+        },
+        onGiveUp: () =>
+          notify("로그인 상태를 확인하지 못했어요. 연결을 확인하고 다시 열어 주세요"),
+      });
     });
     loadStored<"평" | "㎡">("unit", "평").then(setUnit);
     loadStored<"normal" | "satellite">("base", "normal").then(setBase);
@@ -224,7 +244,10 @@ export default function App() {
     loadMatchingRecord()
       .then(setMatchingRecord)
       .catch(() => {});
-    return () => clearTimeout(toastTimer.current);
+    return () => {
+      clearTimeout(toastTimer.current);
+      stopRestore?.();
+    };
   }, []);
   useEffect(() => {
     if (!id) return;

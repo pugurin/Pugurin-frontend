@@ -100,8 +100,7 @@ export class SampleAuth implements AuthApi {
   }
 }
 
-// 기기에 남길 모양으로 바꾼다. 웹은 refresh token도 남기지 않는다(쿠키로 받는다)
-export function toStored(session: Session, web: boolean): StoredSession {
-  const { source, user, refresh_token } = session;
-  return web ? { source, user } : { source, user, refresh_token };
+// 일반 저장소에 남길 모양으로 바꾼다. 토큰은 넣지 않는다
+export function toStored(session: Session): StoredSession {
+  return { source: session.source, user: session.user };
 }

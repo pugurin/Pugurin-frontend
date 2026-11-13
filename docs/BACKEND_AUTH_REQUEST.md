@@ -65,7 +65,7 @@
 
 ## 6. 그대로 쓰는 것
 
-- `POST /auth/refresh`: 앱은 refresh token을 기기 보안 저장소(SecureStore)에 두고, 웹은 httpOnly 쿠키로만 주고받습니다.
+- `POST /auth/refresh`: 앱은 refresh token을 기기 보안 저장소(`expo-secure-store`: iOS 키체인·Android Keystore)에만 두고, 일반 저장소에는 닉네임 같은 사용자 정보만 둡니다. 웹은 httpOnly 쿠키로만 주고받습니다.
 - `POST /auth/logout`
 - `PATCH /users/me`: `nickname`
 - `DELETE /users/me`: 탈퇴 안내 문구는 명세의 탈퇴 규칙을 그대로 옮겼습니다.
