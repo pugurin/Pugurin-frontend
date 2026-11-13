@@ -42,6 +42,8 @@ export type Meta = {
   school_notice?: string;
   // 배정 초등학교 안내 문구(학구도는 참고용이며 실제 배정은 교육청 확인)
   assignment_notice?: string;
+  // 앱에 넣어 둔 참고용 통학구역이면 true. 공식 학구도가 아니라 배정된다고 말하지 않는다
+  reference_only?: boolean;
 };
 export type Envelope<T> = { data: T; meta?: Meta };
 export type Latest = {

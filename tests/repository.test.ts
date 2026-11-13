@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Repository } from "../src/api/repository";
+import { Repository, SCHOOL_SEARCH_WAIT_MS } from "../src/api/repository";
 import { ApiClient } from "../src/api/client";
 import { DEFAULT_FILTERS, HOME } from "../src/state/market";
 describe("메인 API 계약", () => {
@@ -172,6 +172,41 @@ describe("학교 이름 검색", () => {
     fail = false;
     expect((await repo.search("연신")).data.map((x) => x.name)).toContain("연신초등학교");
     expect(urls.filter((u) => u.includes("/schools?")).length).toBeGreaterThan(2);
+  });
+
+  it("학교 목록이 늦으면 기다리지 않고 통합 검색 결과만 준다", async () => {
+    const urls: string[] = [];
+    const repo = new Repository(
+      "api",
+      new ApiClient("http://api", "d", async (value) => {
+        const u = decodeURIComponent(String(value));
+        urls.push(u);
+        // 학교 목록은 끝나지 않는다
+        if (u.includes("/schools?")) return new Promise<Response>(() => {});
+        return new Response(JSON.stringify({ data: [{ type: "region", name: "연산동", lat: 35.18, lng: 129.08 }] }));
+      }),
+    );
+    const start = Date.now();
+    expect((await repo.search("연신")).data.map((x) => x.name)).toEqual(["연산동"]);
+    expect(Date.now() - start).toBeLessThan(SCHOOL_SEARCH_WAIT_MS + 500);
+    // 검색이 취소되면 학교를 기다리지 않고 바로 끝낸다
+    const controller = new AbortController();
+    const pending = repo.search("연신", controller.signal);
+    await new Promise((r) => setTimeout(r, 20));
+    const aborted = Date.now();
+    controller.abort();
+    await pending;
+    expect(Date.now() - aborted).toBeLessThan(SCHOOL_SEARCH_WAIT_MS);
+    // 받는 중인 목록은 다시 부르지 않는다
+    expect(urls.filter((u) => u.includes("/schools?"))).toHaveLength(2);
+  });
+
+  it("미리 받아 둔 학교 목록으로 첫 검색에서도 학교를 찾는다", async () => {
+    const { repo, urls } = api(() => new Response(JSON.stringify({ data: [school("e1", "연신초등학교")] })));
+    repo.prefetchSchools();
+    expect(urls.filter((u) => u.includes("/schools?"))).toHaveLength(2);
+    expect((await repo.search("연신")).data.map((x) => x.name)).toContain("연신초등학교");
+    expect(urls.filter((u) => u.includes("/schools?"))).toHaveLength(2);
   });
 
   it("샘플 모드는 샘플 학교에서 찾는다", async () => {

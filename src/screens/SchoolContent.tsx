@@ -44,6 +44,9 @@ const ZONE_LINE: Record<ZoneStatus, string> = {
   notReady: "통학구역 정보를 준비 중이에요",
   error: "통학구역을 불러오지 못했어요",
 };
+// 공식 학구도가 아닌 참고용 경계일 때 ok 대신 쓰는 말
+const ZONE_REFERENCE_LINE =
+  "지도에 칠한 곳은 참고용 경계예요. 실제 배정은 교육청에 확인하세요";
 
 // 통학구역 안 단지 목록을 처음 펼쳐 두는 건수. 나머지는 더보기로 연다
 export const ZONE_COMPLEX_PREVIEW = 5;
@@ -55,6 +58,7 @@ export function SchoolContent({
   meta,
   zone,
   zoneSource = ASSIGNMENT_SOURCE,
+  zoneReference = false,
   complexes,
   property = "apartment",
   unit = "평",
@@ -65,6 +69,8 @@ export function SchoolContent({
   zone?: ZoneStatus;
   // 통학구역 출처. 없으면 학구도로 적는다
   zoneSource?: string;
+  // 공식 학구도가 아닌 참고용 경계면 true. 배정된다고 말하지 않는다
+  zoneReference?: boolean;
   // 통학구역 안 단지. null이면 불러오는 중, undefined면 목록을 숨긴다
   complexes?: ComplexMarker[] | null;
   property?: Property;
@@ -105,9 +111,11 @@ export function SchoolContent({
         {zone ? (
           <>
             <T size={14} bold={zone === "ok"} color={C.ink2}>
-              {ZONE_LINE[zone]}
+              {zone === "ok" && zoneReference
+                ? ZONE_REFERENCE_LINE
+                : ZONE_LINE[zone]}
             </T>
-            {zone === "ok" && (
+            {zone === "ok" && !zoneReference && (
               <T size={13} color={C.muted}>
                 {meta?.assignment_notice || ASSIGNMENT_NOTICE}
               </T>

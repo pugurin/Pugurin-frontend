@@ -6,6 +6,7 @@ import type { Meta, SchoolZone } from "./types";
 // 서버가 404를 줄 때만 쓰고, 서버 학구도가 생기면 이 파일을 지운다
 export const LOCAL_ZONE_META: Meta = {
   data_as_of: "2026-11-13T00:00:00+09:00",
+  reference_only: true,
   // 도로선은 오픈스트리트맵(ODbL)이라 출처를 함께 적는다
   source_attribution: "배정 단지 위치와 도로로 그린 참고용 경계(공식 학구도 아님) · 도로 © OpenStreetMap contributors",
 };

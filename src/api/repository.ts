@@ -51,6 +51,8 @@ export type Mode = "api" | "sample";
 const BUSAN_BBOX: BBox = [128.75, 34.85, 129.35, 35.4];
 // 학교 검색 결과 최대 개수
 const SCHOOL_SEARCH_LIMIT = 10;
+// 통합 검색이 끝난 뒤 학교 목록을 더 기다리는 시간(ms). 늦으면 학교 없이 결과를 준다
+export const SCHOOL_SEARCH_WAIT_MS = 800;
 export class Repository {
   constructor(
     public mode: Mode,
@@ -124,20 +126,40 @@ export class Repository {
     );
   }
   // 단지·동네·주소 검색에 학교 이름 검색을 붙인다. 학교를 못 찾아도 나머지 결과는 그대로 준다
+  // 학교 목록이 느려도 검색이 멈추지 않게, 통합 검색이 끝난 뒤 잠깐만 더 기다린다
   async search(q: string, signal?: AbortSignal) {
-    const [base, schools] = await Promise.all([
+    const request =
       this.mode === "sample"
         ? Promise.resolve({ data: sampleSearch(q) })
         : this.client.get<SearchResult[]>(
             `/search?q=${encodeURIComponent(q)}&limit=30`,
             signal,
-          ),
-      this.searchSchools(q).catch(() => []),
-    ]);
-    return { ...base, data: [...base.data, ...schools] };
+          );
+    const schools = this.searchSchools(q).catch(() => [] as SearchResult[]);
+    const base = await request;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+    // 시간이 지나거나 검색이 취소되면 학교 없이 끝낸다
+    const late = new Promise<SearchResult[]>((resolve) => {
+      timer = setTimeout(() => resolve([]), SCHOOL_SEARCH_WAIT_MS);
+      onAbort = () => resolve([]);
+      signal?.addEventListener("abort", onAbort);
+    });
+    try {
+      const found = await Promise.race([schools, late]);
+      return { ...base, data: [...base.data, ...found] };
+    } finally {
+      clearTimeout(timer);
+      if (onAbort) signal?.removeEventListener("abort", onAbort);
+    }
+  }
+  // 검색창을 열 때 학교 목록을 미리 받아 둔다. 실패해도 검색 때 다시 받는다
+  prefetchSchools() {
+    void this.searchSchools("").catch(() => {});
   }
   // 학교 이름 검색. 서버에 학교 검색이 없어 부산 학교 목록을 한 번 받아 두고 이름으로 거른다.
-  // /schools는 한 번에 500곳까지라 초등학교와 나머지를 나눠 받는다
+  // /schools는 한 번에 500곳까지라 초등학교와 나머지를 나눠 받는다.
+  // 목록은 다음 검색에도 쓰니 검색 하나가 취소돼도 받기를 멈추지 않는다
   private schoolDirectory?: Promise<School[]>;
   private async searchSchools(q: string): Promise<SearchResult[]> {
     if (!this.schoolDirectory) {

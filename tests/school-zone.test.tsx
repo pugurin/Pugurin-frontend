@@ -2,10 +2,11 @@ import React from "react";
 import { it, expect, vi, afterEach, describe } from "vitest";
 import { act, render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { MapHome } from "../src/screens/MapHome";
-import { DEFAULT_FILTERS } from "../src/state/market";
+import { DEFAULT_FILTERS, changeProperty } from "../src/state/market";
 import { ApiClient, ApiError } from "../src/api/client";
 import { Repository } from "../src/api/repository";
 import { SCHOOLS, SCHOOL_META, SCHOOL_ZONES, SCHOOL_ZONE_META } from "../src/api/fixtures";
+import { LOCAL_ZONE_META } from "../src/api/schoolZonesLocal";
 import { containsPoint, geometryBBox } from "../src/map/geometry";
 import type { ComplexMarker } from "../src/api/types";
 vi.mock("react-native", async () => ({
@@ -54,14 +55,22 @@ const ZONE_MARKERS = [
   complexAt("in-many", 129.146, 35.163, 9),
 ];
 
-function setup(zoneImpl?: (...a: any[]) => Promise<any>, extra: Record<string, unknown> = {}) {
+function setup(
+  zoneImpl?: (...a: any[]) => Promise<any>,
+  extra: Record<string, unknown> = {},
+  // 통학구역 bbox(줌 16) 응답의 묶음 단위. 결과가 많으면 서버가 동 단위로 준다
+  zoneLevel: "complex" | "dong" = "complex",
+) {
   const schoolZone = vi.fn(
     zoneImpl ?? (async (id: string) => ({ data: SCHOOL_ZONES.find((z) => z.school_id === id), meta: SCHOOL_ZONE_META })),
   );
   const repo = {
     mode: "api",
     // 지도 화면 마커는 비우고, 통학구역 bbox를 단지 줌(16)으로 부르면 단지를 준다
-    markers: vi.fn(async (_f: any, _b: any, z: number) => ({ data: { markers: z === 16 ? ZONE_MARKERS : [] }, meta: {} })),
+    markers: vi.fn(async (_f: any, _b: any, z: number) => ({
+      data: z === 16 ? { level: zoneLevel, markers: zoneLevel === "complex" ? ZONE_MARKERS : [] } : { level: "complex", markers: [] },
+      meta: {},
+    })),
     auctions: vi.fn(async () => ({ data: [], meta: {} })),
     schools: vi.fn(async () => ({ data: SCHOOLS, meta: SCHOOL_META })),
     schoolZone,
@@ -69,7 +78,7 @@ function setup(zoneImpl?: (...a: any[]) => Promise<any>, extra: Record<string, u
   render(
     <MapHome
       repo={repo}
-      filters={DEFAULT_FILTERS}
+      filters={(extra.filters as typeof DEFAULT_FILTERS) ?? DEFAULT_FILTERS}
       onFilters={() => {}}
       onSearch={() => {}}
       onFilter={() => {}}
@@ -155,6 +164,36 @@ describe("초등학교 통학구역", () => {
     // 초등학교라 통학구역도 칠하고 구역에 맞춘다
     await waitFor(() => expect(map.props.schoolZone).toEqual(SCHOOL_ZONES[0].geometry));
     expect(map.props.command).toMatchObject({ type: "move", bbox: geometryBBox(SCHOOL_ZONES[0].geometry) });
+  });
+
+  it("참고용 경계면 배정된다고 하지 않고 교육청에 확인하라고 안내한다", async () => {
+    const { pick } = setup(async () => ({ data: SCHOOL_ZONES[0], meta: LOCAL_ZONE_META }));
+    await pick("s-udong-elem");
+    await waitFor(() => expect(map.props.schoolZone).toEqual(SCHOOL_ZONES[0].geometry));
+    const sheet = screen.getByTestId("sheet");
+    expect(sheet.textContent).toContain("참고용 경계예요. 실제 배정은 교육청에 확인하세요");
+    expect(sheet.textContent).not.toContain("배정돼요");
+    expect(sheet.textContent).not.toContain("학구도 기준이며");
+    expect(sheet.textContent).toContain("공식 학구도 아님");
+  });
+
+  it("단지가 많아 동 단위로 묶여 오면 0곳이라 하지 않고 목록을 숨긴다", async () => {
+    const { pick, repo } = setup(undefined, {}, "dong");
+    await pick("s-udong-elem");
+    await waitFor(() => expect(repo.markers).toHaveBeenCalledWith(DEFAULT_FILTERS, expect.anything(), 16, expect.anything()));
+    await act(() => wait(20));
+    const sheet = screen.getByTestId("sheet");
+    expect(sheet.textContent).not.toContain("통학구역 안");
+    expect(sheet.textContent).not.toContain("거래가 있는 곳이 없어요");
+  });
+
+  it("토지는 통학구역 안 단지를 부르지 않는다", async () => {
+    const land = changeProperty(DEFAULT_FILTERS, "land");
+    const { pick, repo } = setup(undefined, { filters: land });
+    await pick("s-udong-elem");
+    await waitFor(() => expect(map.props.schoolZone).toEqual(SCHOOL_ZONES[0].geometry));
+    await act(() => wait(20));
+    expect((repo.markers as any).mock.calls.some((c: any[]) => c[2] === 16)).toBe(false);
   });
 
   it("중·고등학교는 통학구역을 부르지 않는다", async () => {

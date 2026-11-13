@@ -208,6 +208,8 @@ export function MapHome({
     status: ZoneStatus;
     geometry?: Geometry;
     source?: string;
+    // 공식 학구도가 아닌 참고용 경계
+    reference?: boolean;
   } | null>(null);
   // 통학구역 안 단지(거래 많은 순). 불러오는 중이면 null, 못 불러오면 undefined로 목록을 숨긴다
   const [zoneComplexes, setZoneComplexes] = useState<
@@ -502,6 +504,7 @@ export function MapHome({
           status: "ok",
           geometry: r.data.geometry,
           source: Array.isArray(source) ? source.join(", ") : source,
+          reference: r.meta?.reference_only === true,
         });
         // 구역 전체가 보이게 맞춘다. 휴대폰은 아래 시트가 지도를 덮으니 그만큼 아래 여백을 둔다
         const bbox = geometryBBox(r.data.geometry);
@@ -522,11 +525,11 @@ export function MapHome({
     return () => controller.abort();
   }, [repo, zoneSchool]);
   // 통학구역 안 단지. 구역 bbox를 단지 단위 줌으로 불러와 다각형 안 단지만 남긴다.
-  // 지금 고른 매물 유형·거래 조건을 그대로 쓴다
+  // 지금 고른 매물 유형·거래 조건을 그대로 쓴다. 토지는 목록을 두지 않으니 부르지 않는다
   const zoneGeometry = zone?.status === "ok" ? zone.geometry : undefined;
   useEffect(() => {
     const bbox = zoneGeometry && geometryBBox(zoneGeometry);
-    if (!zoneGeometry || !bbox) {
+    if (isLand || !zoneGeometry || !bbox) {
       setZoneComplexes(undefined);
       return;
     }
@@ -536,6 +539,11 @@ export function MapHome({
       .markers(filters, bbox, ZONE_COMPLEX_ZOOM, controller.signal)
       .then((r) => {
         if (controller.signal.aborted) return;
+        // 결과가 많으면(500곳 넘게) 서버가 동 단위로 묶어 준다. 단지가 없는 게 아니라 0곳이라 하지 않고 목록을 숨긴다
+        if (r.data.level !== "complex") {
+          setZoneComplexes(undefined);
+          return;
+        }
         setZoneComplexes(
           r.data.markers
             .filter(
@@ -550,7 +558,7 @@ export function MapHome({
         if (!controller.signal.aborted) setZoneComplexes(undefined);
       });
     return () => controller.abort();
-  }, [repo, zoneGeometry, filters]);
+  }, [repo, zoneGeometry, filters, isLand]);
   // 학교 시트가 열린 채 학교 레이어를 끄면 시트도 닫는다
   useEffect(() => {
     if (!schools && selected?.kind === "school") close();
@@ -1066,6 +1074,9 @@ export function MapHome({
           }
           zoneSource={
             zone?.schoolId === selected.school.id ? zone.source : undefined
+          }
+          zoneReference={
+            zone?.schoolId === selected.school.id && zone.reference === true
           }
           complexes={
             zone?.schoolId === selected.school.id ? zoneComplexes : undefined

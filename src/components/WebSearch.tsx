@@ -38,6 +38,8 @@ export function WebSearch({
 
   useEffect(() => {
     input.current?.focus();
+    // 학교 이름 검색이 첫 검색에서 늦지 않게 학교 목록을 미리 받는다. 테스트 대역에는 없을 수 있다
+    repo.prefetchSchools?.();
   }, []);
   useEffect(() => {
     const escape = (event: KeyboardEvent) => {
