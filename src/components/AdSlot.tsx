@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, View, type LayoutChangeEvent } from "react-native";
 import { C } from "../theme/tokens";
 import { Icon, T } from "./ui";
 
@@ -10,15 +10,21 @@ export type AdPlacement = "map" | "sheet";
 export function AdSlot({
   placement,
   onClose,
+  onLayout,
 }: {
   placement: AdPlacement;
   onClose: () => void;
+  // 실제 높이를 알려 준다. 글자 크기를 키우면 광고창이 커지기 때문이다
+  onLayout?: (e: LayoutChangeEvent) => void;
 }) {
   const floating = placement === "map";
   return (
     <View
       testID={`ad-slot-${placement}`}
-      accessibilityLabel="광고"
+      // 묶음 이름만 붙인다. 안의 글과 닫기 버튼은 화면 읽기에서 그대로 읽힌다
+      role="region"
+      aria-label="광고"
+      onLayout={onLayout}
       style={{
         flexDirection: "row",
         alignItems: "center",

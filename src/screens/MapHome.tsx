@@ -247,6 +247,8 @@ export function MapHome({
   const [stage, setStage] = useState<SheetStage>("peek");
   // 광고 닫기는 이번 실행 동안만 기억한다. 앱을 다시 열면 다시 보인다
   const [adClosed, setAdClosed] = useState({ map: false, sheet: false });
+  // 지도 광고창 실제 높이. 재기 전에는 AD_HEIGHT로 둔다
+  const [adHeight, setAdHeight] = useState(AD_HEIGHT);
   const [command, setCommand] = useState<MapCommand & { nonce: number }>();
   const [locating, setLocating] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
@@ -1710,7 +1712,8 @@ export function MapHome({
               style={{
                 position: "absolute",
                 left: 12,
-                right: 12,
+                // 오른쪽 버튼 묶음 폭만큼 비워, 짧은 화면에서도 닫기 버튼이 그 아래 깔리지 않게 한다
+                right: AD_RIGHT,
                 // 목록 보기·내 위치 버튼(높이 38) 위에 띄워 지도 조작을 가리지 않는다
                 bottom: 62,
                 alignItems: "center",
@@ -1720,6 +1723,10 @@ export function MapHome({
                 <AdSlot
                   placement="map"
                   onClose={() => setAdClosed((a) => ({ ...a, map: true }))}
+                  onLayout={(e) => {
+                    const h = Math.ceil(e.nativeEvent.layout.height);
+                    if (h > 0) setAdHeight(h);
+                  }}
                 />
               </View>
             </View>
@@ -1732,7 +1739,7 @@ export function MapHome({
                 position: "absolute",
                 left: 12,
                 // 목록 보기 버튼(높이 38) 위, 광고창이 있으면 그 위에 둔다
-                bottom: selected ? 16 : mapAd ? 62 + AD_HEIGHT + 8 : 62,
+                bottom: selected ? 16 : mapAd ? 62 + adHeight + 8 : 62,
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 8,
@@ -2096,8 +2103,10 @@ function RailBtn({
     </Pressable>
   );
 }
-// 광고창 높이(닫기 버튼 44 + 위아래 여백 12 + 테두리). 학교 범례를 그 위로 올릴 때 쓴다
+// 광고창 높이(닫기 버튼 44 + 위아래 여백 12 + 테두리). 실제 높이를 재기 전까지 학교 범례를 올릴 때 쓴다
 const AD_HEIGHT = 58;
+// 지도 광고창 오른쪽 여백. 오른쪽 버튼 묶음(오른쪽 12 + 메뉴 버튼 44 + 테두리 2)에 8을 더 띄운다
+const AD_RIGHT = 12 + 44 + 2 + 8;
 const float = {
   backgroundColor: C.surface,
   borderWidth: 1,
