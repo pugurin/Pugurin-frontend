@@ -6,9 +6,7 @@ import { Btn, Header, Icon, Section, T, s } from "../components/ui";
 import { PROVIDER, PROVIDER_NAMES, type User } from "../api/authTypes";
 import { Avatar } from "../components/Avatar";
 export type TermKind =
-  | "서비스 이용약관"
-  | "위치기반서비스 이용약관"
-  | "개인정보 처리방침";
+  "서비스 이용약관" | "위치기반서비스 이용약관" | "개인정보 처리방침";
 export function MoreScreen({
   date,
   mode,
@@ -23,12 +21,17 @@ export function MoreScreen({
   user,
   onLogin,
   onAccount,
+  onInterests,
+  interestCount,
 }: {
   // 로그인한 사용자. 없으면 로그인 카드를 보여 준다
   user?: User | null;
   // 없으면 로그인을 아직 열지 않은 빌드라 "준비 중" 카드를 보여 준다
   onLogin?: () => void;
   onAccount?: () => void;
+  // 관심 목록. 로그인 안 했으면 App이 로그인 화면으로 보낸다
+  onInterests?: () => void;
+  interestCount?: number;
   date?: string;
   mode: Mode;
   onMode: (m: Mode) => void;
@@ -121,6 +124,12 @@ export function MoreScreen({
             </View>
           </Pressable>
         )}
+        {onInterests &&
+          row(
+            "관심 목록",
+            onInterests,
+            user && interestCount ? `${interestCount}개` : undefined,
+          )}
         <Section title="용어">
           <View style={[s.between, { minHeight: 48 }]}>
             <T>로딩 중 용어 팁</T>
