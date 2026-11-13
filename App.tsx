@@ -59,7 +59,22 @@ import {
   type MatchingRecord,
 } from "./src/glossary/matching";
 import { kstDateKey, todayLabel } from "./src/glossary/today";
+import {
+  SampleAuth,
+  toStored,
+  type AuthApi,
+  type Session,
+  type SignInResult,
+  type StoredSession,
+} from "./src/api/auth";
+import { restoreSession } from "./src/api/restoreSession";
+import { loadRefreshToken, saveRefreshToken } from "./src/state/secureToken";
+import { AccountScreen, LoginScreen, SignupScreen } from "./src/screens/AuthScreens";
 type Route =
+  | { kind: "login" }
+  // 처음 로그인한 사람의 가입 마무리
+  | { kind: "signup"; signup: Extract<SignInResult, { kind: "signup" }> }
+  | { kind: "account" }
   | { kind: "matching" }
   | { kind: "filter" }
   | { kind: "search" }
@@ -101,6 +116,22 @@ export default function App() {
   // 지도 재개발 레이어. 처음엔 꺼짐이고 켠 상태를 저장한다
   const [redevelopments, setRedevelopments] = useState(false);
   const [recent, setRecent] = useState<Recent[]>([]);
+  // 로그인 세션. 기기에 저장해 다음에 열어도 로그인이 유지된다(F-AUTH-02).
+  // 백엔드 인증 API 전이라 EXPO_PUBLIC_AUTH_MODE=sample일 때만 앱 안 가짜 서버(SampleAuth)를 켠다.
+  // 운영 빌드에는 이 값이 없어 로그인 카드가 "준비 중"으로 남는다
+  const [session, setSession] = useState<Session | null>(null);
+  const auth = useMemo<AuthApi | null>(
+    () => (process.env.EXPO_PUBLIC_AUTH_MODE === "sample" ? new SampleAuth() : null),
+    [],
+  );
+  // 세션을 바꿀 때마다 올린다. 늦게 끝난 복원이 더 새로운 로그인·로그아웃을 덮지 않게 한다
+  const sessionVersion = useRef(0);
+  const saveSession = (next: Session | null) => {
+    sessionVersion.current += 1;
+    setSession(next);
+    void store("session", next && toStored(next));
+    void saveRefreshToken(next?.refresh_token ?? null);
+  };
   const [focus, setFocus] = useState<Focus>();
   // 경매 목록에서 고른 줄. 지도가 그 경매로 이동해 시트를 연다
   const [auctionFocus, setAuctionFocus] = useState<AuctionFocus | null>(null);
@@ -172,6 +203,33 @@ export default function App() {
         setInitError("기기 정보를 저장할 수 없어요. 다시 시도해 주세요"),
       );
     loadStored<Recent[]>("recent", []).then(setRecent);
+    // 저장한 세션은 인증 서버에 확인한 뒤에만 되살린다(src/api/restoreSession)
+    let stopRestore: (() => void) | undefined;
+    Promise.all([
+      loadStored<StoredSession | null>("session", null),
+      loadRefreshToken(),
+    ]).then(([saved, refreshToken]) => {
+      if (!saved) return;
+      if (!auth) {
+        void store("session", null);
+        void saveRefreshToken(null);
+        return;
+      }
+      const version = sessionVersion.current;
+      stopRestore = restoreSession({
+        auth,
+        saved,
+        refreshToken,
+        isCurrent: () => sessionVersion.current === version,
+        onSession: saveSession,
+        onClear: () => {
+          void store("session", null);
+          void saveRefreshToken(null);
+        },
+        onGiveUp: () =>
+          notify("로그인 상태를 확인하지 못했어요. 연결을 확인하고 다시 열어 주세요"),
+      });
+    });
     loadStored<"평" | "㎡">("unit", "평").then(setUnit);
     loadStored<"normal" | "satellite">("base", "normal").then(setBase);
     loadStored<boolean>("cad", false).then(setCad);
@@ -186,7 +244,10 @@ export default function App() {
     loadMatchingRecord()
       .then(setMatchingRecord)
       .catch(() => {});
-    return () => clearTimeout(toastTimer.current);
+    return () => {
+      clearTimeout(toastTimer.current);
+      stopRestore?.();
+    };
   }, []);
   useEffect(() => {
     if (!id) return;
@@ -398,6 +459,51 @@ export default function App() {
         }}
       />
     );
+  const signedIn = (next: Session, joined: boolean) => {
+    saveSession(next);
+    setRoute(null);
+    setTab("more");
+    notify(
+      joined
+        ? `가입을 마쳤어요. 반가워요, ${next.user.nickname}님`
+        : `${next.user.nickname}님, 다시 만나 반가워요`,
+    );
+  };
+  if (route?.kind === "login" && auth)
+    overlay = (
+      <LoginScreen
+        auth={auth}
+        onBack={() => setRoute(null)}
+        onSession={(next) => signedIn(next, false)}
+        onSignup={(signup) => setRoute({ kind: "signup", signup })}
+      />
+    );
+  if (route?.kind === "signup" && auth)
+    overlay = (
+      <SignupScreen
+        auth={auth}
+        signup={route.signup}
+        onBack={() => setRoute({ kind: "login" })}
+        onSession={(next) => signedIn(next, true)}
+      />
+    );
+  if (route?.kind === "account" && auth && session)
+    overlay = (
+      <AccountScreen
+        auth={auth}
+        session={session}
+        onBack={() => setRoute(null)}
+        notify={notify}
+        onUser={(user) => {
+          saveSession({ ...session, user });
+        }}
+        onSignedOut={(withdrawn) => {
+          saveSession(null);
+          setRoute(null);
+          notify(withdrawn ? "탈퇴했어요. 그동안 고마웠어요" : "로그아웃했어요");
+        }}
+      />
+    );
   if (route?.kind === "terms")
     overlay = <TermsScreen kind={route.name} onBack={() => setRoute(null)} />;
   if (route?.kind === "date")
@@ -546,6 +652,9 @@ export default function App() {
             )}
             {tab === "more" && (
               <MoreScreen
+                user={session?.user ?? null}
+                onLogin={auth ? () => setRoute({ kind: "login" }) : undefined}
+                onAccount={() => setRoute({ kind: "account" })}
                 mode={mode}
                 date={
                   dataMeta?.data_as_of ??
