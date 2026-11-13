@@ -59,12 +59,16 @@ import {
   type MatchingRecord,
 } from "./src/glossary/matching";
 import { kstDateKey, todayLabel } from "./src/glossary/today";
-import { SampleAuth, type Session, type SignInResult } from "./src/api/auth";
 import {
-  AccountScreen,
-  LoginScreen,
-  SignupScreen,
-} from "./src/screens/AuthScreens";
+  SampleAuth,
+  toStored,
+  type AuthApi,
+  type Session,
+  type SignInResult,
+  type StoredSession,
+} from "./src/api/auth";
+import { ApiError } from "./src/api/client";
+import { AccountScreen, LoginScreen, SignupScreen } from "./src/screens/AuthScreens";
 import { SampleInterests } from "./src/api/interests";
 import { InterestsProvider, useInterestsState } from "./src/state/interests";
 import { InterestsScreen } from "./src/screens/InterestsScreen";
@@ -116,9 +120,17 @@ export default function App() {
   const [redevelopments, setRedevelopments] = useState(false);
   const [recent, setRecent] = useState<Recent[]>([]);
   // 로그인 세션. 기기에 저장해 다음에 열어도 로그인이 유지된다(F-AUTH-02).
-  // 백엔드 인증 API 전이라 앱 안 가짜 서버(SampleAuth)를 쓴다
+  // 백엔드 인증 API 전이라 EXPO_PUBLIC_AUTH_MODE=sample일 때만 앱 안 가짜 서버(SampleAuth)를 켠다.
+  // 운영 빌드에는 이 값이 없어 로그인 카드가 "준비 중"으로 남는다
   const [session, setSession] = useState<Session | null>(null);
-  const auth = useMemo(() => new SampleAuth(), []);
+  const auth = useMemo<AuthApi | null>(
+    () => (process.env.EXPO_PUBLIC_AUTH_MODE === "sample" ? new SampleAuth() : null),
+    [],
+  );
+  const saveSession = (next: Session | null) => {
+    setSession(next);
+    void store("session", next && toStored(next, Platform.OS === "web"));
+  };
   // 관심 단지·지역(F-INT-01·02). 백엔드 API 전이라 앱 안 가짜 서버를 쓴다
   const interestsApi = useMemo(() => new SampleInterests(), []);
   const [focus, setFocus] = useState<Focus>();
@@ -192,7 +204,18 @@ export default function App() {
         setInitError("기기 정보를 저장할 수 없어요. 다시 시도해 주세요"),
       );
     loadStored<Recent[]>("recent", []).then(setRecent);
-    loadStored<Session | null>("session", null).then(setSession);
+    // 저장한 세션은 인증 서버에 확인한 뒤에만 되살린다. 출처가 다르거나 계정이 없으면 지운다
+    loadStored<StoredSession | null>("session", null).then((saved) => {
+      if (!saved) return;
+      if (!auth) return void store("session", null);
+      auth
+        .restore(saved)
+        .then(saveSession)
+        .catch((e) => {
+          if (e instanceof ApiError && e.code === "UNAUTHORIZED")
+            void store("session", null);
+        });
+    });
     loadStored<"평" | "㎡">("unit", "평").then(setUnit);
     loadStored<"normal" | "satellite">("base", "normal").then(setBase);
     loadStored<boolean>("cad", false).then(setCad);
@@ -255,9 +278,12 @@ export default function App() {
     setToast(message);
     toastTimer.current = setTimeout(() => setToast(""), 3200);
   };
-  const interests = useInterestsState(interestsApi, session, notify, () =>
-    setRoute({ kind: "login" }),
-  );
+  // 로그인을 아직 열지 않은 빌드(auth 없음)에서는 빈 화면 대신 준비 중이라고 알린다
+  const askLogin = () => {
+    if (auth) return setRoute({ kind: "login" });
+    notify("로그인과 관심 기능은 다음 단계에서 준비하고 있어요");
+  };
+  const interests = useInterestsState(interestsApi, session, notify, askLogin);
   const onHelp = (name: string) => {
     const term = terms.find((t) => t.term === name);
     if (term) {
@@ -423,8 +449,7 @@ export default function App() {
       />
     );
   const signedIn = (next: Session, joined: boolean) => {
-    setSession(next);
-    void store("session", next);
+    saveSession(next);
     setRoute(null);
     setTab("more");
     notify(
@@ -433,7 +458,7 @@ export default function App() {
         : `${next.user.nickname}님, 다시 만나 반가워요`,
     );
   };
-  if (route?.kind === "login")
+  if (route?.kind === "login" && auth)
     overlay = (
       <LoginScreen
         auth={auth}
@@ -442,7 +467,7 @@ export default function App() {
         onSignup={(signup) => setRoute({ kind: "signup", signup })}
       />
     );
-  if (route?.kind === "signup")
+  if (route?.kind === "signup" && auth)
     overlay = (
       <SignupScreen
         auth={auth}
@@ -451,7 +476,7 @@ export default function App() {
         onSession={(next) => signedIn(next, true)}
       />
     );
-  if (route?.kind === "account" && session)
+  if (route?.kind === "account" && auth && session)
     overlay = (
       <AccountScreen
         auth={auth}
@@ -459,15 +484,12 @@ export default function App() {
         onBack={() => setRoute(null)}
         notify={notify}
         onUser={(user) => {
-          const next = { ...session, user };
-          setSession(next);
-          void store("session", next);
+          saveSession({ ...session, user });
         }}
         onSignedOut={(withdrawn) => {
           // 탈퇴하면 관심 목록도 계정과 함께 지운다
           if (withdrawn) void interestsApi.clear(session).catch(() => {});
-          setSession(null);
-          void store("session", null);
+          saveSession(null);
           setRoute(null);
           notify(
             withdrawn ? "탈퇴했어요. 그동안 고마웠어요" : "로그아웃했어요",
@@ -651,10 +673,11 @@ export default function App() {
               {tab === "more" && (
                 <MoreScreen
                   user={session?.user ?? null}
-                  onLogin={() => setRoute({ kind: "login" })}
+                  onLogin={auth ? () => setRoute({ kind: "login" }) : undefined}
                   onAccount={() => setRoute({ kind: "account" })}
                   onInterests={() => {
                     if (session) return setRoute({ kind: "interests" });
+                    if (!auth) return askLogin();
                     notify("로그인하면 관심 목록을 볼 수 있어요");
                     setRoute({ kind: "login" });
                   }}

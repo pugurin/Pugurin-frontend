@@ -9,6 +9,10 @@
   # 같은 주소의 /api/v1을 아래 프록시가 백엔드로 넘긴다. 브라우저는 백엔드를 직접 부르지 않아 CORS·혼합 콘텐츠 문제가 없다
   EXPO_PUBLIC_API_URL = "/api/v1"
 
+# PR 미리보기에서만 가짜 인증 서버로 로그인 화면을 켠다. 운영(main)은 백엔드 인증 API 전까지 "준비 중"이다
+[context.deploy-preview.environment]
+  EXPO_PUBLIC_AUTH_MODE = "sample"
+
 # 백엔드에 HTTPS 도메인이 생기면 to를 그 주소로 바꾼다
 [[redirects]]
   from = "/api/*"

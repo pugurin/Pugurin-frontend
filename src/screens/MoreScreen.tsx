@@ -3,7 +3,7 @@ import { Linking, Pressable, ScrollView, Switch, View } from "react-native";
 import type { Mode } from "../api/repository";
 import { C } from "../theme/tokens";
 import { Btn, Header, Icon, Section, T, s } from "../components/ui";
-import { PROVIDER, PROVIDER_NAMES, type User } from "../api/auth";
+import { PROVIDER, PROVIDER_NAMES, type User } from "../api/authTypes";
 import { Avatar } from "../components/Avatar";
 export type TermKind =
   "서비스 이용약관" | "위치기반서비스 이용약관" | "개인정보 처리방침";
@@ -26,6 +26,7 @@ export function MoreScreen({
 }: {
   // 로그인한 사용자. 없으면 로그인 카드를 보여 준다
   user?: User | null;
+  // 없으면 로그인을 아직 열지 않은 빌드라 "준비 중" 카드를 보여 준다
   onLogin?: () => void;
   onAccount?: () => void;
   // 관심 목록. 로그인 안 했으면 App이 로그인 화면으로 보낸다
@@ -87,6 +88,22 @@ export function MoreScreen({
             </View>
             <Icon name="right" size={18} color={C.light} />
           </Pressable>
+        ) : !onLogin ? (
+          <View
+            style={[
+              s.card,
+              {
+                backgroundColor: C.bg2,
+                borderStyle: "dashed",
+                marginVertical: 14,
+              },
+            ]}
+          >
+            <T bold>로그인 · 회원가입</T>
+            <T size={14} color={C.light}>
+              로그인과 관심 기능은 다음 단계에서 준비하고 있어요
+            </T>
+          </View>
         ) : (
           <Pressable
             accessibilityRole="button"

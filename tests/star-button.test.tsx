@@ -1,6 +1,6 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { SampleInterests, type InterestsApi } from "../src/api/interests";
 import type { Session } from "../src/api/auth";
 import { InterestsProvider, useInterestsState } from "../src/state/interests";
@@ -59,17 +59,15 @@ describe("관심 ☆ 버튼", () => {
   it("누르면 담고 다시 누르면 뺀다", async () => {
     const { notify } = setup(session("u1"));
     await flush();
-    fireEvent.click(screen.getByLabelText("관심 단지 등록"));
-    await flush();
-    expect(screen.getByLabelText("관심 단지 해제")).toBeTruthy();
-    expect(notify).toHaveBeenLastCalledWith("관심 단지에 담았어요");
-    fireEvent.click(screen.getByLabelText("관심 단지 해제"));
-    await flush();
-    expect(screen.getByLabelText("관심 단지 등록")).toBeTruthy();
-    expect(notify).toHaveBeenLastCalledWith("관심 단지에서 뺐어요");
+    // 저장은 비동기라, 전체 테스트가 몰릴 때도 버티도록 고정 대기 대신 결과가 올 때까지 기다린다
+    fireEvent.click(await screen.findByLabelText("관심 단지 등록"));
+    const remove = await screen.findByLabelText("관심 단지 해제");
+    await waitFor(() => expect(notify).toHaveBeenLastCalledWith("관심 단지에 담았어요"));
+    fireEvent.click(remove);
+    await screen.findByLabelText("관심 단지 등록");
+    await waitFor(() => expect(notify).toHaveBeenLastCalledWith("관심 단지에서 뺐어요"));
     fireEvent.click(screen.getByLabelText("관심 지역 등록"));
-    await flush();
-    expect(notify).toHaveBeenLastCalledWith("관심 지역에 담았어요");
+    await waitFor(() => expect(notify).toHaveBeenLastCalledWith("관심 지역에 담았어요"));
   });
 
   it("지역이 10개 차 있으면 안내만 하고 담지 않는다", async () => {
@@ -79,8 +77,7 @@ describe("관심 ☆ 버튼", () => {
     const { notify } = setup(me, api);
     await flush();
     fireEvent.click(screen.getByLabelText("관심 지역 등록"));
-    await flush();
-    expect(notify).toHaveBeenLastCalledWith("관심 지역은 10개까지예요");
+    await waitFor(() => expect(notify).toHaveBeenLastCalledWith("관심 지역은 10개까지예요"));
     expect(screen.getByLabelText("관심 지역 등록")).toBeTruthy();
   });
 
@@ -88,13 +85,12 @@ describe("관심 ☆ 버튼", () => {
     const { rerender } = setup(session("u1"));
     await flush();
     fireEvent.click(screen.getByLabelText("관심 단지 등록"));
-    await flush();
-    expect(screen.getByLabelText("관심 단지 해제")).toBeTruthy();
+    await screen.findByLabelText("관심 단지 해제");
     rerender(session("u2"));
     await flush();
-    expect(screen.getByLabelText("관심 단지 등록")).toBeTruthy();
+    await screen.findByLabelText("관심 단지 등록");
     rerender(null);
     await flush();
-    expect(screen.getByLabelText("관심 단지 등록")).toBeTruthy();
+    await screen.findByLabelText("관심 단지 등록");
   });
 });
