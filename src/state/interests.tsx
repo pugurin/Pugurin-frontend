@@ -9,6 +9,10 @@ import type {
   RegionInterest,
 } from "../api/interests";
 
+export const REGION_LIMIT = 10;
+// 법정동 코드는 10자리, 시·군·구는 5자리
+export const isDong = (code: string) => code.length === 10;
+
 // 로그인한 사람의 관심 단지·지역. App이 만들어 시트·목록 화면에 내려 준다
 export type InterestsValue = {
   signedIn: boolean;

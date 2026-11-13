@@ -3,6 +3,7 @@ import { TRANSACTIONS } from "./fixtures";
 import type { Session } from "./auth";
 import type { Property, Transaction } from "./types";
 import { loadStored, store } from "../state/storage";
+import { REGION_LIMIT, isDong } from "../state/interests";
 
 // 관심 단지(F-INT-01)·관심 지역(F-INT-02). API 명세 §10 /interests/complexes·/interests/regions 모양을 따른다.
 // 백엔드 API가 아직 없어 지금은 SampleInterests(앱 안 가짜 서버)만 쓴다
@@ -27,9 +28,7 @@ export type RegionInterest = {
 };
 export type ComplexInput = Omit<ComplexInterest, "created_at" | "latest">;
 export type RegionInput = Omit<RegionInterest, "created_at">;
-export const REGION_LIMIT = 10;
-// 법정동 코드는 10자리, 시·군·구는 5자리
-export const isDong = (code: string) => code.length === 10;
+export { REGION_LIMIT, isDong };
 
 export interface InterestsApi {
   listComplexes(s: Session): Promise<ComplexInterest[]>;

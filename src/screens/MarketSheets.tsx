@@ -43,6 +43,8 @@ import type { SheetStage } from "../components/Sheet";
 import { HAS_KAKAO } from "../map/kakaoRuntime";
 import { RoadviewModal } from "../roadview/RoadviewModal";
 import { NearbySchoolsSection } from "./NearbySchools";
+import { StarButton } from "../components/StarButton";
+import { isDong } from "../state/interests";
 
 // 단지 상세에서 거래 이력을 처음 펼쳐 두는 건수. 나머지는 더보기로 연다
 export const TX_PREVIEW = 4;
@@ -102,6 +104,18 @@ export function RegionContent({
           {marker.name}
         </T>
         {onUnit && <UnitToggle unit={unit} onUnit={onUnit} />}
+        {/* 관심 지역은 법정동 단위라 시·군·구 시트에는 없다 */}
+        {isDong(marker.region_code) && (
+          <StarButton
+            kind="region"
+            item={{
+              region_code: marker.region_code,
+              name: marker.name,
+              lat: marker.lat,
+              lng: marker.lng,
+            }}
+          />
+        )}
       </View>
       <T size={14} color={C.muted}>
         {PROPERTY[filters.property_type]} · {DEAL[filters.deal_type]} · 최근{" "}
@@ -451,20 +465,17 @@ export function ComplexContent({
           {complex.name}
         </T>
         {onUnit && <UnitToggle unit={unit} onUnit={onUnit} />}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="관심 단지 등록"
-          onPress={() => notify("관심 등록은 2차에서 열려요")}
-          style={{
-            padding: 12,
-            borderWidth: 1,
-            borderStyle: "dashed",
-            borderColor: C.disabled,
-            borderRadius: 12,
+        <StarButton
+          kind="complex"
+          item={{
+            complex_id: complex.id,
+            name: complex.name,
+            property_type: complex.property_type,
+            address: complex.address,
+            lat: complex.lat,
+            lng: complex.lng,
           }}
-        >
-          <Icon name="star" color={C.light} />
-        </Pressable>
+        />
       </View>
       <View style={[s.row, { gap: 8 }]}>
         <T size={14} color={C.muted} style={{ flex: 1 }}>

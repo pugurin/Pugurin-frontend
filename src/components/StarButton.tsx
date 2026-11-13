@@ -19,6 +19,7 @@ export function StarButton(
       accessibilityRole="button"
       accessibilityLabel={`관심 ${what} ${on ? "해제" : "등록"}`}
       accessibilityState={{ selected: on, disabled: v.busy.includes(key) }}
+      aria-pressed={on}
       disabled={v.busy.includes(key)}
       onPress={() =>
         props.kind === "complex" ? v.toggleComplex(props.item) : v.toggleRegion(props.item)
