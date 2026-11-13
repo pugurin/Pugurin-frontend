@@ -84,13 +84,16 @@ export function Icon({
   name,
   size = 22,
   color = C.ink,
+  fill,
 }: {
   name: IconName;
   size?: number;
   color?: string;
+  // 채운 아이콘(켜진 ★ 등)
+  fill?: string;
 }) {
   const I: LucideIcon = ICONS[name];
-  return <I size={size * 0.875} color={color} strokeWidth={1.8} />;
+  return <I size={size * 0.875} color={color} strokeWidth={1.8} fill={fill} />;
 }
 export function T({
   children,
