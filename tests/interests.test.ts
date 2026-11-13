@@ -53,6 +53,8 @@ describe("관심 샘플 서버", () => {
     const real = list.find((c) => c.complex_id === COMPLEXES[0].id)!;
     expect(real.latest?.complex_id).toBe(COMPLEXES[0].id);
     expect(real.latest?.is_cancelled).toBe(false);
+    // 단지 시트 첫 화면처럼 매매가를 먼저 보여 준다(매매가 없을 때만 전월세)
+    expect(real.latest?.deal_type).toBe("sale");
     expect(list.find((c) => c.complex_id === "no-such")!.latest).toBeNull();
   });
 
@@ -77,6 +79,24 @@ describe("관심 샘플 서버", () => {
     await api.clear(me);
     expect(await api.listComplexes(me)).toHaveLength(0);
     expect(await api.listRegions(other)).toHaveLength(1);
+  });
+
+  it("동시에 들어온 요청도 하나씩 처리해 서로 덮어쓰지 않는다", async () => {
+    const api = new SampleInterests(0);
+    for (let i = 0; i < 9; i++) await api.addRegion(me, region(i));
+    // 실제 기기처럼 읽기가 느리면 두 요청이 같은 옛 값을 읽는다
+    storage.getItem.mockImplementation(
+      (k: string) => {
+        const v = storage.data.get(k) ?? null;
+        return new Promise((r) => setTimeout(() => r(v), 5));
+      },
+    );
+    await Promise.all([api.addComplex(me, complex()), api.addComplex(me, complex(COMPLEXES[1]))]);
+    expect(await api.listComplexes(me)).toHaveLength(2);
+    // 9개에서 두 개가 동시에 오면 하나만 들어가고 하나는 10개 제한에 걸린다
+    const r = await Promise.allSettled([api.addRegion(me, region(20)), api.addRegion(me, region(21))]);
+    expect(r.map((x) => x.status).sort()).toEqual(["fulfilled", "rejected"]);
+    expect(await api.listRegions(me)).toHaveLength(10);
   });
 
   it("법정동 코드는 10자리", () => {

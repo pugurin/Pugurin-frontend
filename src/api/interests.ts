@@ -48,21 +48,36 @@ type Saved = {
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const newestFirst = <T extends { created_at: string }>(list: T[]) =>
   [...list].sort((a, b) => b.created_at.localeCompare(a.created_at));
+// 단지별 최근 거래. 단지 시트 첫 화면처럼 매매를 먼저 고르고, 매매가 없으면 전월세 중 최신
 function latestOf(complexId: string): Transaction | null {
-  let best: Transaction | null = null;
-  for (const t of TRANSACTIONS)
-    if (
-      t.complex_id === complexId &&
-      !t.is_cancelled &&
-      (!best || t.contract_date > best.contract_date)
-    )
-      best = t;
-  return best;
+  const list = TRANSACTIONS.filter(
+    (t) => t.complex_id === complexId && !t.is_cancelled,
+  );
+  const newest = (xs: Transaction[]) =>
+    xs.reduce<Transaction | null>(
+      (best, t) => (!best || t.contract_date > best.contract_date ? t : best),
+      null,
+    );
+  return newest(list.filter((t) => t.deal_type === "sale")) ?? newest(list);
 }
 
 // 앱 안 가짜 관심 서버. 계정마다 기기에 따로 저장한다
 export class SampleInterests implements InterestsApi {
   constructor(private delay = 250) {}
+  // 계정별 쓰기 순서. 읽고-고쳐-쓰기가 겹치면 먼저 쓴 값을 덮어쓰므로 하나씩 처리한다
+  private queue = new Map<string, Promise<unknown>>();
+  private update(s: Session, change: (v: Saved) => Saved | null) {
+    const key = this.key(s);
+    const next = (this.queue.get(key) ?? Promise.resolve())
+      .catch(() => {})
+      .then(async () => {
+        await wait(this.delay);
+        const v = change(await this.load(s));
+        if (v) await this.save(s, v);
+      });
+    this.queue.set(key, next);
+    return next;
+  }
   private key(s: Session) {
     return `sample_interests.${s.user.id}`;
   }
@@ -80,54 +95,50 @@ export class SampleInterests implements InterestsApi {
       latest: latestOf(c.complex_id),
     }));
   }
-  async addComplex(s: Session, c: ComplexInput) {
-    await wait(this.delay);
-    const v = await this.load(s);
-    if (v.complexes.some((x) => x.complex_id === c.complex_id)) return;
-    await this.save(s, {
-      ...v,
-      complexes: [
-        ...v.complexes,
-        { ...c, created_at: new Date().toISOString() },
-      ],
-    });
+  addComplex(s: Session, c: ComplexInput) {
+    return this.update(s, (v) =>
+      v.complexes.some((x) => x.complex_id === c.complex_id)
+        ? null
+        : {
+            ...v,
+            complexes: [
+              ...v.complexes,
+              { ...c, created_at: new Date().toISOString() },
+            ],
+          },
+    );
   }
-  async removeComplex(s: Session, complexId: string) {
-    await wait(this.delay);
-    const v = await this.load(s);
-    await this.save(s, {
+  removeComplex(s: Session, complexId: string) {
+    return this.update(s, (v) => ({
       ...v,
       complexes: v.complexes.filter((x) => x.complex_id !== complexId),
-    });
+    }));
   }
   async listRegions(s: Session) {
     await wait(this.delay);
     return newestFirst((await this.load(s)).regions);
   }
-  async addRegion(s: Session, r: RegionInput) {
-    await wait(this.delay);
-    const v = await this.load(s);
-    if (v.regions.some((x) => x.region_code === r.region_code)) return;
-    if (v.regions.length >= REGION_LIMIT)
-      throw new ApiError(
-        `관심 지역은 ${REGION_LIMIT}개까지예요`,
-        "LIMIT_EXCEEDED",
-      );
-    await this.save(s, {
-      ...v,
-      regions: [...v.regions, { ...r, created_at: new Date().toISOString() }],
+  addRegion(s: Session, r: RegionInput) {
+    return this.update(s, (v) => {
+      if (v.regions.some((x) => x.region_code === r.region_code)) return null;
+      if (v.regions.length >= REGION_LIMIT)
+        throw new ApiError(
+          `관심 지역은 ${REGION_LIMIT}개까지예요`,
+          "LIMIT_EXCEEDED",
+        );
+      return {
+        ...v,
+        regions: [...v.regions, { ...r, created_at: new Date().toISOString() }],
+      };
     });
   }
-  async removeRegion(s: Session, regionCode: string) {
-    await wait(this.delay);
-    const v = await this.load(s);
-    await this.save(s, {
+  removeRegion(s: Session, regionCode: string) {
+    return this.update(s, (v) => ({
       ...v,
       regions: v.regions.filter((x) => x.region_code !== regionCode),
-    });
+    }));
   }
-  async clear(s: Session) {
-    await wait(this.delay);
-    await this.save(s, { complexes: [], regions: [] });
+  clear(s: Session) {
+    return this.update(s, () => ({ complexes: [], regions: [] }));
   }
 }
