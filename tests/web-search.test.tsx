@@ -32,6 +32,15 @@ const school: SearchResult = {
   lat: 35.18,
   lng: 129.08,
 };
+const station: SearchResult = {
+  type: "station",
+  station_id: "21160803",
+  name: "해운대역 2호선",
+  line: "부산도시철도 2호선",
+  address: "부산 해운대구 해운대로 지하 626",
+  lat: 35.1636,
+  lng: 129.1588,
+};
 function setup(search = async () => ({ data: [region, complex] })) {
   const onSelect = vi.fn(),
     onClose = vi.fn(),
@@ -72,18 +81,25 @@ describe("웹 검색 드롭다운", () => {
     expect(screen.getByRole("group", { name: "동네" })).toBeTruthy();
     fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(input.getAttribute("aria-activedescendant")).toBe(
-      screen.getByRole("option", { name: "해운대 아파트" }).id,
+      screen.getByRole("option", { name: "우동" }).id,
     );
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(onSelect).toHaveBeenCalledWith(region);
+    expect(onSelect).toHaveBeenCalledWith(complex);
     expect(onClose).toHaveBeenCalledOnce();
   });
-  it("학교 결과는 단지 다음 학교 묶음으로 보여 준다", async () => {
-    const { onSelect } = setup(async () => ({ data: [region, school, complex] }));
+  it("동네를 맨 위에, 그다음 지하철역·학교·단지 순으로 묶는다", async () => {
+    const { onSelect } = setup(async () => ({ data: [complex, school, station, region] }));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "연신" } });
     await screen.findByRole("option", { name: "연신초등학교" });
-    expect(screen.getAllByRole("group").map((g) => g.getAttribute("aria-label"))).toEqual(["단지", "학교", "동네"]);
+    expect(screen.getAllByRole("group").map((g) => g.getAttribute("aria-label"))).toEqual([
+      "동네",
+      "지하철역",
+      "학교",
+      "단지",
+    ]);
+    fireEvent.click(screen.getByRole("option", { name: "해운대역 2호선" }));
+    expect(onSelect).toHaveBeenCalledWith(station);
     fireEvent.click(screen.getByRole("option", { name: "연신초등학교" }));
     expect(onSelect).toHaveBeenCalledWith(school);
   });

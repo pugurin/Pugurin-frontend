@@ -150,7 +150,15 @@ export class Repository {
     });
     try {
       const found = await Promise.race([schools, late]);
-      return { ...base, data: [...base.data, ...found] };
+      // 새 백엔드는 학교도 통합 검색에 담아 준다. 같은 학교는 한 번만 둔다
+      const seen = new Set(base.data.flatMap((x) => (x.school ? [x.school.id] : [])));
+      const extra = found.filter((x) => {
+        const id = x.school?.id;
+        if (!id || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+      return { ...base, data: [...base.data, ...extra] };
     } finally {
       clearTimeout(timer);
       if (onAbort) signal?.removeEventListener("abort", onAbort);
