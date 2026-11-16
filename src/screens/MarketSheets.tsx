@@ -303,7 +303,8 @@ export function ComplexContent({
   const [error, setError] = useState<string | null>(null);
   const [statsError, setStatsError] = useState(false);
   const [sort, setSort] = useState<Sort>("contract_date_desc");
-  const [cancelled, setCancelled] = useState(false);
+  // 해제(이상) 거래는 숨기지 않고 처음부터 함께 보여준다. 줄에는 가운데 줄과 "해제" 표시가 붙는다
+  const [cancelled, setCancelled] = useState(true);
   const [area, setArea] = useState<number | undefined>();
   const [page, setPage] = useState(1);
   const [retry, setRetry] = useState(0);
@@ -614,6 +615,8 @@ export function ComplexContent({
                   <Pressable
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: cancelled }}
+                    // react-native-web은 accessibilityState만으로 aria-checked를 내보내지 않는다
+                    aria-checked={cancelled}
                     onPress={() => {
                       setCancelled((v) => !v);
                       setPage(1);
