@@ -1,6 +1,9 @@
 import { ApiClient, ApiError } from "./client";
 import { HOSPITAL_TIERS } from "../state/hospital";
-import { REDEVELOPMENT_LIMIT } from "../state/redevelopment";
+import {
+  REDEVELOPMENT_LIMIT,
+  cleanRedevelopment,
+} from "../state/redevelopment";
 import type {
   Analysis,
   Redevelopment,
@@ -412,7 +415,9 @@ export class Repository {
       stage: stages.join(","),
       page_size: String(REDEVELOPMENT_LIMIT),
     });
-    return this.client.get<Redevelopment[]>(`/redevelopments?${p}`, signal);
+    return this.client
+      .get<Redevelopment[]>(`/redevelopments?${p}`, signal)
+      .then((r) => ({ ...r, data: r.data.map(cleanRedevelopment) }));
   }
   // 단지 주변 학교. 샘플 모드는 서버처럼 직선거리 3km 안에서 학교급별 가까운 3곳을 고른다
   nearby(complexId: string, signal?: AbortSignal): Promise<Envelope<Nearby>> {
