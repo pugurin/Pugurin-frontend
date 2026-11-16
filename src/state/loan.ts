@@ -105,15 +105,41 @@ export const ASSET_STEP = 1e7;
 export const snapAssets = (v: number, price: number) =>
   Math.min(price, Math.max(0, Math.round(v / ASSET_STEP) * ASSET_STEP));
 
-// 대출 계산기 기본 매매가. 고른 평형의 가장 최근 매매(해제 제외), 없으면 단지의 가장 최근 매매
-export function latestSalePrice(
+// 대출 계산기 기본 매매가. 매매 거래만 따로 불러온 목록에서 고른다(지도 필터가 전세·월세여도 매매 기준).
+// 고른 평형의 가장 최근 매매(해제 제외). 없으면 단지의 가장 최근 매매를 쓰되 sameArea=false로 평형을 알린다
+export type SaleBase = {
+  price: number;
+  exclusive_area_m2: number | null;
+  sameArea: boolean;
+};
+export function latestSale(
   items: Transaction[],
   area: number | null | undefined,
-): number | null {
+): SaleBase | null {
   const sales = items
     .filter((t) => t.deal_type === "sale" && !t.is_cancelled && t.price)
     .sort((x, y) => y.contract_date.localeCompare(x.contract_date));
-  return (
-    (sales.find((t) => t.exclusive_area_m2 === area) ?? sales[0])?.price ?? null
-  );
+  const same =
+    area == null
+      ? undefined
+      : sales.find(
+          (t) =>
+            t.exclusive_area_m2 != null &&
+            Math.abs(t.exclusive_area_m2 - area) < 1,
+        );
+  const t = same ?? sales[0];
+  return t?.price
+    ? { price: t.price, exclusive_area_m2: t.exclusive_area_m2, sameArea: !!same }
+    : null;
 }
+
+// 매매가 입력 읽기. 숫자만 쓰면 만 원 단위, "5억", "5억 3,000", "5.3억"도 읽는다. 못 읽으면 0
+export function parsePrice(text: string): number {
+  const t = text.replace(/[,\s원]/g, "");
+  const m = t.match(/^(\d+(?:\.\d+)?)억(\d+)?만?$/);
+  if (m) return Math.round(Number(m[1]) * 1e8 + Number(m[2] ?? 0) * 1e4);
+  const man = t.match(/^(\d+)만?$/);
+  return man ? Number(man[1]) * 1e4 : 0;
+}
+// 이보다 작은 매매가는 단위를 잘못 쓴 것으로 보고 안내한다
+export const MIN_PRICE = 1e7;

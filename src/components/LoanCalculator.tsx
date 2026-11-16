@@ -8,9 +8,12 @@ import {
   HOMES,
   LOAN_TERMS,
   SAMPLE_RATES,
+  MIN_PRICE,
   calcLoan,
+  parsePrice,
   snapAssets,
   type Homes,
+  type SaleBase,
   type LoanRates,
   type LoanTerm,
 } from "../state/loan";
@@ -21,14 +24,16 @@ const DEFAULT_ASSET_RATIO = 0.3;
 // 단지 상세 최하단 대출 계산기 (#143).
 // regulated·rates는 백엔드가 줄 값이다. 없으면(null) 규제지역은 사용자가 고르고 금리는 예시값을 쓴다
 export function LoanCalculator({
-  defaultPrice,
+  sale = null,
   regulated = null,
   rates = null,
 }: {
-  defaultPrice?: number | null;
+  // 기본 매매가. 단지 상세가 매매 거래를 따로 불러와 넘긴다
+  sale?: SaleBase | null;
   regulated?: boolean | null;
   rates?: LoanRates | null;
 }) {
+  const defaultPrice = sale?.price ?? null;
   const [price, setPrice] = useState(defaultPrice ?? 0);
   const [priceText, setPriceText] = useState(manText(defaultPrice));
   const [assets, setAssets] = useState(initialAssets(defaultPrice ?? 0));
@@ -50,8 +55,7 @@ export function LoanCalculator({
   const criteria = { regulated: isRegulated, homes, firstTime };
   const r = calcLoan({ price, assets, criteria, rate, years });
   const commitPrice = (text: string) => {
-    const man = Number(text.replace(/[^0-9]/g, ""));
-    const won = Number.isFinite(man) ? man * 1e4 : 0;
+    const won = parsePrice(text);
     setPrice(won);
     setPriceText(won ? manText(won) : "");
     setAssets((a) => snapAssets(a, won));
@@ -65,19 +69,27 @@ export function LoanCalculator({
         </T>
         <TextInput
           accessibilityLabel="매매가 (만 원)"
-          placeholder="예: 50000"
-          keyboardType="number-pad"
+          placeholder="예: 50000 또는 5억"
           value={priceText}
           onChangeText={setPriceText}
           onBlur={() => commitPrice(priceText)}
           onSubmitEditing={() => commitPrice(priceText)}
           style={s.input}
         />
-        <T size={13} color={C.light}>
-          {defaultPrice
-            ? `최근 매매 실거래가 ${formatWon(defaultPrice)} 기준이에요. 바꿔 볼 수 있어요`
-            : "매매 실거래가가 없어요. 매매가를 입력해 주세요"}
-        </T>
+        {price > 0 && price < MIN_PRICE ? (
+          <T size={13} color={C.brown}>
+            매매가가 {formatWon(price)}원이에요. 만 원 단위(예: 50000)나 "5억"처럼
+            적어 주세요
+          </T>
+        ) : (
+          <T size={13} color={C.light}>
+            {!sale
+              ? "매매 실거래가가 없어요. 매매가를 입력해 주세요"
+              : sale.sameArea
+                ? `최근 매매 실거래가 ${formatWon(sale.price)} 기준이에요. 바꿔 볼 수 있어요`
+                : `이 평형은 매매 거래가 없어 ${areaText(sale.exclusive_area_m2)} 최근 매매가 ${formatWon(sale.price)}를 넣었어요. 바꿔 볼 수 있어요`}
+          </T>
+        )}
       </View>
 
       <View style={[s.card, { gap: 10 }]}>
@@ -174,7 +186,7 @@ export function LoanCalculator({
             </T>
             <T size={14} color={r.ok ? C.greenInk : C.brownInk}>
               {r.needed === 0
-                ? "내 자산이 매매가보다 많아요"
+                ? "내 자산으로 살 수 있어요"
                 : r.ok
                   ? `한도 ${formatWon(r.limit)} 안에서 ${formatWon(r.needed)}을 빌려요`
                   : r.limit === 0
@@ -217,13 +229,17 @@ export function LoanCalculator({
         </>
       )}
       <T size={12} color={C.light}>
-        LTV만 반영한 참고용 계산이에요. DSR(소득 대비 상환 비율)·은행 심사·정책
-        대출 한도에 따라 실제 대출액은 달라요.
+        LTV만 반영한 참고용 계산이에요. 규제지역 주택담보대출 금액 상한(예: 최대
+        6억)·DSR(소득 대비 상환 비율)·은행 심사·정책 대출 한도는 반영하지 않아
+        실제 대출액은 달라요.
       </T>
     </Section>
   );
 }
 
+function areaText(m2: number | null) {
+  return m2 == null ? "다른 평형" : `전용 ${+m2.toFixed(1)}㎡`;
+}
 function manText(won: number | null | undefined) {
   return won ? String(Math.round(won / 1e4)) : "";
 }
