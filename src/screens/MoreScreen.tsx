@@ -6,9 +6,7 @@ import { Btn, Header, Icon, Section, T, s } from "../components/ui";
 import { PROVIDER, PROVIDER_NAMES, type User } from "../api/authTypes";
 import { Avatar } from "../components/Avatar";
 export type TermKind =
-  | "서비스 이용약관"
-  | "위치기반서비스 이용약관"
-  | "개인정보 처리방침";
+  "서비스 이용약관" | "위치기반서비스 이용약관" | "개인정보 처리방침";
 export function MoreScreen({
   date,
   mode,
@@ -23,12 +21,17 @@ export function MoreScreen({
   user,
   onLogin,
   onAccount,
+  onInterests,
+  interestCount,
 }: {
   // 로그인한 사용자. 없으면 로그인 카드를 보여 준다
   user?: User | null;
   // 없으면 로그인을 아직 열지 않은 빌드라 "준비 중" 카드를 보여 준다
   onLogin?: () => void;
   onAccount?: () => void;
+  // 관심 단지·관심 경매 목록. 로그인 없이 이 기기에 저장된다
+  onInterests?: (kind: "complex" | "auction") => void;
+  interestCount?: { complex: number; auction: number };
   date?: string;
   mode: Mode;
   onMode: (m: Mode) => void;
@@ -98,7 +101,7 @@ export function MoreScreen({
           >
             <T bold>로그인 · 회원가입</T>
             <T size={14} color={C.light}>
-              로그인과 관심 기능은 다음 단계에서 준비하고 있어요
+              로그인은 다음 단계에서 준비하고 있어요
             </T>
           </View>
         ) : (
@@ -120,6 +123,29 @@ export function MoreScreen({
               <Icon name="right" size={18} color={C.light} />
             </View>
           </Pressable>
+        )}
+        {onInterests && (
+          <Section title="관심">
+            <View>
+              {row(
+                "관심 단지",
+                () => onInterests("complex"),
+                interestCount?.complex
+                  ? `${interestCount.complex}개`
+                  : undefined,
+              )}
+              {row(
+                "관심 경매",
+                () => onInterests("auction"),
+                interestCount?.auction
+                  ? `${interestCount.auction}개`
+                  : undefined,
+              )}
+            </View>
+            <T size={14} color={C.muted}>
+              관심 목록은 이 기기에 저장돼요. 앱을 지우면 사라져요
+            </T>
+          </Section>
         )}
         <Section title="용어">
           <View style={[s.between, { minHeight: 48 }]}>

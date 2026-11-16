@@ -49,6 +49,9 @@ import {
 } from "./src/screens/MoreScreen";
 import { TransactionsScreen } from "./src/screens/TransactionsScreen";
 import { AuctionsScreen } from "./src/screens/AuctionsScreen";
+import { InterestsScreen } from "./src/screens/InterestsScreen";
+import { InterestsProvider, useInterests } from "./src/state/interests";
+import type { InterestKind } from "./src/api/types";
 import { Brand } from "./src/components/Brand";
 import { LoadingTip } from "./src/components/LoadingTip";
 import { LearningProvider } from "./src/glossary/LearningContext";
@@ -69,7 +72,11 @@ import {
 } from "./src/api/auth";
 import { restoreSession } from "./src/api/restoreSession";
 import { loadRefreshToken, saveRefreshToken } from "./src/state/secureToken";
-import { AccountScreen, LoginScreen, SignupScreen } from "./src/screens/AuthScreens";
+import {
+  AccountScreen,
+  LoginScreen,
+  SignupScreen,
+} from "./src/screens/AuthScreens";
 type Route =
   | { kind: "login" }
   // 처음 로그인한 사람의 가입 마무리
@@ -87,6 +94,7 @@ type Route =
     }
   | { kind: "terms"; name: TermKind }
   | { kind: "date" }
+  | { kind: "interests"; tab: InterestKind }
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
   // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
   | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };
@@ -121,7 +129,8 @@ export default function App() {
   // 운영 빌드에는 이 값이 없어 로그인 카드가 "준비 중"으로 남는다
   const [session, setSession] = useState<Session | null>(null);
   const auth = useMemo<AuthApi | null>(
-    () => (process.env.EXPO_PUBLIC_AUTH_MODE === "sample" ? new SampleAuth() : null),
+    () =>
+      process.env.EXPO_PUBLIC_AUTH_MODE === "sample" ? new SampleAuth() : null,
     [],
   );
   // 세션을 바꿀 때마다 올린다. 늦게 끝난 복원이 더 새로운 로그인·로그아웃을 덮지 않게 한다
@@ -196,6 +205,8 @@ export default function App() {
       ),
     [mode, id],
   );
+  // 관심 등록(별 버튼). 기기 id가 생긴 뒤 서버에서 담아 둔 id를 받는다
+  const interests = useInterests(repo, (m) => notify(m), !!id);
   useEffect(() => {
     deviceId()
       .then(setId)
@@ -230,7 +241,9 @@ export default function App() {
           void saveRefreshToken(null);
         },
         onGiveUp: () =>
-          notify("로그인 상태를 확인하지 못했어요. 연결을 확인하고 다시 열어 주세요"),
+          notify(
+            "로그인 상태를 확인하지 못했어요. 연결을 확인하고 다시 열어 주세요",
+          ),
       });
     });
     loadStored<"평" | "㎡">("unit", "평").then(setUnit);
@@ -504,7 +517,9 @@ export default function App() {
         onSignedOut={(withdrawn) => {
           saveSession(null);
           setRoute(null);
-          notify(withdrawn ? "탈퇴했어요. 그동안 고마웠어요" : "로그아웃했어요");
+          notify(
+            withdrawn ? "탈퇴했어요. 그동안 고마웠어요" : "로그아웃했어요",
+          );
         }}
       />
     );
@@ -532,6 +547,26 @@ export default function App() {
         unit={unit}
       />
     );
+  const showAuction = (a: {
+    id: string;
+    lat: number | null;
+    lng: number | null;
+  }) => {
+    setAuctionFocus({ id: a.id, lat: a.lat, lng: a.lng, nonce: Date.now() });
+    setTab("map");
+    setRoute(null);
+  };
+  if (route?.kind === "interests")
+    overlay = (
+      <InterestsScreen
+        repo={repo}
+        initialTab={route.tab}
+        unit={unit}
+        onBack={() => setRoute(null)}
+        onComplex={openComplex}
+        onAuction={showAuction}
+      />
+    );
   if (route?.kind === "auctions")
     overlay = (
       <AuctionsScreen
@@ -542,271 +577,271 @@ export default function App() {
         name={route.name}
         unit={unit}
         onBack={() => setRoute(null)}
-        onAuction={(a) => {
-          setAuctionFocus({
-            id: a.id,
-            lat: a.lat,
-            lng: a.lng,
-            nonce: Date.now(),
-          });
-          setTab("map");
-          setRoute(null);
-        }}
+        onAuction={showAuction}
       />
     );
   return (
-    <LearningProvider
-      value={{
-        terms,
-        tipsEnabled,
-        onTerm: (term) => setRoute({ kind: "term", term, map: true }),
-      }}
-    >
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: width > 600 ? "#EAEAE5" : C.bg }}
+    <InterestsProvider value={interests}>
+      <LearningProvider
+        value={{
+          terms,
+          tipsEnabled,
+          onTerm: (term) => setRoute({ kind: "term", term, map: true }),
+        }}
       >
-        <StatusBar barStyle="dark-content" />
-        <View
-          style={{
-            flex: 1,
-            width: "100%",
-            maxWidth: wide ? undefined : 420,
-            alignSelf: "center",
-            backgroundColor: C.bg,
-            position: "relative",
-            ...(Platform.OS === "web"
-              ? { boxShadow: "0 0 40px rgba(17,17,16,.08)" }
-              : {}),
-          }}
+        <SafeAreaView
+          style={{ flex: 1, backgroundColor: width > 600 ? "#EAEAE5" : C.bg }}
         >
-          <View style={{ flex: 1, position: "relative" }}>
-            <View
-              style={{
-                position: "absolute",
-                inset: 0,
-                opacity: tab === "map" ? 1 : 0,
-                pointerEvents: tab === "map" ? "auto" : "none",
-              }}
-            >
-              <MapHome
-                key={mode}
-                repo={repo}
-                filters={filters}
-                onFilters={setFilters}
-                onSearch={() => setRoute({ kind: "search" })}
-                onGlossary={() => setTab("glossary")}
-                interactionBlocked={!!popup || !!route || tab !== "map"}
-                onFilter={() => setRoute({ kind: "filter" })}
-                onList={(args) => setRoute({ kind: "transactions", ...args })}
-                onDate={() => setRoute({ kind: "date" })}
-                unit={unit}
-                onUnit={(u) => {
-                  setUnit(u);
-                  void store("unit", u);
-                }}
-                base={base}
-                onBase={(b) => {
-                  setBase(b);
-                  void store("base", b);
-                }}
-                cadastral={cad}
-                onCadastral={(c) => {
-                  setCad(c);
-                  void store("cad", c);
-                }}
-                schools={schools}
-                onSchools={(on) => {
-                  setSchools(on);
-                  void store("schools", on);
-                }}
-                hospitals={hospitals}
-                onHospitals={(on) => {
-                  setHospitals(on);
-                  void store("hospitals", on);
-                }}
-                redevelopments={redevelopments}
-                onRedevelopments={(on) => {
-                  setRedevelopments(on);
-                  void store("redevelopments", on);
-                }}
-                focus={focus}
-                focusAuction={auctionFocus}
-                onHelp={onHelp}
-                notify={notify}
-                onMeta={setDataMeta}
-                onParcel={setLastParcel}
-                onToday={() => setRoute({ kind: "matching" })}
-                auction={auction}
-                onAuction={setAuction}
-                onAuctionList={(args) =>
-                  setRoute({ kind: "auctions", ...args })
-                }
-              />
-            </View>
-            {tab === "glossary" && (
-              <GlossaryScreen
-                terms={terms}
-                loading={termsLoading}
-                error={termsError}
-                onRetry={() => setTermsRetry((x) => x + 1)}
-                onTerm={(term) => setRoute({ kind: "term", term, map: false })}
-                today={todayEnabled ? learning : undefined}
-                onToday={() => setRoute({ kind: "matching" })}
-              />
-            )}
-            {tab === "more" && (
-              <MoreScreen
-                user={session?.user ?? null}
-                onLogin={auth ? () => setRoute({ kind: "login" }) : undefined}
-                onAccount={() => setRoute({ kind: "account" })}
-                mode={mode}
-                date={
-                  dataMeta?.data_as_of ??
-                  (mode === "sample" ? "2026-10-05" : undefined)
-                }
-                onMode={(m) => {
-                  setFocus(undefined);
-                  setAuctionFocus(null);
-                  setDataMeta(undefined);
-                  setMode(m);
-                  notify(
-                    m === "sample"
-                      ? "샘플 데이터로 화면을 보여드려요"
-                      : "백엔드 API에 연결합니다",
-                  );
-                }}
-                onDate={() => setRoute({ kind: "date" })}
-                onTerms={(name) => setRoute({ kind: "terms", name })}
-                notify={notify}
-                tipsEnabled={tipsEnabled}
-                onTipsEnabled={(on) => {
-                  setTipsEnabled(on);
-                  void store("tips_enabled", on);
-                }}
-                todayEnabled={todayEnabled}
-                onTodayEnabled={(on) => {
-                  setTodayEnabled(on);
-                  void store("today_enabled", on);
-                }}
-              />
-            )}
-          </View>
+          <StatusBar barStyle="dark-content" />
           <View
             style={{
-              height: 54,
-              flexDirection: "row",
-              borderTopWidth: 1,
-              borderColor: C.rule,
-              backgroundColor: C.surface,
-              zIndex: 40,
+              flex: 1,
+              width: "100%",
+              maxWidth: wide ? undefined : 420,
+              alignSelf: "center",
+              backgroundColor: C.bg,
+              position: "relative",
+              ...(Platform.OS === "web"
+                ? { boxShadow: "0 0 40px rgba(17,17,16,.08)" }
+                : {}),
             }}
           >
-            {(
-              [
-                ["map", "지도", "map"],
-                ["glossary", "용어사전", "book"],
-                ["more", "더보기", "more"],
-              ] as const
-            ).map(([k, label, icon]) => (
-              <Pressable
-                key={k}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: tab === k }}
-                onPress={() => {
-                  setTab(k);
-                  setRoute(null);
-                }}
+            <View style={{ flex: 1, position: "relative" }}>
+              <View
                 style={{
-                  flex: 1,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 3,
+                  position: "absolute",
+                  inset: 0,
+                  opacity: tab === "map" ? 1 : 0,
+                  pointerEvents: tab === "map" ? "auto" : "none",
                 }}
               >
-                <Icon name={icon} color={tab === k ? C.ink : C.light} />
-                <T
-                  size={14}
-                  bold={tab === k}
-                  color={tab === k ? C.ink : C.light}
-                >
-                  {label}
-                </T>
-              </Pressable>
-            ))}
-          </View>
-          {overlay && (
-            <View
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundColor: wide ? "rgba(17,17,16,.24)" : C.bg,
-                zIndex: 50,
-                alignItems: wide ? "center" : undefined,
-                justifyContent: wide ? "center" : undefined,
-              }}
-            >
-              {wide && (
-                <Pressable
-                  accessibilityLabel="화면 닫기"
-                  onPress={() => setRoute(null)}
-                  style={{ position: "absolute", inset: 0 }}
+                <MapHome
+                  key={mode}
+                  repo={repo}
+                  filters={filters}
+                  onFilters={setFilters}
+                  onSearch={() => setRoute({ kind: "search" })}
+                  onGlossary={() => setTab("glossary")}
+                  interactionBlocked={!!popup || !!route || tab !== "map"}
+                  onFilter={() => setRoute({ kind: "filter" })}
+                  onList={(args) => setRoute({ kind: "transactions", ...args })}
+                  onDate={() => setRoute({ kind: "date" })}
+                  unit={unit}
+                  onUnit={(u) => {
+                    setUnit(u);
+                    void store("unit", u);
+                  }}
+                  base={base}
+                  onBase={(b) => {
+                    setBase(b);
+                    void store("base", b);
+                  }}
+                  cadastral={cad}
+                  onCadastral={(c) => {
+                    setCad(c);
+                    void store("cad", c);
+                  }}
+                  schools={schools}
+                  onSchools={(on) => {
+                    setSchools(on);
+                    void store("schools", on);
+                  }}
+                  hospitals={hospitals}
+                  onHospitals={(on) => {
+                    setHospitals(on);
+                    void store("hospitals", on);
+                  }}
+                  redevelopments={redevelopments}
+                  onRedevelopments={(on) => {
+                    setRedevelopments(on);
+                    void store("redevelopments", on);
+                  }}
+                  focus={focus}
+                  focusAuction={auctionFocus}
+                  onHelp={onHelp}
+                  notify={notify}
+                  onMeta={setDataMeta}
+                  onParcel={setLastParcel}
+                  onToday={() => setRoute({ kind: "matching" })}
+                  auction={auction}
+                  onAuction={setAuction}
+                  onAuctionList={(args) =>
+                    setRoute({ kind: "auctions", ...args })
+                  }
+                />
+              </View>
+              {tab === "glossary" && (
+                <GlossaryScreen
+                  terms={terms}
+                  loading={termsLoading}
+                  error={termsError}
+                  onRetry={() => setTermsRetry((x) => x + 1)}
+                  onTerm={(term) =>
+                    setRoute({ kind: "term", term, map: false })
+                  }
+                  today={todayEnabled ? learning : undefined}
+                  onToday={() => setRoute({ kind: "matching" })}
                 />
               )}
-              <View
-                style={
-                  wide
-                    ? {
-                        width: route?.kind === "search" && desktop ? 520 : 560,
-                        maxWidth: "95%",
-                        height:
-                          route?.kind === "search" && desktop
-                            ? undefined
-                            : "92%",
-                        maxHeight: "92%",
-                        backgroundColor: C.bg,
-                        borderRadius: 14,
-                        overflow: "hidden",
-                        ...(route?.kind === "search" && desktop
-                          ? { position: "absolute", left: 190, top: 72 }
-                          : {}),
-                      }
-                    : { flex: 1 }
-                }
-              >
-                {overlay}
-              </View>
+              {tab === "more" && (
+                <MoreScreen
+                  user={session?.user ?? null}
+                  onLogin={auth ? () => setRoute({ kind: "login" }) : undefined}
+                  onAccount={() => setRoute({ kind: "account" })}
+                  onInterests={(kind) =>
+                    setRoute({ kind: "interests", tab: kind })
+                  }
+                  interestCount={interests.count}
+                  mode={mode}
+                  date={
+                    dataMeta?.data_as_of ??
+                    (mode === "sample" ? "2026-10-05" : undefined)
+                  }
+                  onMode={(m) => {
+                    setFocus(undefined);
+                    setAuctionFocus(null);
+                    setDataMeta(undefined);
+                    setMode(m);
+                    notify(
+                      m === "sample"
+                        ? "샘플 데이터로 화면을 보여드려요"
+                        : "백엔드 API에 연결합니다",
+                    );
+                  }}
+                  onDate={() => setRoute({ kind: "date" })}
+                  onTerms={(name) => setRoute({ kind: "terms", name })}
+                  notify={notify}
+                  tipsEnabled={tipsEnabled}
+                  onTipsEnabled={(on) => {
+                    setTipsEnabled(on);
+                    void store("tips_enabled", on);
+                  }}
+                  todayEnabled={todayEnabled}
+                  onTodayEnabled={(on) => {
+                    setTodayEnabled(on);
+                    void store("today_enabled", on);
+                  }}
+                />
+              )}
             </View>
-          )}
-          {toast !== "" && (
             <View
-              pointerEvents="none"
               style={{
-                position: "absolute",
-                left: 18,
-                right: 18,
-                bottom: route ? 24 : 82,
-                padding: 14,
-                borderRadius: 12,
-                backgroundColor: C.primary,
-                zIndex: 100,
+                height: 54,
+                flexDirection: "row",
+                borderTopWidth: 1,
+                borderColor: C.rule,
+                backgroundColor: C.surface,
+                zIndex: 40,
               }}
             >
-              <T color={C.bg} style={{ textAlign: "center" }}>
-                {toast}
-              </T>
+              {(
+                [
+                  ["map", "지도", "map"],
+                  ["glossary", "용어사전", "book"],
+                  ["more", "더보기", "more"],
+                ] as const
+              ).map(([k, label, icon]) => (
+                <Pressable
+                  key={k}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: tab === k }}
+                  onPress={() => {
+                    setTab(k);
+                    setRoute(null);
+                  }}
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 3,
+                  }}
+                >
+                  <Icon name={icon} color={tab === k ? C.ink : C.light} />
+                  <T
+                    size={14}
+                    bold={tab === k}
+                    color={tab === k ? C.ink : C.light}
+                  >
+                    {label}
+                  </T>
+                </Pressable>
+              ))}
             </View>
-          )}
-          <TermPopup
-            term={popup}
-            anchor={popupAnchor}
-            onClose={() => setPopup(null)}
-            onDetail={(term) => {
-              setPopup(null);
-              setRoute({ kind: "term", term, map: tab === "map" });
-            }}
-          />
-        </View>
-      </SafeAreaView>
-    </LearningProvider>
+            {overlay && (
+              <View
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  backgroundColor: wide ? "rgba(17,17,16,.24)" : C.bg,
+                  zIndex: 50,
+                  alignItems: wide ? "center" : undefined,
+                  justifyContent: wide ? "center" : undefined,
+                }}
+              >
+                {wide && (
+                  <Pressable
+                    accessibilityLabel="화면 닫기"
+                    onPress={() => setRoute(null)}
+                    style={{ position: "absolute", inset: 0 }}
+                  />
+                )}
+                <View
+                  style={
+                    wide
+                      ? {
+                          width:
+                            route?.kind === "search" && desktop ? 520 : 560,
+                          maxWidth: "95%",
+                          height:
+                            route?.kind === "search" && desktop
+                              ? undefined
+                              : "92%",
+                          maxHeight: "92%",
+                          backgroundColor: C.bg,
+                          borderRadius: 14,
+                          overflow: "hidden",
+                          ...(route?.kind === "search" && desktop
+                            ? { position: "absolute", left: 190, top: 72 }
+                            : {}),
+                        }
+                      : { flex: 1 }
+                  }
+                >
+                  {overlay}
+                </View>
+              </View>
+            )}
+            {toast !== "" && (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  left: 18,
+                  right: 18,
+                  bottom: route ? 24 : 82,
+                  padding: 14,
+                  borderRadius: 12,
+                  backgroundColor: C.primary,
+                  zIndex: 100,
+                }}
+              >
+                <T color={C.bg} style={{ textAlign: "center" }}>
+                  {toast}
+                </T>
+              </View>
+            )}
+            <TermPopup
+              term={popup}
+              anchor={popupAnchor}
+              onClose={() => setPopup(null)}
+              onDetail={(term) => {
+                setPopup(null);
+                setRoute({ kind: "term", term, map: tab === "map" });
+              }}
+            />
+          </View>
+        </SafeAreaView>
+      </LearningProvider>
+    </InterestsProvider>
   );
 }

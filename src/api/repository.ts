@@ -7,6 +7,10 @@ import type {
   RedevelopmentStage,
   Auction,
   AuctionDetail,
+  AuctionInterest,
+  ComplexInterest,
+  InterestIds,
+  InterestKind,
   AuctionQuery,
   BBox,
   Complex,
@@ -53,6 +57,15 @@ const BUSAN_BBOX: BBox = [128.75, 34.85, 129.35, 35.4];
 const SCHOOL_SEARCH_LIMIT = 10;
 // 통합 검색이 끝난 뒤 학교 목록을 더 기다리는 시간(ms). 늦으면 학교 없이 결과를 준다
 export const SCHOOL_SEARCH_WAIT_MS = 800;
+// 서버가 종류별로 받아 주는 관심 개수 상한. 넘으면 409 CONFLICT
+export const INTEREST_LIMIT = 200;
+// 샘플 모드의 관심 목록. 서버처럼 기기 하나에 한 벌이고, 앱을 다시 켜면 비어 있다
+const sampleInterests: Record<InterestKind, Map<string, string>> = {
+  complex: new Map(),
+  auction: new Map(),
+};
+const newestFirst = (m: Map<string, string>) =>
+  [...m].sort((a, b) => b[1].localeCompare(a[1]));
 export class Repository {
   constructor(
     public mode: Mode,
@@ -451,6 +464,81 @@ export class Repository {
       `/complexes/${encodeURIComponent(complexId)}/nearby`,
       signal,
     );
+  }
+  // 내 관심 id 전체. 별을 켜고 끌 때 쓴다
+  interestIds(signal?: AbortSignal): Promise<Envelope<InterestIds>> {
+    if (this.mode === "sample")
+      return Promise.resolve({
+        data: {
+          complexes: newestFirst(sampleInterests.complex).map(([id]) => id),
+          auctions: newestFirst(sampleInterests.auction).map(([id]) => id),
+        },
+      });
+    return this.client.get<InterestIds>("/interests", signal);
+  }
+  // 관심 등록·해제. 같은 요청을 여러 번 보내도 결과가 같다
+  async setInterest(kind: InterestKind, id: string, on: boolean) {
+    if (this.mode === "sample") {
+      const store = sampleInterests[kind];
+      const known =
+        kind === "complex"
+          ? COMPLEXES.some((c) => c.id === id)
+          : AUCTIONS.some((a) => a.id === id);
+      if (!on) {
+        store.delete(id);
+        return;
+      }
+      if (!known)
+        throw new ApiError(
+          kind === "complex" ? "단지를 찾을 수 없어요" : "경매 물건을 찾을 수 없어요",
+          "RESOURCE_NOT_FOUND",
+        );
+      if (!store.has(id) && store.size >= INTEREST_LIMIT)
+        throw new ApiError(
+          `관심 ${kind === "complex" ? "단지" : "경매"}는 ${INTEREST_LIMIT}개까지 담을 수 있어요`,
+          "CONFLICT",
+        );
+      if (!store.has(id)) store.set(id, new Date().toISOString());
+      return;
+    }
+    const path = `/interests/${kind === "complex" ? "complexes" : "auctions"}/${encodeURIComponent(id)}`;
+    await this.client.send(on ? "PUT" : "DELETE", path);
+  }
+  // 관심 단지 목록 화면. complex는 단지 상세와 같은 모양이다
+  complexInterests(
+    signal?: AbortSignal,
+  ): Promise<Envelope<ComplexInterest[]>> {
+    if (this.mode === "sample")
+      return Promise.resolve({
+        data: newestFirst(sampleInterests.complex).flatMap(([id, added_at]) => {
+          const complex = COMPLEXES.find((c) => c.id === id);
+          if (!complex) return [];
+          const latest_sale =
+            TRANSACTIONS.filter(
+              (t) =>
+                t.complex_id === id && t.deal_type === "sale" && !t.is_cancelled,
+            ).sort((a, b) =>
+              b.contract_date.localeCompare(a.contract_date),
+            )[0] ?? null;
+          return [{ complex, latest_sale, added_at }];
+        }),
+        meta: SAMPLE_META,
+      });
+    return this.client.get<ComplexInterest[]>("/interests/complexes", signal);
+  }
+  // 관심 경매 목록 화면. auction은 /auctions 목록 항목과 같은 모양이고 끝난 물건도 남는다
+  auctionInterests(
+    signal?: AbortSignal,
+  ): Promise<Envelope<AuctionInterest[]>> {
+    if (this.mode === "sample")
+      return Promise.resolve({
+        data: newestFirst(sampleInterests.auction).flatMap(([id, added_at]) => {
+          const auction = AUCTIONS.find((a) => a.id === id);
+          return auction ? [{ auction, added_at }] : [];
+        }),
+        meta: AUCTION_META,
+      });
+    return this.client.get<AuctionInterest[]>("/interests/auctions", signal);
   }
   // 검색 결과·필지 마커처럼 PNU를 이미 알 때. 응답 형태는 parcelLookup과 같다
   parcel(pnu: string, signal?: AbortSignal) {

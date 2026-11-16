@@ -1,6 +1,9 @@
 // 브라우저 개발 전용. 백엔드에 CORS 설정이 없어 같은 PC의 API로 중계한다.
 import http from "node:http";
 const target = process.env.PUGURIN_API_TARGET || "http://127.0.0.1:8000";
+const port = Number(process.env.PUGURIN_API_PORT) || 8001;
+// 관심 등록(PUT)·해제(DELETE)도 중계한다
+const METHODS = ["GET", "PUT", "DELETE"];
 http
   .createServer(async (req, res) => {
     const origin = req.headers.origin;
@@ -12,6 +15,7 @@ http
       "Access-Control-Allow-Headers",
       "X-Device-Id,If-None-Match,Content-Type",
     );
+    res.setHeader("Access-Control-Allow-Methods", METHODS.join(","));
     res.setHeader(
       "Access-Control-Expose-Headers",
       "ETag,Retry-After,X-Data-Mode",
@@ -21,7 +25,7 @@ http
       res.end();
       return;
     }
-    if (req.method !== "GET" || !req.url?.startsWith("/api/v1/")) {
+    if (!METHODS.includes(req.method) || !req.url?.startsWith("/api/v1/")) {
       res.writeHead(404);
       res.end();
       return;
@@ -30,7 +34,10 @@ http
       const headers = {};
       for (const k of ["x-device-id", "if-none-match"])
         if (req.headers[k]) headers[k] = req.headers[k];
-      const response = await fetch(target + req.url, { headers });
+      const response = await fetch(target + req.url, {
+        method: req.method,
+        headers,
+      });
       res.statusCode = response.status;
       for (const k of [
         "content-type",
@@ -55,6 +62,6 @@ http
       );
     }
   })
-  .listen(8001, "127.0.0.1", () =>
-    console.log("개발 API 중계: http://localhost:8001/api/v1"),
+  .listen(port, "127.0.0.1", () =>
+    console.log(`개발 API 중계: http://localhost:${port}/api/v1`),
   );

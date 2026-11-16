@@ -409,3 +409,13 @@ export type AuctionQuery = {
     "sale_date" | "min_price_ratio" | "min_price" | "recent_trade_discount";
   excludeShare?: boolean;
 };
+// 관심 등록(기기별, X-Device-Id). 목록은 최근에 등록한 것부터 온다
+export type InterestIds = { complexes: string[]; auctions: string[] };
+export type ComplexInterest = {
+  complex: Complex;
+  // 해제 거래를 뺀 가장 최근 매매. 매매가 없으면 null
+  latest_sale: Transaction | null;
+  added_at: string;
+};
+export type AuctionInterest = { auction: Auction; added_at: string };
+export type InterestKind = "complex" | "auction";
