@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Linking, Platform, Pressable, View } from "react-native";
-import type { Meta, School } from "../api/types";
+import type { ComplexMarker, Meta, Property, School } from "../api/types";
+import { PROPERTY, formatArea, priceLabel } from "../state/market";
 import { Btn, T, s } from "../components/ui";
 import {
   ASSIGNMENT_NOTICE,
@@ -38,28 +39,50 @@ export type ZoneStatus = "loading" | "ok" | "none" | "notReady" | "error";
 const ZONE_LINE: Record<ZoneStatus, string> = {
   loading: "통학구역을 불러오는 중…",
   ok: "지도에 칠한 곳이 이 학교 통학구역이에요. 이 안에 살면 이 학교로 배정돼요",
-  none: "학구도에서 이 학교 통학구역을 찾지 못했어요",
+  // 404는 학구도에 구역이 없는 학교와 서버에 학구도 API가 아직 없는 경우 둘 다라 둘에 맞는 말로 쓴다
+  none: "이 학교 통학구역 정보가 아직 없어요",
   notReady: "통학구역 정보를 준비 중이에요",
   error: "통학구역을 불러오지 못했어요",
 };
+// 공식 학구도가 아닌 참고용 경계일 때 ok 대신 쓰는 말
+const ZONE_REFERENCE_LINE =
+  "지도에 칠한 곳은 참고용 경계예요. 실제 배정은 교육청에 확인하세요";
+
+// 통학구역 안 단지 목록을 처음 펼쳐 두는 건수. 나머지는 더보기로 연다
+export const ZONE_COMPLEX_PREVIEW = 5;
 
 // 학교 시트 내용. 목록 응답의 값을 그대로 쓰며 따로 부르지 않는다. 짧아서 단계와 상관없이 같은 내용이다.
-// 초등학교는 MapHome이 통학구역을 불러와 zone으로 상태를 넘긴다
+// 초등학교는 MapHome이 통학구역과 그 안 단지를 불러와 zone·complexes로 넘긴다
 export function SchoolContent({
   school,
   meta,
   zone,
+  zoneSource = ASSIGNMENT_SOURCE,
+  zoneReference = false,
+  complexes,
+  property = "apartment",
+  unit = "평",
+  onComplex,
 }: {
   school: School;
   meta?: Meta;
   zone?: ZoneStatus;
+  // 통학구역 출처. 없으면 학구도로 적는다
+  zoneSource?: string;
+  // 공식 학구도가 아닌 참고용 경계면 true. 배정된다고 말하지 않는다
+  zoneReference?: boolean;
+  // 통학구역 안 단지. null이면 불러오는 중, undefined면 목록을 숨긴다
+  complexes?: ComplexMarker[] | null;
+  property?: Property;
+  unit?: "평" | "㎡";
+  onComplex?: (id: string) => void;
 }) {
   const level = SCHOOL_LEVEL[school.level];
   const address = school.address.replace(/^부산광역시\s+/, "");
   const notice = meta?.school_notice || SCHOOL_NOTICE;
   // 출처가 배열로 와도 학교 시트에는 학교 출처만 쓴다. 기준일은 날짜시간으로 와서 앞 10글자만 쓴다
   const asOf = meta?.data_as_of?.slice(0, 10).replaceAll("-", ".");
-  const sourceLine = `출처: ${SCHOOL_SOURCE}${zone === "ok" ? `, ${ASSIGNMENT_SOURCE}` : ""}${asOf ? ` · 기준일 ${asOf}` : ""}`;
+  const sourceLine = `출처: ${SCHOOL_SOURCE}${zone === "ok" ? `, ${zoneSource}` : ""}${asOf ? ` · 기준일 ${asOf}` : ""}`;
   const homepage = homepageUrl(school.homepage);
   const callTel = () => {
     if (school.tel) void Linking.openURL(`tel:${school.tel}`).catch(() => {});
@@ -88,9 +111,11 @@ export function SchoolContent({
         {zone ? (
           <>
             <T size={14} bold={zone === "ok"} color={C.ink2}>
-              {ZONE_LINE[zone]}
+              {zone === "ok" && zoneReference
+                ? ZONE_REFERENCE_LINE
+                : ZONE_LINE[zone]}
             </T>
-            {zone === "ok" && (
+            {zone === "ok" && !zoneReference && (
               <T size={13} color={C.muted}>
                 {meta?.assignment_notice || ASSIGNMENT_NOTICE}
               </T>
@@ -102,6 +127,16 @@ export function SchoolContent({
           </T>
         )}
       </View>
+      {/* 토지는 단지가 아니라 필지 거래라 목록을 두지 않는다 */}
+      {zone === "ok" && complexes !== undefined && property !== "land" && (
+        <ZoneComplexes
+          key={school.id}
+          complexes={complexes}
+          property={property}
+          unit={unit}
+          onComplex={onComplex}
+        />
+      )}
       {school.opened_on && (
         <T size={14} color={C.muted}>
           {openedLine(school.opened_on)}
@@ -137,5 +172,74 @@ export function SchoolContent({
         {sourceLine}
       </T>
     </>
+  );
+}
+
+// 통학구역 안 단지. 이 안에 살면 이 학교로 배정되니, 학교에서 집으로 거꾸로 찾아가는 목록이다
+function ZoneComplexes({
+  complexes,
+  property,
+  unit,
+  onComplex,
+}: {
+  complexes: ComplexMarker[] | null;
+  property: Property;
+  unit: "평" | "㎡";
+  onComplex?: (id: string) => void;
+}) {
+  const [all, setAll] = useState(false);
+  useEffect(() => setAll(false), [complexes]);
+  const kind = PROPERTY[property];
+  if (!complexes)
+    return (
+      <T size={14} color={C.light} style={{ paddingVertical: 8 }}>
+        통학구역 안 단지를 찾는 중…
+      </T>
+    );
+  const shown = all ? complexes : complexes.slice(0, ZONE_COMPLEX_PREVIEW);
+  return (
+    <View style={{ marginTop: 8, marginBottom: 8 }}>
+      <T size={16} bold>
+        통학구역 안 {kind} {complexes.length}곳
+      </T>
+      <T size={13} color={C.muted}>
+        {complexes.length
+          ? "지금 조건으로 거래가 있는 곳이에요. 거래 많은 순"
+          : "지금 조건으로 거래가 있는 곳이 없어요"}
+      </T>
+      {shown.map((c) => (
+        <Pressable
+          key={c.complex_id}
+          accessibilityRole="button"
+          accessibilityLabel={`${c.name} 보기`}
+          onPress={() => onComplex?.(c.complex_id)}
+          style={{
+            paddingVertical: 10,
+            borderBottomWidth: 1,
+            borderColor: C.rule,
+            gap: 2,
+          }}
+        >
+          <View style={s.between}>
+            <T size={15} bold style={{ flexShrink: 1 }}>
+              {c.name}
+            </T>
+            <T size={15} bold>
+              {priceLabel(c.latest)}
+            </T>
+          </View>
+          <T size={13} color={C.muted}>
+            최근 {formatArea(c.latest, unit)} · 거래 {c.transaction_count}건
+          </T>
+        </Pressable>
+      ))}
+      {!all && complexes.length > ZONE_COMPLEX_PREVIEW && (
+        <View style={{ marginTop: 8 }}>
+          <Btn secondary onPress={() => setAll(true)}>
+            {`더보기 (${complexes.length - ZONE_COMPLEX_PREVIEW}곳)`}
+          </Btn>
+        </View>
+      )}
+    </View>
   );
 }

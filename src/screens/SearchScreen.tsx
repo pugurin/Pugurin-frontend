@@ -23,6 +23,10 @@ export function SearchScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
+  // 학교 이름 검색이 첫 검색에서 늦지 않게 학교 목록을 미리 받는다. 테스트 대역에는 없을 수 있다
+  useEffect(() => {
+    repo.prefetchSchools?.();
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     if (q.trim().length < 2) {
@@ -72,7 +76,9 @@ export function SearchScreen({
           <T size={12} color={C.light}>
             {r.type === "complex"
               ? "단지"
-              : r.type === "region"
+              : r.type === "school"
+                ? "학교"
+                : r.type === "region"
                 ? "동네"
                 : "주소"}
           </T>
@@ -110,7 +116,7 @@ export function SearchScreen({
           autoFocus
           value={q}
           onChangeText={setQ}
-          placeholder="단지·주소·동네 검색"
+          placeholder="단지·동네·학교 검색"
           style={[s.input, { flex: 1, borderWidth: 0, paddingLeft: 0 }]}
         />
         {q !== "" && (
