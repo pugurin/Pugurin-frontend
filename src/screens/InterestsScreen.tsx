@@ -15,7 +15,7 @@ export function InterestsScreen({
   unit,
 }: {
   onBack: () => void;
-  onComplex: (complexId: string) => void;
+  onComplex: (c: ComplexInterest) => void;
   onRegion: (r: RegionInterest) => void;
   unit: "평" | "㎡";
 }) {
@@ -53,7 +53,7 @@ export function InterestsScreen({
               key={c.complex_id}
               c={c}
               unit={unit}
-              onPress={() => onComplex(c.complex_id)}
+              onPress={() => onComplex(c)}
             />
           ))
         ) : (

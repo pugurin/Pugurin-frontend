@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SampleInterests, isDong, type ComplexInput } from "../src/api/interests";
+import { SampleInterests, isDong, latestTransaction, type ComplexInput, type LatestOf } from "../src/api/interests";
+import type { Transaction } from "../src/api/types";
 import type { Session } from "../src/api/auth";
 import { COMPLEXES } from "../src/api/fixtures";
 
@@ -9,11 +10,17 @@ const storage = vi.hoisted(() => {
     data,
     getItem: vi.fn(async (k: string) => data.get(k) ?? null),
     setItem: vi.fn(async (k: string, v: string) => void data.set(k, v)),
+    multiRemove: vi.fn(async (ks: string[]) => ks.forEach((k) => data.delete(k))),
   };
 });
 vi.mock("@react-native-async-storage/async-storage", () => ({ default: storage }));
 vi.mock("expo-crypto", () => ({ randomUUID: () => "uuid" }));
-beforeEach(() => storage.data.clear());
+beforeEach(() => {
+  storage.data.clear();
+  storage.getItem.mockImplementation(async (k: string) => storage.data.get(k) ?? null);
+});
+const sample = (latestOf: LatestOf = async () => null, scope: "sample" | "api" = "sample") =>
+  new SampleInterests({ scope, latestOf, delay: 0 });
 
 const session = (id: string): Session => ({
   user: { id, nickname: "부산사람", provider: "kakao", role: "buyer", marketing_push: false, created_at: "2026-11-13" },
@@ -33,7 +40,7 @@ const region = (i: number) => ({ region_code: `26350${String(10000 + i).padStart
 
 describe("관심 샘플 서버", () => {
   it("등록은 멱등이고 최신순으로 돌려준다", async () => {
-    const api = new SampleInterests(0);
+    const api = sample();
     await api.addComplex(me, complex());
     await api.addComplex(me, complex());
     expect(await api.listComplexes(me)).toHaveLength(1);
@@ -45,21 +52,62 @@ describe("관심 샘플 서버", () => {
     expect(await api.listComplexes(me)).toHaveLength(1);
   });
 
-  it("단지 목록에 목 거래 중 최신 거래를 붙인다", async () => {
-    const api = new SampleInterests(0);
-    await api.addComplex(me, complex());
-    await api.addComplex(me, { ...complex(), complex_id: "no-such", name: "없는 단지" });
+  it("단지 목록의 최근 거래는 넘겨받은 조회 함수(지금 repo)로 붙이고, 실패하면 없음으로 둔다", async () => {
+    const tx = { id: "t1", complex_id: "uuid-1" } as Transaction;
+    const latestOf = vi.fn<LatestOf>(async (c) => {
+      if (c.complex_id === "broken") throw new Error("500");
+      return c.complex_id === "uuid-1" ? tx : null;
+    });
+    const api = sample(latestOf, "api");
+    await api.addComplex(me, { ...complex(), complex_id: "uuid-1" });
+    await api.addComplex(me, { ...complex(), complex_id: "broken" });
     const list = await api.listComplexes(me);
-    const real = list.find((c) => c.complex_id === COMPLEXES[0].id)!;
-    expect(real.latest?.complex_id).toBe(COMPLEXES[0].id);
-    expect(real.latest?.is_cancelled).toBe(false);
-    // 단지 시트 첫 화면처럼 매매가를 먼저 보여 준다(매매가 없을 때만 전월세)
-    expect(real.latest?.deal_type).toBe("sale");
-    expect(list.find((c) => c.complex_id === "no-such")!.latest).toBeNull();
+    expect(list.find((c) => c.complex_id === "uuid-1")!.latest).toBe(tx);
+    expect(list.find((c) => c.complex_id === "broken")!.latest).toBeNull();
+    expect(latestOf).toHaveBeenCalledWith(expect.objectContaining({ complex_id: "uuid-1", property_type: "apartment" }));
+  });
+
+  it("최근 거래는 매매를 먼저, 없으면 전세·월세 중 최신을 고른다", async () => {
+    const tx = (deal: string, date: string) => ({ deal_type: deal, contract_date: date }) as Transaction;
+    const repo = (data: Record<string, Transaction[]>) => ({
+      transactions: vi.fn(async (f: any, o: any) => {
+        expect(o.complexId).toBe("c1");
+        return { data: data[f.deal_type] ?? [] } as any;
+      }),
+    });
+    const c = { complex_id: "c1", property_type: "apartment" as const };
+    expect(await latestTransaction(repo({ sale: [tx("sale", "2026-01-01")], jeonse: [tx("jeonse", "2026-09-01")] }), c)).toMatchObject({ deal_type: "sale" });
+    expect(await latestTransaction(repo({ jeonse: [tx("jeonse", "2026-03-01")], monthly: [tx("monthly", "2026-05-01")] }), c)).toMatchObject({ deal_type: "monthly" });
+    expect(await latestTransaction(repo({}), c)).toBeNull();
+  });
+
+  it("데이터 모드마다 따로 저장한다(샘플 단지 id와 백엔드 uuid가 섞이지 않게)", async () => {
+    await sample(undefined, "sample").addComplex(me, complex());
+    expect(await sample(undefined, "api").listComplexes(me)).toHaveLength(0);
+    expect(await sample(undefined, "sample").listComplexes(me)).toHaveLength(1);
+  });
+
+  it("저장값을 읽지 못하거나 모르는 모양이면 오류로 올리고 덮어쓰지 않는다", async () => {
+    const api = sample();
+    await api.addComplex(me, complex());
+    const key = [...storage.data.keys()][0];
+    for (const broken of ["{oops", JSON.stringify({ complexes: [], regions: [] })]) {
+      storage.data.set(key, broken);
+      await expect(api.listComplexes(me)).rejects.toMatchObject({ message: "관심 목록을 불러오지 못했어요" });
+      await expect(api.addComplex(me, complex(COMPLEXES[1]))).rejects.toMatchObject({ code: "STORAGE_ERROR" });
+      expect(storage.data.get(key)).toBe(broken);
+    }
+    storage.getItem.mockRejectedValueOnce(new Error("io"));
+    await expect(api.listRegions(me)).rejects.toMatchObject({ code: "STORAGE_ERROR" });
+  });
+
+  it("쓰기에 실패하면 오류로 올린다", async () => {
+    storage.setItem.mockRejectedValueOnce(new Error("disk full"));
+    await expect(sample().addComplex(me, complex())).rejects.toMatchObject({ message: "관심 목록을 저장하지 못했어요" });
   });
 
   it("지역은 10개까지", async () => {
-    const api = new SampleInterests(0);
+    const api = sample();
     for (let i = 0; i < 10; i++) await api.addRegion(me, region(i));
     await expect(api.addRegion(me, region(10))).rejects.toMatchObject({
       code: "LIMIT_EXCEEDED",
@@ -70,7 +118,7 @@ describe("관심 샘플 서버", () => {
   });
 
   it("계정마다 따로 저장하고 clear는 그 계정만 지운다", async () => {
-    const api = new SampleInterests(0);
+    const api = sample();
     const other = session("u2");
     await api.addComplex(me, complex());
     await api.addRegion(other, region(1));
@@ -81,8 +129,17 @@ describe("관심 샘플 서버", () => {
     expect(await api.listRegions(other)).toHaveLength(1);
   });
 
+  it("탈퇴(clear)하면 두 데이터 모드 모두, 읽지 못하는 저장값까지 지운다", async () => {
+    await sample(undefined, "sample").addComplex(me, complex());
+    await sample(undefined, "api").addComplex(me, complex());
+    const keys = [...storage.data.keys()];
+    storage.data.set(keys[0], "{oops");
+    await sample(undefined, "api").clear(me);
+    expect(storage.data.size).toBe(0);
+  });
+
   it("동시에 들어온 요청도 하나씩 처리해 서로 덮어쓰지 않는다", async () => {
-    const api = new SampleInterests(0);
+    const api = sample();
     for (let i = 0; i < 9; i++) await api.addRegion(me, region(i));
     // 실제 기기처럼 읽기가 느리면 두 요청이 같은 옛 값을 읽는다
     storage.getItem.mockImplementation(

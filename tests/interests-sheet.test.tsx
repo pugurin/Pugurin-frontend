@@ -1,8 +1,9 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ComplexContent, RegionContent } from "../src/screens/MarketSheets";
 import { DEFAULT_FILTERS } from "../src/state/market";
+import { InterestsProvider, type InterestsValue } from "../src/state/interests";
 vi.mock("../src/components/Chart", () => ({ Chart: () => <div>차트</div> }));
 afterEach(cleanup);
 const flush = () => act(() => new Promise((r) => setTimeout(r, 5)));
@@ -38,22 +39,35 @@ const region = (region_code: string, name: string) => (
 );
 
 describe("시트의 관심 ☆", () => {
-  it("단지 시트에 관심 단지 ☆가 있고 '2차에서 열려요' 안내는 없다", async () => {
+  it("단지 시트 ☆를 누르면 관심 등록으로 가고 '2차에서 열려요' 안내는 뜨지 않는다", async () => {
+    const notify = vi.fn();
+    const toggleComplex = vi.fn(async () => {});
+    const value: InterestsValue = {
+      enabled: true, signedIn: true, complexes: [], regions: [], busy: [],
+      hasComplex: () => false, hasRegion: () => false, toggleComplex, toggleRegion: vi.fn(),
+    };
     render(
-      <ComplexContent id="c" repo={repo} filters={DEFAULT_FILTERS} stage="peek" onStage={() => {}} onHelp={() => {}} notify={() => {}} unit="평" />,
+      <InterestsProvider value={value}>
+        <ComplexContent id="c" repo={repo} filters={DEFAULT_FILTERS} stage="peek" onStage={() => {}} onHelp={() => {}} notify={notify} unit="평" />
+      </InterestsProvider>,
     );
     await flush();
-    // 켜고 끄는 버튼이라 선택 상태를 알린다(예전 '2차에서 열려요' 버튼에는 없었다)
-    expect(screen.getByLabelText("관심 단지 등록").getAttribute("aria-pressed")).toBe("false");
+    const star = screen.getByLabelText("관심 단지 우동 단지");
+    expect(star.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(star);
+    await flush();
+    expect(toggleComplex).toHaveBeenCalledWith(expect.objectContaining({ complex_id: "c", name: "우동 단지" }));
+    expect(notify).not.toHaveBeenCalled();
+    expect(screen.queryByText(/2차/)).toBeNull();
   });
 
   it("동 시트에는 관심 지역 ☆가 있고 시·군·구 시트에는 없다", async () => {
     render(region("2635010500", "우동"));
     await flush();
-    expect(screen.getByLabelText("관심 지역 등록")).toBeTruthy();
+    expect(screen.getByLabelText("관심 지역 우동")).toBeTruthy();
     cleanup();
     render(region("26350", "해운대구"));
     await flush();
-    expect(screen.queryByLabelText("관심 지역 등록")).toBeNull();
+    expect(screen.queryByLabelText(/관심 지역/)).toBeNull();
   });
 });

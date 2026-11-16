@@ -70,7 +70,7 @@ import {
 import { restoreSession } from "./src/api/restoreSession";
 import { loadRefreshToken, saveRefreshToken } from "./src/state/secureToken";
 import { AccountScreen, LoginScreen, SignupScreen } from "./src/screens/AuthScreens";
-import { SampleInterests } from "./src/api/interests";
+import { SampleInterests, latestTransaction } from "./src/api/interests";
 import { InterestsProvider, useInterestsState } from "./src/state/interests";
 import { InterestsScreen } from "./src/screens/InterestsScreen";
 type Route =
@@ -136,8 +136,6 @@ export default function App() {
     void store("session", next && toStored(next));
     void saveRefreshToken(next?.refresh_token ?? null);
   };
-  // 관심 단지·지역(F-INT-01·02). 백엔드 API 전이라 앱 안 가짜 서버를 쓴다
-  const interestsApi = useMemo(() => new SampleInterests(), []);
   const [focus, setFocus] = useState<Focus>();
   // 경매 목록에서 고른 줄. 지도가 그 경매로 이동해 시트를 연다
   const [auctionFocus, setAuctionFocus] = useState<AuctionFocus | null>(null);
@@ -310,6 +308,19 @@ export default function App() {
     if (auth) return setRoute({ kind: "login" });
     notify("로그인과 관심 기능은 다음 단계에서 준비하고 있어요");
   };
+  // 관심 단지·지역(F-INT-01·02). 백엔드 API 전이라 샘플 로그인일 때만 앱 안 가짜 서버를 쓴다.
+  // 진짜 로그인이 먼저 붙어도 관심이 기기에만 저장되지 않게 auth 종류로 막는다.
+  // 데이터 모드마다 단지 id가 달라서 모드별로 저장하고, 최근 거래는 지금 repo에서 찾는다
+  const interestsApi = useMemo(
+    () =>
+      auth?.source === "sample"
+        ? new SampleInterests({
+            scope: mode,
+            latestOf: (c) => latestTransaction(repo, c),
+          })
+        : null,
+    [auth, mode, repo],
+  );
   const interests = useInterestsState(interestsApi, session, notify, askLogin);
   const onHelp = (name: string) => {
     const term = terms.find((t) => t.term === name);
@@ -515,7 +526,7 @@ export default function App() {
         }}
         onSignedOut={(withdrawn) => {
           // 탈퇴하면 관심 목록도 계정과 함께 지운다
-          if (withdrawn) void interestsApi.clear(session).catch(() => {});
+          if (withdrawn) void interestsApi?.clear(session).catch(() => {});
           saveSession(null);
           setRoute(null);
           notify(
@@ -529,7 +540,20 @@ export default function App() {
       <InterestsScreen
         unit={unit}
         onBack={() => setRoute(null)}
-        onComplex={(id) => void openComplex(id)}
+        onComplex={(c) => {
+          // 담을 때 저장한 위치로 바로 옮긴다(단지 조회가 실패해도 지도는 옮긴다)
+          setFocus({
+            result: {
+              type: "complex",
+              complex_id: c.complex_id,
+              lat: c.lat,
+              lng: c.lng,
+            },
+            nonce: Date.now(),
+          });
+          setTab("map");
+          setRoute(null);
+        }}
         onRegion={(r) => {
           // 검색 기록에는 남기지 않고 그 동으로 지도만 옮긴다
           setFocus({
@@ -702,12 +726,15 @@ export default function App() {
                   user={session?.user ?? null}
                   onLogin={auth ? () => setRoute({ kind: "login" }) : undefined}
                   onAccount={() => setRoute({ kind: "account" })}
-                  onInterests={() => {
-                    if (session) return setRoute({ kind: "interests" });
-                    if (!auth) return askLogin();
-                    notify("로그인하면 관심 목록을 볼 수 있어요");
-                    setRoute({ kind: "login" });
-                  }}
+                  onInterests={
+                    interestsApi
+                      ? () => {
+                          if (session) return setRoute({ kind: "interests" });
+                          notify("로그인하면 관심 목록을 볼 수 있어요");
+                          setRoute({ kind: "login" });
+                        }
+                      : undefined
+                  }
                   interestCount={
                     interests.complexes.length + interests.regions.length
                   }

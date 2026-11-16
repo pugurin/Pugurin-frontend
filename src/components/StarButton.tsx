@@ -21,13 +21,38 @@ export function StarButton(
       ? `complex:${props.item.complex_id}`
       : `region:${props.item.region_code}`;
   const what = props.kind === "complex" ? "단지" : "지역";
+  const busy = v.busy.includes(key);
+  // 관심 기능을 열지 않은 빌드는 예전처럼 점선 비활성 모양. 누르면 준비 중 안내만 한다
+  if (!v.enabled)
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`관심 ${what} ${props.item.name}`}
+        accessibilityHint="준비 중이에요"
+        onPress={() =>
+          props.kind === "complex"
+            ? v.toggleComplex(props.item)
+            : v.toggleRegion(props.item)
+        }
+        style={{
+          padding: 12,
+          borderWidth: 1,
+          borderStyle: "dashed",
+          borderColor: C.disabled,
+          borderRadius: 12,
+        }}
+      >
+        <Icon name="star" color={C.light} />
+      </Pressable>
+    );
+  // 이름은 어느 단지·지역인지만 말하고, 담겼는지는 눌림 상태(aria-pressed)로만 알린다
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`관심 ${what} ${on ? "해제" : "등록"}`}
-      accessibilityState={{ selected: on, disabled: v.busy.includes(key) }}
+      accessibilityLabel={`관심 ${what} ${props.item.name}`}
+      accessibilityState={{ disabled: busy }}
       aria-pressed={on}
-      disabled={v.busy.includes(key)}
+      disabled={busy}
       onPress={() =>
         props.kind === "complex"
           ? v.toggleComplex(props.item)

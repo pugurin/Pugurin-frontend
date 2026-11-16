@@ -13,6 +13,7 @@ const c = (id: string, name: string, latest = sale): ComplexInterest => ({
 });
 const r: RegionInterest = { region_code: "2635010500", name: "우동", lat: 35.16, lng: 129.14, created_at: "2026-11-13" };
 const value = (over: Partial<InterestsValue> = {}): InterestsValue => ({
+  enabled: true,
   signedIn: true,
   complexes: [c("c1", "해운대아이파크"), c("c2", "두산위브")],
   regions: [r],
@@ -42,12 +43,21 @@ describe("관심 목록 화면", () => {
     expect(screen.getByText("해운대아이파크")).toBeTruthy();
     expect(screen.getAllByText(/억/).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByLabelText("해운대아이파크 지도에서 보기"));
-    expect(onComplex).toHaveBeenCalledWith("c1");
+    // 담을 때 저장한 위치로 옮기도록 행 전체를 넘긴다
+    expect(onComplex).toHaveBeenCalledWith(expect.objectContaining({ complex_id: "c1", lat: 35, lng: 129 }));
   });
 
   it("최근 거래가 없는 단지는 그렇게 알려 준다", () => {
     show(value({ complexes: [c("c3", "새 단지", null as any)] }));
     expect(screen.getByText("최근 거래 정보 없음")).toBeTruthy();
+  });
+
+  it("목록의 ★ 이름은 어느 단지인지 말하고, 담긴 상태는 눌림으로만 알린다", () => {
+    show(value());
+    const star = screen.getByLabelText("관심 단지 두산위브");
+    expect(star.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByLabelText("관심 단지 해운대아이파크")).toBeTruthy();
+    expect(screen.queryByLabelText(/해제/)).toBeNull();
   });
 
   it("지역 탭에서 행을 누르면 그 동으로 가고, ★는 해제한다", () => {
@@ -56,7 +66,7 @@ describe("관심 목록 화면", () => {
     fireEvent.click(screen.getByText("지역 1/10"));
     fireEvent.click(screen.getByLabelText("우동 지도에서 보기"));
     expect(onRegion).toHaveBeenCalledWith(r);
-    fireEvent.click(screen.getByLabelText("관심 지역 해제"));
+    fireEvent.click(screen.getByLabelText("관심 지역 우동"));
     expect(v.toggleRegion).toHaveBeenCalledWith({ region_code: r.region_code, name: "우동", lat: r.lat, lng: r.lng });
   });
 
