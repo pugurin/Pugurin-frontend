@@ -81,6 +81,52 @@ describe("단지 상세의 해제(이상) 거래", () => {
     ).toBe("true");
   });
 
+  it("첫 화면의 최근 거래는 해제된 거래를 건너뛴다", async () => {
+    // 가장 최근 거래가 해제된 거래여도 머리의 큰 가격은 해제되지 않은 최근 거래로 보여준다
+    const data = [
+      {
+        ...TRANSACTIONS[0],
+        id: "tx-cancel",
+        deal_type: "sale",
+        price: 900000000,
+        contract_date: "2026-09-20",
+        is_cancelled: true,
+        cancelled_at: "2026-09-21T10:00:00+09:00",
+      },
+      {
+        ...TRANSACTIONS[0],
+        id: "tx-ok",
+        deal_type: "sale",
+        price: 800000000,
+        contract_date: "2026-09-01",
+        is_cancelled: false,
+        cancelled_at: null,
+      },
+    ];
+    const repo = {
+      ...makeRepo(),
+      transactions: vi.fn(async () => ({
+        data,
+        meta: { page: 1, total_pages: 1, total: data.length },
+      })),
+    };
+    render(
+      <ComplexContent
+        id={COMPLEX.id}
+        repo={repo}
+        filters={DEFAULT_FILTERS}
+        stage="peek"
+        onStage={() => {}}
+        onHelp={() => {}}
+        notify={() => {}}
+        unit="평"
+      />,
+    );
+    await screen.findByText("8억");
+    expect(screen.queryByText("9억")).toBeNull();
+    expect(screen.getByText(/2026\.09\.01 계약/)).toBeTruthy();
+  });
+
   it("해제 거래 포함을 끄면 해제 거래 없이 다시 부른다", async () => {
     const repo = makeRepo();
     renderFull(repo);

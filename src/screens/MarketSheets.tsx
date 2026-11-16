@@ -420,7 +420,8 @@ export function ComplexContent({
         <LoadingTip loading={loading} error={!!error} context="complex" />
       </>
     );
-  const tx = items[0];
+  // 머리의 "최근 거래"는 해제되지 않은 거래만 쓴다. 해제 거래는 목록에서만 해제 표시와 함께 보여준다
+  const tx = items.find((t) => !t.is_cancelled);
   const a =
     complex.area_types.find((a) => a.exclusive_area_m2 === area) ??
     complex.area_types[0];
