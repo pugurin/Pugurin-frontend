@@ -204,23 +204,26 @@ export default function App() {
       );
     loadStored<Recent[]>("recent", []).then(setRecent);
     // 저장한 세션은 인증 서버에 확인한 뒤에만 되살린다(src/api/restoreSession)
+    // 버전은 저장소 읽기 전에 기록한다. 읽는 사이에 로그인·로그아웃하면 복원 결과를 버린다
+    const restoreVersion = sessionVersion.current;
+    const isCurrentSession = () => sessionVersion.current === restoreVersion;
+    let unmounted = false;
     let stopRestore: (() => void) | undefined;
     Promise.all([
       loadStored<StoredSession | null>("session", null),
       loadRefreshToken(),
     ]).then(([saved, refreshToken]) => {
-      if (!saved) return;
+      if (!saved || unmounted || !isCurrentSession()) return;
       if (!auth) {
         void store("session", null);
         void saveRefreshToken(null);
         return;
       }
-      const version = sessionVersion.current;
       stopRestore = restoreSession({
         auth,
         saved,
         refreshToken,
-        isCurrent: () => sessionVersion.current === version,
+        isCurrent: isCurrentSession,
         onSession: saveSession,
         onClear: () => {
           void store("session", null);
@@ -246,6 +249,7 @@ export default function App() {
       .catch(() => {});
     return () => {
       clearTimeout(toastTimer.current);
+      unmounted = true;
       stopRestore?.();
     };
   }, []);
