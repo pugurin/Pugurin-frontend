@@ -43,7 +43,11 @@ import type { SheetStage } from "../components/Sheet";
 import { HAS_KAKAO } from "../map/kakaoRuntime";
 import { RoadviewModal } from "../roadview/RoadviewModal";
 import { NearbySchoolsSection } from "./NearbySchools";
+import { LoanCalculator } from "../components/LoanCalculator";
+import { latestSale } from "../state/loan";
 
+// 대출 계산기 기본 매매가를 찾는 기간. 지도 기간 필터와 따로 둔다
+const SALE_PERIOD_MONTHS = 60;
 // 단지 상세에서 거래 이력을 처음 펼쳐 두는 건수. 나머지는 더보기로 연다
 export const TX_PREVIEW = 4;
 export function RegionContent({
@@ -376,6 +380,30 @@ export function ComplexContent({
     retry,
     analysisRetry,
   ]);
+  // 대출 계산기 기본 매매가용 매매 거래. 지도 필터(전세·월세, 해제 포함 등)와 상관없이
+  // 이 단지의 최근 매매를 따로 불러온다. 실패하면 사용자가 매매가를 직접 넣는다
+  const [sales, setSales] = useState<Transaction[]>([]);
+  useEffect(() => {
+    setSales([]);
+    if (stage !== "full") return;
+    const abort = new AbortController();
+    repo
+      .transactions(
+        {
+          property_type: filters.property_type,
+          deal_type: "sale",
+          period_months: SALE_PERIOD_MONTHS,
+          exclude_direct: false,
+        },
+        { complexId: id, sort: "contract_date_desc", cancelled: false },
+        abort.signal,
+      )
+      .then((r) => {
+        if (!abort.signal.aborted) setSales(r.data);
+      })
+      .catch(() => {});
+    return () => abort.abort();
+  }, [id, repo, filters.property_type, stage]);
   // 이 단지의 진행 중 경매. 오류는 카드만 숨기고 단지 시트는 막지 않는다
   useEffect(() => {
     setAuctions([]);
@@ -718,6 +746,9 @@ export function ComplexContent({
                 </Section>
               </View>
             </View>
+          )}
+          {stage === "full" && (
+            <LoanCalculator sale={latestSale(sales, a?.exclusive_area_m2)} />
           )}
           <Pressable
             onPress={() => notify("중개사 연결은 보류 중이에요")}
