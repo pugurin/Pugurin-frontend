@@ -33,9 +33,9 @@ export type Session = {
   access_token: string;
   refresh_token: string;
 };
-// 기기에 남기는 세션. access token은 넣지 않고, refresh token은 앱에서만 넣는다
-// (웹은 httpOnly 쿠키로 받는다. docs/BACKEND_AUTH_REQUEST.md §6)
-export type StoredSession = { source: AuthSource; user: User; refresh_token?: string };
+// 기기 일반 저장소에 남기는 세션. 토큰은 넣지 않는다.
+// 앱의 refresh token은 보안 저장소(state/secureToken)에 따로 두고, 웹은 httpOnly 쿠키로 받는다
+export type StoredSession = { source: AuthSource; user: User };
 // 가입 동의. terms·privacy·age14는 필수, marketing은 선택이다
 export type Agreements = {
   terms: boolean;
@@ -58,7 +58,7 @@ export interface AuthApi {
   withdraw(session: Session): Promise<void>;
   // 저장한 세션을 서버에 확인하고 새 세션으로 바꾼다(refresh 후 /users/me).
   // 계정이 없거나 토큰이 만료됐으면 UNAUTHORIZED를 던진다
-  restore(saved: StoredSession): Promise<Session>;
+  restore(saved: StoredSession, refreshToken?: string): Promise<Session>;
 }
 
 export const NICKNAME_MIN = 2;

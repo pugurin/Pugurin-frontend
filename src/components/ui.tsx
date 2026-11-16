@@ -109,7 +109,7 @@ export function T({
   color?: string;
   style?: any;
   numberOfLines?: number;
-  accessibilityRole?: "header";
+  accessibilityRole?: "header" | "alert";
   selectable?: boolean;
 }) {
   return (
