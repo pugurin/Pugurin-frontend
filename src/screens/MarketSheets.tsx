@@ -43,6 +43,8 @@ import type { SheetStage } from "../components/Sheet";
 import { HAS_KAKAO } from "../map/kakaoRuntime";
 import { RoadviewModal } from "../roadview/RoadviewModal";
 import { NearbySchoolsSection } from "./NearbySchools";
+import { LoanCalculator } from "../components/LoanCalculator";
+import { latestSalePrice } from "../state/loan";
 
 // 단지 상세에서 거래 이력을 처음 펼쳐 두는 건수. 나머지는 더보기로 연다
 export const TX_PREVIEW = 4;
@@ -714,6 +716,9 @@ export function ComplexContent({
                 </Section>
               </View>
             </View>
+          )}
+          {stage === "full" && (
+            <LoanCalculator defaultPrice={latestSalePrice(items, a?.exclusive_area_m2)} />
           )}
           <Pressable
             onPress={() => notify("중개사 연결은 보류 중이에요")}
