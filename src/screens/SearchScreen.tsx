@@ -11,7 +11,11 @@ export function SearchScreen({
   onRecent,
   onSelect,
   onBack,
+  title = "검색",
+  placeholder = "단지·동네·학교 검색",
 }: {
+  title?: string;
+  placeholder?: string;
   repo: Repository;
   recent: Recent[];
   onRecent: (r: Recent[]) => void;
@@ -97,7 +101,7 @@ export function SearchScreen({
   );
   return (
     <View style={s.screen}>
-      <Header title="검색" onBack={onBack} />
+      <Header title={title} onBack={onBack} />
       <View
         style={[
           s.row,
@@ -116,7 +120,7 @@ export function SearchScreen({
           autoFocus
           value={q}
           onChangeText={setQ}
-          placeholder="단지·동네·학교 검색"
+          placeholder={placeholder}
           style={[s.input, { flex: 1, borderWidth: 0, paddingLeft: 0 }]}
         />
         {q !== "" && (

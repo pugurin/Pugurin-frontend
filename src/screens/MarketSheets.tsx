@@ -43,6 +43,7 @@ import type { SheetStage } from "../components/Sheet";
 import { HAS_KAKAO } from "../map/kakaoRuntime";
 import { RoadviewModal } from "../roadview/RoadviewModal";
 import { NearbySchoolsSection } from "./NearbySchools";
+import { CommuteSection } from "./Commute";
 
 // 단지 상세에서 거래 이력을 처음 펼쳐 두는 건수. 나머지는 더보기로 연다
 export const TX_PREVIEW = 4;
@@ -659,6 +660,15 @@ export function ComplexContent({
                     )
                   )}
                 </Section>
+                <CommuteSection
+                  repo={repo}
+                  home={{
+                    name: complex.name,
+                    address: complex.address,
+                    lat: complex.lat,
+                    lng: complex.lng,
+                  }}
+                />
                 <NearbySchoolsSection complexId={complex.id} repo={repo} />
               </View>
               <View style={{ flex: twoColumns ? 1 : undefined, minWidth: 0 }}>

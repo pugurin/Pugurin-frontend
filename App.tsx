@@ -70,6 +70,12 @@ import {
 import { restoreSession } from "./src/api/restoreSession";
 import { loadRefreshToken, saveRefreshToken } from "./src/state/secureToken";
 import { AccountScreen, LoginScreen, SignupScreen } from "./src/screens/AuthScreens";
+import { CommuteScreen } from "./src/screens/Commute";
+import {
+  CommuteProvider,
+  placeFromSearch,
+  type Place,
+} from "./src/state/commute";
 type Route =
   | { kind: "login" }
   // 처음 로그인한 사람의 가입 마무리
@@ -89,7 +95,11 @@ type Route =
   | { kind: "date" }
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
   // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
-  | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };
+  | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string }
+  // 직장 고르기. home이 있으면 고른 뒤 그 집의 길찾기로 간다
+  | { kind: "workplace"; home?: Place }
+  // 집 → 직장 대중교통 길찾기
+  | { kind: "commute"; home: Place };
 export default function App() {
   const [fonts] = useFonts({
     Pretendard: require("./assets/fonts/Pretendard-Regular.otf"),
@@ -116,6 +126,8 @@ export default function App() {
   // 지도 재개발 레이어. 처음엔 꺼짐이고 켠 상태를 저장한다
   const [redevelopments, setRedevelopments] = useState(false);
   const [recent, setRecent] = useState<Recent[]>([]);
+  // 출퇴근 길찾기의 직장. 이 기기에만 저장한다
+  const [workplace, setWorkplace] = useState<Place | null>(null);
   // 로그인 세션. 기기에 저장해 다음에 열어도 로그인이 유지된다(F-AUTH-02).
   // 백엔드 인증 API 전이라 EXPO_PUBLIC_AUTH_MODE=sample일 때만 앱 안 가짜 서버(SampleAuth)를 켠다.
   // 운영 빌드에는 이 값이 없어 로그인 카드가 "준비 중"으로 남는다
@@ -236,6 +248,7 @@ export default function App() {
     loadStored<"평" | "㎡">("unit", "평").then(setUnit);
     loadStored<"normal" | "satellite">("base", "normal").then(setBase);
     loadStored<boolean>("cad", false).then(setCad);
+    loadStored<Place | null>("workplace", null).then(setWorkplace);
     loadStored<boolean>("schools", false).then(setSchools);
     loadStored<boolean>("hospitals", false).then(setHospitals);
     loadStored<boolean>("redevelopments", false).then(setRedevelopments);
@@ -519,6 +532,34 @@ export default function App() {
         }
       />
     );
+  if (route?.kind === "workplace")
+    overlay = (
+      <SearchScreen
+        title="직장 찾기"
+        placeholder="회사 주소·건물·동네 검색"
+        repo={repo}
+        recent={recent}
+        onRecent={setHistory}
+        onSelect={(r) => {
+          const place = placeFromSearch(r);
+          setWorkplace(place);
+          void store("workplace", place);
+          notify(`직장을 ${place.name}(으)로 정했어요`);
+          setRoute(route.home ? { kind: "commute", home: route.home } : null);
+        }}
+        onBack={() =>
+          setRoute(route.home && workplace ? { kind: "commute", home: route.home } : null)
+        }
+      />
+    );
+  if (route?.kind === "commute")
+    overlay = (
+      <CommuteScreen
+        repo={repo}
+        home={route.home}
+        onBack={() => setRoute(null)}
+      />
+    );
   if (route?.kind === "transactions")
     overlay = (
       <TransactionsScreen
@@ -562,6 +603,13 @@ export default function App() {
         onTerm: (term) => setRoute({ kind: "term", term, map: true }),
       }}
     >
+      <CommuteProvider
+        value={{
+          workplace,
+          pickWorkplace: (home) => setRoute({ kind: "workplace", home }),
+          openRoute: (home) => setRoute({ kind: "commute", home }),
+        }}
+      >
       <SafeAreaView
         style={{ flex: 1, backgroundColor: width > 600 ? "#EAEAE5" : C.bg }}
       >
@@ -807,6 +855,7 @@ export default function App() {
           />
         </View>
       </SafeAreaView>
+      </CommuteProvider>
     </LearningProvider>
   );
 }
