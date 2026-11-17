@@ -7,6 +7,7 @@ import {
   PROVIDERS,
   REQUIRED_AGREEMENTS,
   nicknameError,
+  randomNickname,
   type Agreements,
   type AuthApi,
   type Provider,
@@ -24,38 +25,43 @@ import { kstDateKey } from "../glossary/today";
 
 const SAMPLE_NOTICE = `지금은 화면 확인용 샘플 로그인이에요. 실제 ${PROVIDER_NAMES} 계정에는 연결되지 않아요`;
 
-// 동그란 체크 상자. 글자까지 눌러서 켜고 끈다
+// 체크 상자. 글자까지 눌러서 켜고 끈다
 function Check({
   checked,
   onPress,
   label,
+  tag,
+  sub,
   bold = false,
   right,
 }: {
   checked: boolean;
   onPress: () => void;
   label: string;
+  // 필수·선택 표시
+  tag?: "필수" | "선택";
+  sub?: string;
   bold?: boolean;
   right?: React.ReactNode;
 }) {
   return (
-    <View style={[s.between, { minHeight: 48 }]}>
+    <View style={[s.between, { minHeight: 52 }]}>
       <Pressable
         accessibilityRole="checkbox"
         accessibilityState={{ checked }}
         // 웹(react-native-web)은 accessibilityState.checked를 aria-checked로 옮기지 않아 따로 준다
         aria-checked={checked}
-        accessibilityLabel={label}
+        accessibilityLabel={tag ? `[${tag}] ${label}` : label}
         onPress={onPress}
-        style={[s.row, { flex: 1, paddingVertical: 10, gap: 12 }]}
+        style={[s.row, { flex: 1, paddingVertical: 10, gap: 12, alignItems: "flex-start" }]}
       >
         <View
           style={{
             width: 24,
             height: 24,
-            borderRadius: 12,
+            borderRadius: 6,
             borderWidth: checked ? 0 : 1.5,
-            borderColor: C.rule,
+            borderColor: C.disabled,
             backgroundColor: checked ? C.primary : C.surface,
             alignItems: "center",
             justifyContent: "center",
@@ -63,9 +69,21 @@ function Check({
         >
           {checked && <Icon name="check" size={16} color={C.surface} />}
         </View>
-        <T bold={bold} size={bold ? 17 : 16} style={{ flexShrink: 1 }}>
-          {label}
-        </T>
+        <View style={{ flexShrink: 1, gap: 2 }}>
+          <T bold={bold} size={bold ? 17 : 16}>
+            {tag && (
+              <T bold size={15} color={tag === "필수" ? C.greenInk : C.light}>
+                {tag}{" "}
+              </T>
+            )}
+            {label}
+          </T>
+          {sub && (
+            <T size={13} color={C.light}>
+              {sub}
+            </T>
+          )}
+        </View>
       </Pressable>
       {right}
     </View>
@@ -87,7 +105,7 @@ function ProviderButton({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${p.name}로 시작하기`}
+      accessibilityLabel={p.label}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
@@ -105,9 +123,12 @@ function ProviderButton({
         <ActivityIndicator color={p.ink} />
       ) : (
         <>
-          <ProviderLogo provider={provider} />
+          {/* 로고는 왼쪽 끝, 글자는 가운데 */}
+          <View style={{ position: "absolute", left: 18 }}>
+            <ProviderLogo provider={provider} />
+          </View>
           <T bold size={17} color={p.ink}>
-            {p.name}로 시작하기
+            {p.label}
           </T>
         </>
       )}
@@ -115,92 +136,230 @@ function ProviderButton({
   );
 }
 
-// 로그인. 네이버·카카오·구글 중 하나로 들어오고, 처음이면 onSignup으로 가입 화면에 넘긴다
+// 소셜 로그인 버튼 묶음. 로그인 화면과 로그인 안내 시트가 같이 쓴다.
+// 실패하면 onError(제공자), 사용자가 취소했으면 아무 안내 없이 그대로 둔다(시안 A5)
+function useSignIn(
+  auth: AuthApi,
+  onSession: (session: Session) => void,
+  onSignup: (r: Extract<SignInResult, { kind: "signup" }>) => void,
+) {
+  const [busy, setBusy] = useState<Provider | null>(null);
+  const [failed, setFailed] = useState<{ provider?: Provider; message?: string } | null>(null);
+  const start = (provider: Provider) => {
+    setBusy(provider);
+    setFailed(null);
+    auth
+      .signIn(provider)
+      .then((r) => (r.kind === "session" ? onSession(r.session) : onSignup(r)))
+      .catch((e) => {
+        if (e?.code === "CANCELLED") return;
+        // "준비 중" 같은 안내는 문구 그대로, 그 밖의 실패는 시안의 실패 안내로
+        setFailed(
+          e?.code === "SOURCE_UNAVAILABLE" || e?.code === "NOT_SUPPORTED"
+            ? { message: e.message }
+            : { provider },
+        );
+      })
+      .finally(() => setBusy(null));
+  };
+  return { busy, failed, setFailed, start };
+}
+
+function ProviderButtons({
+  busy,
+  onStart,
+}: {
+  busy: Provider | null;
+  onStart: (p: Provider) => void;
+}) {
+  return (
+    <View style={{ gap: 12 }}>
+      {PROVIDERS.map((p) => (
+        <ProviderButton
+          key={p}
+          provider={p}
+          busy={busy === p}
+          disabled={busy !== null}
+          onPress={() => onStart(p)}
+        />
+      ))}
+    </View>
+  );
+}
+
+// 로그인 실패 안내(시안 A5)
+export function SignInFailed({ provider, message }: { provider?: Provider; message?: string }) {
+  return (
+    <View
+      accessibilityRole="alert"
+      style={{ flexDirection: "row", gap: 10, padding: 14, borderRadius: 12, backgroundColor: C.bg2 }}
+    >
+      <Icon name="info" size={20} color={C.brownInk} />
+      <View style={{ flex: 1, gap: 4 }}>
+        <T bold size={15}>
+          {message ?? `${provider ? `${PROVIDER[provider].name} ` : ""}로그인을 마치지 못했어요`}
+        </T>
+        {!message && (
+          <T size={14} color={C.muted}>
+            잠시 후 다시 시도해 주세요. 계속 안 되면 다른 계정으로 시작할 수 있어요.
+          </T>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// 로그인(시안 A2). 카카오·네이버·구글 중 하나로 들어오고, 처음이면 onSignup으로 약관 동의에 넘긴다
 export function LoginScreen({
   auth,
   onBack,
   onSession,
   onSignup,
+  initialError,
 }: {
   auth: AuthApi;
   onBack: () => void;
   onSession: (session: Session) => void;
   onSignup: (r: Extract<SignInResult, { kind: "signup" }>) => void;
+  // 웹 리다이렉트 로그인이 돌아와서 실패했을 때
+  initialError?: string;
 }) {
-  const [busy, setBusy] = useState<Provider | null>(null);
-  const [error, setError] = useState("");
-  const start = (provider: Provider) => {
-    setBusy(provider);
-    setError("");
-    auth
-      .signIn(provider)
-      .then((r) => (r.kind === "session" ? onSession(r.session) : onSignup(r)))
-      .catch((e) => setError(e?.message ?? "로그인하지 못했어요. 다시 시도해 주세요"))
-      .finally(() => setBusy(null));
-  };
+  const { busy, failed, start } = useSignIn(auth, onSession, onSignup);
+  const shown = failed ?? (initialError ? { message: initialError } : null);
   return (
     <View style={s.screen}>
-      <Header title="로그인 · 회원가입" onBack={onBack} />
-      <ScrollView contentContainerStyle={{ padding: 24, gap: 14, maxWidth: 480, width: "100%", alignSelf: "center" }}>
-        <View style={{ alignItems: "center", gap: 14, paddingVertical: 28 }}>
-          <Brand size={64} />
-          <T size={25} bold style={{ textAlign: "center" }} accessibilityRole="header">
-            가지가지 시작하기
+      <View style={{ paddingHorizontal: 8, paddingTop: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="닫기"
+          onPress={onBack}
+          hitSlop={8}
+          style={{ padding: 10, alignSelf: "flex-start" }}
+        >
+          <Icon name="close" color={C.muted} />
+        </Pressable>
+      </View>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, padding: 24, paddingTop: 4, gap: 12, maxWidth: 480, width: "100%", alignSelf: "center" }}
+      >
+        {shown && <SignInFailed {...shown} />}
+        <View style={{ flex: 1, minHeight: 260, alignItems: "center", justifyContent: "center", gap: 6 }}>
+          <Brand size={104} />
+          <T size={30} bold color={C.brown} accessibilityRole="header">
+            가지가지
           </T>
-          <T color={C.muted} style={{ textAlign: "center" }}>
-            {PROVIDER_NAMES} 계정으로 바로 시작해요.{"\n"}처음이면 가입도 함께 돼요
-          </T>
+          <T color={C.muted}>부산 실거래가 · 토지 지도</T>
         </View>
-        {PROVIDERS.map((p) => (
-          <ProviderButton
-            key={p}
-            provider={p}
-            busy={busy === p}
-            disabled={busy !== null}
-            onPress={() => start(p)}
-          />
-        ))}
-        {error !== "" && (
-          <T color={C.brown} accessibilityRole="alert">
-            {error}
-          </T>
-        )}
-        <T size={14} color={C.muted} style={{ textAlign: "center", marginTop: 6 }}>
-          이메일·비밀번호 가입은 없어요
-        </T>
+        <ProviderButtons busy={busy} onStart={start} />
         <Pressable
           accessibilityRole="button"
           onPress={onBack}
           style={{ alignSelf: "center", paddingVertical: 12, paddingHorizontal: 16 }}
         >
-          <T size={15} color={C.muted} style={{ textDecorationLine: "underline" }}>
+          <T size={15} color={C.muted}>
             로그인 없이 둘러보기
           </T>
         </Pressable>
-        <View style={[s.card, { backgroundColor: C.bg2, gap: 4 }]}>
-          <T size={14} color={C.muted}>
-            지도·검색·용어사전은 로그인하지 않아도 쓸 수 있어요.
+        <T size={13} color={C.light} style={{ textAlign: "center" }}>
+          처음이면 다음 화면에서 약관을 확인하고 가입해요.{"\n"}이메일 가입은 없어요.
+        </T>
+        {auth.source === "sample" && (
+          <T size={13} color={C.light} style={{ textAlign: "center" }}>
+            {SAMPLE_NOTICE}
           </T>
-          {auth.source === "sample" && (
-            <T size={13} color={C.light}>
-              {SAMPLE_NOTICE}
-            </T>
-          )}
-        </View>
+        )}
       </ScrollView>
     </View>
   );
 }
 
-const AGREEMENT_ROWS: { key: keyof Agreements; label: string; terms?: TermKind }[] = [
-  { key: "age14", label: "[필수] 만 14세 이상이에요" },
-  { key: "terms", label: "[필수] 서비스 이용약관 동의", terms: "서비스 이용약관" },
-  { key: "privacy", label: "[필수] 개인정보 수집·이용 동의", terms: "개인정보 처리방침" },
-  { key: "marketing", label: "[선택] 이벤트·혜택 알림 받기" },
-];
-const NONE: Agreements = { terms: false, privacy: false, age14: false, marketing: false };
+// 로그인 안내 시트(시안 A1). 로그인이 필요한 동작(관심 등록·문의하기)을 누르면 지도 위에 띄운다
+export function LoginSheet({
+  auth,
+  title,
+  message,
+  onClose,
+  onSession,
+  onSignup,
+}: {
+  auth: AuthApi;
+  title: string;
+  message: string;
+  onClose: () => void;
+  onSession: (session: Session) => void;
+  onSignup: (r: Extract<SignInResult, { kind: "signup" }>) => void;
+}) {
+  const { busy, failed, start } = useSignIn(auth, onSession, onSignup);
+  return (
+    <View
+      style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, justifyContent: "flex-end" }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="닫기"
+        onPress={onClose}
+        style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(17,17,16,0.35)" }}
+      />
+      <View
+        accessibilityViewIsModal
+        style={{
+          backgroundColor: C.surface,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          padding: 22,
+          paddingTop: 10,
+          gap: 12,
+          width: "100%",
+          maxWidth: 520,
+          alignSelf: "center",
+        }}
+      >
+        <View style={{ alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: C.rule, marginBottom: 8 }} />
+        <T size={21} bold accessibilityRole="header">
+          {title}
+        </T>
+        <T color={C.muted} style={{ marginBottom: 6 }}>
+          {message}
+        </T>
+        {failed && <SignInFailed {...failed} />}
+        <ProviderButtons busy={busy} onStart={start} />
+        <Pressable
+          accessibilityRole="button"
+          onPress={onClose}
+          style={{ alignSelf: "center", paddingVertical: 12, paddingHorizontal: 16 }}
+        >
+          <T size={15} color={C.muted}>
+            나중에 할게요
+          </T>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
 
-// 회원가입. 처음 로그인한 사람만 온다. 닉네임과 동의를 받아 가입을 마친다
+const AGREEMENT_ROWS: {
+  key: keyof Agreements;
+  tag: "필수" | "선택";
+  label: string;
+  sub?: string;
+  terms?: TermKind;
+}[] = [
+  { key: "terms", tag: "필수", label: "이용약관", terms: "서비스 이용약관" },
+  { key: "privacy", tag: "필수", label: "개인정보 수집 · 이용", terms: "개인정보 처리방침" },
+  // 시안에는 없지만 서버가 필수로 받는다(만 14세 미만은 법정대리인 동의가 필요)
+  { key: "age14", tag: "필수", label: "만 14세 이상이에요" },
+  {
+    key: "location",
+    tag: "선택",
+    label: "위치기반 서비스 이용약관",
+    sub: "지도에서 내 위치를 쓸 때 필요해요",
+    terms: "위치기반서비스 이용약관",
+  },
+  { key: "marketing", tag: "선택", label: "광고성 알림 받기", sub: "밤 9시~아침 8시 알림은 따로 여쭤봐요" },
+];
+const NONE: Agreements = { terms: false, privacy: false, age14: false, marketing: false, location: false };
+
+// 약관 동의 · 처음 가입(시안 A3). 처음 로그인한 사람만 온다. 닉네임은 자동으로 만들고 내 정보에서 바꾼다
 export function SignupScreen({
   auth,
   signup,
@@ -212,14 +371,13 @@ export function SignupScreen({
   onBack: () => void;
   onSession: (session: Session) => void;
 }) {
-  const [nickname, setNickname] = useState(signup.nickname ?? "");
+  const [nickname] = useState(() => randomNickname());
   const [agree, setAgree] = useState<Agreements>(NONE);
   const [viewing, setViewing] = useState<TermKind | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const nameError = nicknameError(nickname);
   const all = AGREEMENT_ROWS.every((r) => agree[r.key]);
-  const ready = !nameError && REQUIRED_AGREEMENTS.every((k) => agree[k]);
+  const ready = REQUIRED_AGREEMENTS.every((k) => agree[k]);
   if (viewing) return <TermsScreen kind={viewing} onBack={() => setViewing(null)} />;
   const submit = () => {
     setBusy(true);
@@ -232,70 +390,92 @@ export function SignupScreen({
   };
   return (
     <View style={s.screen}>
-      <Header title="회원가입" onBack={onBack} />
-      <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 40, maxWidth: 520, width: "100%", alignSelf: "center" }}>
-        <T size={24} bold accessibilityRole="header">
-          반가워요!{"\n"}가입을 마무리할게요
+      <Header title="약관 동의" onBack={onBack} />
+      <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 24, maxWidth: 520, width: "100%", alignSelf: "center" }}>
+        <T size={24} bold accessibilityRole="header" style={{ marginBottom: 18 }}>
+          가지가지를 쓰려면{"\n"}동의가 필요해요
         </T>
-        <T color={C.muted} style={{ marginTop: 6 }}>
-          {PROVIDER[signup.provider].name} 계정으로 처음 오셨어요
-        </T>
-        <Section title="닉네임">
-          <TextInput
-            value={nickname}
-            onChangeText={setNickname}
-            maxLength={NICKNAME_MAX}
-            accessibilityLabel="닉네임"
-            placeholder="2~12자, 한글·영문·숫자"
-            style={[s.input, { fontSize: 17, height: 50 }, nickname !== "" && nameError ? { borderColor: C.brown } : null]}
+        <View style={[s.card, { paddingVertical: 2, paddingHorizontal: 14, marginBottom: 10 }]}>
+          <Check
+            bold
+            label="모두 동의"
+            checked={all}
+            onPress={() =>
+              setAgree(all ? NONE : { terms: true, privacy: true, age14: true, marketing: true, location: true })
+            }
           />
-          <T size={14} color={nickname !== "" && nameError ? C.brown : C.muted}>
-            {nickname !== "" && nameError ? nameError : "매물 문의 채팅에서 상대에게 보이는 이름이에요"}
-          </T>
-        </Section>
-        <Section title="약관 동의">
-          <View style={[s.card, { paddingVertical: 4 }]}>
+        </View>
+        {AGREEMENT_ROWS.map((r, i) => (
+          <View key={r.key} style={{ borderTopWidth: i ? 1 : 0, borderColor: C.rule }}>
             <Check
-              bold
-              label="모두 동의해요"
-              checked={all}
-              onPress={() =>
-                setAgree(all ? NONE : { terms: true, privacy: true, age14: true, marketing: true })
+              tag={r.tag}
+              label={r.label}
+              sub={r.sub}
+              checked={!!agree[r.key]}
+              onPress={() => setAgree((a) => ({ ...a, [r.key]: !a[r.key] }))}
+              right={
+                r.terms && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${r.terms} 보기`}
+                    onPress={() => setViewing(r.terms!)}
+                    style={[s.row, { gap: 0, padding: 8 }]}
+                  >
+                    <T size={14} color={C.light}>
+                      보기
+                    </T>
+                    <Icon name="right" size={14} color={C.light} />
+                  </Pressable>
+                )
               }
             />
-            <View style={{ height: 1, backgroundColor: C.rule }} />
-            {AGREEMENT_ROWS.map((r) => (
-              <Check
-                key={r.key}
-                label={r.label}
-                checked={agree[r.key]}
-                onPress={() => setAgree((a) => ({ ...a, [r.key]: !a[r.key] }))}
-                right={
-                  r.terms && (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`${r.terms} 보기`}
-                      onPress={() => setViewing(r.terms!)}
-                      style={{ padding: 8 }}
-                    >
-                      <T size={14} color={C.muted} style={{ textDecorationLine: "underline" }}>
-                        보기
-                      </T>
-                    </Pressable>
-                  )
-                }
-              />
-            ))}
           </View>
-          <T size={13} color={C.light}>
-            선택 항목은 동의하지 않아도 가입할 수 있어요
+        ))}
+        {error !== "" && (
+          <T color={C.brown} accessibilityRole="alert" style={{ marginTop: 12 }}>
+            {error}
           </T>
-        </Section>
-        {error !== "" && <T color={C.brown}>{error}</T>}
-        <Btn disabled={!ready || busy} onPress={submit} style={{ height: 54, marginTop: 8 }}>
-          {busy ? "가입하는 중…" : "가입하고 시작하기"}
-        </Btn>
+        )}
       </ScrollView>
+      <View style={{ padding: 22, paddingTop: 8, maxWidth: 520, width: "100%", alignSelf: "center" }}>
+        <Btn disabled={!ready || busy} onPress={submit} style={{ height: 54 }}>
+          {busy ? "가입하는 중…" : "동의하고 시작하기"}
+        </Btn>
+      </View>
+    </View>
+  );
+}
+
+// 가입 완료(시안 A4). 자동으로 만든 닉네임을 알려 주고, 들어온 화면으로 돌아간다
+export function SignupDoneScreen({ user, onDone }: { user: User; onDone: () => void }) {
+  return (
+    <View style={s.screen}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 22, paddingTop: 56, gap: 16, maxWidth: 520, width: "100%", alignSelf: "center" }}>
+        <View
+          style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: C.greenWash, alignItems: "center", justifyContent: "center" }}
+        >
+          <Icon name="check" size={28} color={C.primary} />
+        </View>
+        <T size={26} bold accessibilityRole="header">
+          가입했어요
+        </T>
+        <View style={[s.card, { padding: 16, gap: 4 }]}>
+          <T size={13} color={C.light}>
+            내 닉네임
+          </T>
+          <T size={20} bold>
+            {user.nickname}
+          </T>
+          <T size={14} color={C.muted}>
+            매물 · 채팅에서 다른 사람에게 보이는 이름이에요. 더보기 › 내 정보에서 바꿀 수 있어요.
+          </T>
+        </View>
+      </ScrollView>
+      <View style={{ padding: 22, paddingTop: 8, maxWidth: 520, width: "100%", alignSelf: "center" }}>
+        <Btn onPress={onDone} style={{ height: 54 }}>
+          돌아가기
+        </Btn>
+      </View>
     </View>
   );
 }

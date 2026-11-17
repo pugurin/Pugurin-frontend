@@ -279,6 +279,7 @@ export function ComplexContent({
   onUnit,
   onAuction,
   onAuctionList,
+  onInterest,
 }: {
   id: string;
   repo: Repository;
@@ -291,6 +292,8 @@ export function ComplexContent({
   onUnit?: (u: "평" | "㎡") => void;
   onAuction?: (id: string) => void;
   onAuctionList?: (complexId: string, name: string) => void;
+  // 관심 등록. 로그인하지 않았으면 App이 로그인 안내 시트를 띄운다
+  onInterest?: (name: string) => void;
 }) {
   const { width } = useWindowDimensions();
   const twoColumns = Platform.OS === "web" && width >= 768 && width < 1024;
@@ -484,7 +487,9 @@ export function ComplexContent({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="관심 단지 등록"
-          onPress={() => notify("관심 등록은 2차에서 열려요")}
+          onPress={() =>
+            onInterest ? onInterest(complex.name) : notify("관심 등록은 2차에서 열려요")
+          }
           style={{
             padding: 12,
             borderWidth: 1,
