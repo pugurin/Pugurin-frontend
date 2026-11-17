@@ -4,6 +4,7 @@ import {
   queryForFilters,
   formatPrice,
   formatArea,
+  areaLabel,
   kakaoZoom,
   validateDraft,
   draftFor,
@@ -75,6 +76,49 @@ describe("지도 필터와 표시 계약", () => {
     expect(
       formatArea({ exclusive_area_pyeong: 25.7, supply_area_pyeong: null }),
     ).toBe("전용 25.7평");
+  });
+});
+
+describe("면적 표기: 공급 평형(전용)", () => {
+  it("공급 평형을 알면 '31평형(전용 25.7평)', 모르면 '전용 25.7평'", () => {
+    expect(areaLabel({ supplyPyeong: 31.2, exclusivePyeong: 25.7 })).toBe(
+      "31평형(전용 25.7평)",
+    );
+    expect(areaLabel({ supplyPyeong: null, exclusivePyeong: 25.7 })).toBe(
+      "전용 25.7평",
+    );
+    // 평이 없으면 ㎡에서 바꿔 쓴다
+    expect(areaLabel({ supplyPyeong: 34, exclusiveM2: 84.97 })).toBe(
+      "34평형(전용 25.7평)",
+    );
+  });
+  it("㎡ 단위면 '102㎡형(전용 84.9㎡)'", () => {
+    expect(
+      areaLabel(
+        { supplyPyeong: 31, exclusivePyeong: 25.7, exclusiveM2: 84.92 },
+        "㎡",
+      ),
+    ).toBe("102㎡형(전용 84.9㎡)");
+    expect(areaLabel({ exclusivePyeong: 25.7 }, "㎡")).toBe("전용 85㎡");
+  });
+  it("전용을 모르면 공급 평형만, 둘 다 모르면 null", () => {
+    expect(areaLabel({ supplyPyeong: 31 })).toBe("31평형");
+    expect(areaLabel({})).toBeNull();
+  });
+  it("거래 면적(formatArea)도 같은 표기를 쓴다. 토지는 토지 면적 그대로", () => {
+    expect(
+      formatArea({ exclusive_area_pyeong: 25.7, supply_area_pyeong: 31.2 }),
+    ).toBe("31평형(전용 25.7평)");
+    expect(
+      formatArea({
+        exclusive_area_pyeong: null,
+        supply_area_pyeong: null,
+        land_area_pyeong: 100,
+      }),
+    ).toBe("100평");
+    expect(
+      formatArea({ exclusive_area_pyeong: null, supply_area_pyeong: null }),
+    ).toBe("면적 정보 없음");
   });
 });
 
