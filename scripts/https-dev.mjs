@@ -1,4 +1,7 @@
 // 브라우저 개발 전용. https://localhost:8443을 Expo 웹(8081)으로 중계한다.
+// /api/로 시작하는 요청은 로컬 백엔드(PUGURIN_API_TARGET, 기본 http://127.0.0.1:8000)로 넘긴다.
+// 운영 Netlify 프록시와 같은 구조(같은 주소·https)라 로그인 쿠키·리디렉션이 운영처럼 동작한다.
+// 이때 웹은 EXPO_PUBLIC_API_URL=/api/v1, 소셜 콘솔·백엔드 허용 목록의 주소는 https://localhost:8443/auth/callback
 // 외부 http를 막는 네트워크에서는 http 페이지의 카카오 SDK가 지도 본체·타일을 http로 받다 실패한다.
 // https 페이지에서는 전부 https로 받는다. 인증서는 처음 실행 때 .cert/에 자체 서명으로 만든다(git 제외).
 import https from "node:https";
@@ -10,6 +13,7 @@ import { execFileSync } from "node:child_process";
 
 const port = Number(process.env.PUGURIN_HTTPS_PORT || 8443);
 const target = Number(process.env.PUGURIN_WEB_PORT || 8081);
+const api = new URL(process.env.PUGURIN_API_TARGET || "http://127.0.0.1:8000");
 const dir = path.join(path.dirname(new URL(import.meta.url).pathname), "..", ".cert");
 const key = path.join(dir, "localhost-key.pem");
 const cert = path.join(dir, "localhost.pem");
@@ -27,13 +31,16 @@ if (!fs.existsSync(key) || !fs.existsSync(cert)) {
 const server = https.createServer(
   { key: fs.readFileSync(key), cert: fs.readFileSync(cert) },
   (req, res) => {
+    const toApi = req.url?.startsWith("/api/");
+    const host = toApi ? api.hostname : "127.0.0.1";
+    const port = toApi ? Number(api.port || 80) : target;
     const upstream = http.request(
       {
-        host: "127.0.0.1",
-        port: target,
+        host,
+        port,
         method: req.method,
         path: req.url,
-        headers: { ...req.headers, host: `localhost:${target}` },
+        headers: { ...req.headers, host: `${toApi ? api.hostname : "localhost"}:${port}` },
       },
       (r) => {
         res.writeHead(r.statusCode ?? 502, r.headers);
@@ -42,7 +49,11 @@ const server = https.createServer(
     );
     upstream.on("error", () => {
       res.writeHead(502, { "Content-Type": "text/plain; charset=utf-8" });
-      res.end(`Expo 웹(${target})에 연결할 수 없어요. npm run web을 먼저 실행하세요`);
+      res.end(
+        toApi
+          ? `로컬 백엔드(${api.origin})에 연결할 수 없어요. 백엔드를 먼저 띄우세요`
+          : `Expo 웹(${target})에 연결할 수 없어요. npm run web을 먼저 실행하세요`,
+      );
     });
     req.pipe(upstream);
   },
