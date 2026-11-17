@@ -11,7 +11,7 @@
 
 # PR 미리보기에서만 가짜 인증 서버로 로그인 화면을 켠다(이 파일 값이 Netlify 화면의 값보다 먼저다).
 # 운영 로그인 설정(EXPO_PUBLIC_AUTH_MODE=api, 소셜 클라이언트 ID)은 Netlify 화면의 환경 변수에 있다.
-# 운영 로그인이 동작하려면 백엔드가 https여야 한다: 아래 프록시를 https 주소로 바꾸고 백엔드에 로그인 키를 넣는다
+# 로그인 토큰이 오가므로 아래 백엔드 프록시는 반드시 https여야 한다
 [context.deploy-preview.environment]
   EXPO_PUBLIC_AUTH_MODE = "sample"
 
