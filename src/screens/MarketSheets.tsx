@@ -513,7 +513,10 @@ export function ComplexContent({
                 {
                   ...tx,
                   supply_area_pyeong: complex.area_types.find(
-                    (a) => a.exclusive_area_m2 === tx.exclusive_area_m2,
+                    (a) =>
+                      tx.exclusive_area_m2 != null &&
+                      Math.round(a.exclusive_area_m2) ===
+                        Math.round(tx.exclusive_area_m2),
                   )?.supply_area_pyeong,
                 },
                 unit,
@@ -649,7 +652,10 @@ export function ComplexContent({
                       tx={{
                         ...t,
                         supply_area_pyeong: complex.area_types.find(
-                          (a) => a.exclusive_area_m2 === t.exclusive_area_m2,
+                          (a) =>
+                            t.exclusive_area_m2 != null &&
+                            Math.round(a.exclusive_area_m2) ===
+                              Math.round(t.exclusive_area_m2),
                         )?.supply_area_pyeong,
                       }}
                       unit={unit}
