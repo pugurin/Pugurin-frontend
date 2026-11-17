@@ -69,11 +69,7 @@ import {
 } from "./src/api/auth";
 import { restoreSession } from "./src/api/restoreSession";
 import { ApiAuth } from "./src/api/apiAuth";
-import {
-  CALLBACK_PATH,
-  RedirectOAuth,
-  webOAuthConfig,
-} from "./src/auth/webOAuth";
+import { RedirectOAuth, webOAuthConfig } from "./src/auth/webOAuth";
 import { loadRefreshToken, saveRefreshToken } from "./src/state/secureToken";
 import {
   AccountScreen,
@@ -166,6 +162,12 @@ export default function App() {
     void store("session", next && toStored(next));
     void saveRefreshToken(next?.refresh_token ?? null);
   };
+  // 웹 소셜 로그인에서 돌아왔으면 로그인을 마친다(소셜 로그인에서 온 게 아니면 null).
+  // 인가 코드는 한 번만 쓸 수 있어 한 번만 부르고, 세션 복원과 로그인 마무리가 같은 결과를 기다린다
+  const signInCallback = useRef<Promise<SignInResult | null> | null>(null);
+  const completeSignIn = () =>
+    (signInCallback.current ??=
+      auth?.completeSignIn?.() ?? Promise.resolve(null));
   const [focus, setFocus] = useState<Focus>();
   // 경매 목록에서 고른 줄. 지도가 그 경매로 이동해 시트를 연다
   const [auctionFocus, setAuctionFocus] = useState<AuctionFocus | null>(null);
@@ -225,19 +227,21 @@ export default function App() {
     // 저장한 세션은 인증 서버에 확인한 뒤에만 되살린다(src/api/restoreSession)
     // 버전은 저장소 읽기 전에 기록한다. 읽는 사이에 로그인·로그아웃하면 복원 결과를 버린다
     const restoreVersion = sessionVersion.current;
-    // 소셜 로그인에서 돌아온 참인지는 지금 읽어 둔다. 로그인 마무리가 곧 주소를 첫 화면으로 바꾼다
-    const fromCallback =
-      Platform.OS === "web" && window.location.pathname === CALLBACK_PATH;
     const isCurrentSession = () => sessionVersion.current === restoreVersion;
     let unmounted = false;
     let stopRestore: (() => void) | undefined;
     Promise.all([
       loadStored<StoredSession | null>("session", null),
       loadRefreshToken(),
-    ]).then(([saved, refreshToken]) => {
+      // 소셜 로그인에서 돌아왔으면 결과를 기다린다. 옛 세션 갱신이 새 토큰·쿠키를 덮지 않게 한다
+      completeSignIn().then(
+        (r) => r !== null,
+        () => false,
+      ),
+    ]).then(([saved, refreshToken, signingIn]) => {
       if (!saved || unmounted || !isCurrentSession()) return;
-      // 소셜 로그인에서 돌아온 참이면 새 로그인이 세션을 정한다. 옛 세션 갱신이 새 토큰·쿠키를 덮지 않게 건너뛴다
-      if (fromCallback) return;
+      // 새 로그인·가입이 세션을 정한다. 로그인이 실패했거나 소셜 로그인에서 온 게 아니면 저장한 세션을 되살린다
+      if (signingIn) return;
       if (!auth) {
         void store("session", null);
         void saveRefreshToken(null);
@@ -393,11 +397,11 @@ export default function App() {
         : `${next.user.nickname}님, 다시 만나 반가워요`,
     );
   };
-  // 웹 소셜 로그인에서 돌아왔으면 로그인을 마친다. 처음 온 사람은 가입 화면으로
+  // 소셜 로그인 결과를 화면에 반영한다. 처음 온 사람은 가입 화면으로
+  // 이 효과는 처음 그린 함수(signedIn·notify)를 계속 쓴다. 두 함수는 ref·setter만 써야 한다
   useEffect(() => {
     let alive = true;
-    auth
-      ?.completeSignIn?.()
+    completeSignIn()
       .then((r) => {
         if (!alive || !r) return;
         if (r.kind === "session") signedIn(r.session, false);

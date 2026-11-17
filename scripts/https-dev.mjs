@@ -32,15 +32,23 @@ const server = https.createServer(
   { key: fs.readFileSync(key), cert: fs.readFileSync(cert) },
   (req, res) => {
     const toApi = req.url?.startsWith("/api/");
-    const host = toApi ? api.hostname : "127.0.0.1";
-    const port = toApi ? Number(api.port || 80) : target;
-    const upstream = http.request(
+    // 백엔드가 https 주소(예: 배포 백엔드)여도 넘길 수 있게 프로토콜·기본 포트를 주소에서 정한다
+    const apiHttps = api.protocol === "https:";
+    const upstream = (toApi && apiHttps ? https : http).request(
       {
-        host,
-        port,
+        host: toApi ? api.hostname : "127.0.0.1",
+        port: toApi ? Number(api.port || (apiHttps ? 443 : 80)) : target,
         method: req.method,
         path: req.url,
-        headers: { ...req.headers, host: `${toApi ? api.hostname : "localhost"}:${port}` },
+        headers: {
+          ...req.headers,
+          host: toApi ? api.host : `localhost:${target}`,
+          // Netlify 프록시처럼 원래 주소(https://localhost:8443)를 알린다
+          ...(toApi && {
+            "x-forwarded-proto": "https",
+            "x-forwarded-host": req.headers.host ?? `localhost:${port}`,
+          }),
+        },
       },
       (r) => {
         res.writeHead(r.statusCode ?? 502, r.headers);
@@ -48,6 +56,8 @@ const server = https.createServer(
       },
     );
     upstream.on("error", () => {
+      // 응답을 보내던 중 끊겼으면 상태 코드를 바꿀 수 없다
+      if (res.headersSent) return void res.destroy();
       res.writeHead(502, { "Content-Type": "text/plain; charset=utf-8" });
       res.end(
         toApi

@@ -124,6 +124,31 @@ describe("소셜 로그인에서 돌아왔을 때(App)", () => {
     expect(auth.restore).not.toHaveBeenCalled();
   });
 
+  it("소셜 로그인이 실패하면 저장된 세션을 되살린다", async () => {
+    storage.values.session = { source: "api", user };
+    auth.completeSignIn.mockRejectedValue(new Error("로그인을 취소했어요"));
+    auth.restore.mockReset().mockResolvedValue(session);
+    fonts.ready = true;
+    render(<App />);
+    await waitFor(() => expect(auth.restore).toHaveBeenCalled());
+    expect(await screen.findByText("로그인을 취소했어요")).toBeTruthy();
+  });
+
+  it("처음 온 사람(가입)이면 저장된 옛 세션을 되살리지 않는다", async () => {
+    storage.values.session = { source: "api", user: { ...user, id: "old" } };
+    auth.completeSignIn.mockResolvedValue({
+      kind: "signup",
+      signup_token: "t",
+      provider: "google",
+      nickname: null,
+    });
+    fonts.ready = true;
+    render(<App />);
+    await waitFor(() => expect(auth.completeSignIn).toHaveBeenCalled());
+    await act(async () => {});
+    expect(auth.restore).not.toHaveBeenCalled();
+  });
+
   it("콜백 주소가 아니면 저장된 세션을 복원한다", async () => {
     window.history.replaceState(null, "", "/");
     storage.values.session = { source: "api", user };
