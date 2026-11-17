@@ -66,18 +66,25 @@ import {
   type Session,
   type SignInResult,
   type StoredSession,
+  type User,
 } from "./src/api/auth";
 import { restoreSession } from "./src/api/restoreSession";
-import { ApiAuth } from "./src/api/apiAuth";
+import { ApiAuth, type TokenPair } from "./src/api/apiAuth";
 import { RedirectOAuth, webOAuthConfig } from "./src/auth/webOAuth";
+import { socialLogin } from "./src/auth/socialLogin";
 import { loadRefreshToken, saveRefreshToken } from "./src/state/secureToken";
 import {
   AccountScreen,
   LoginScreen,
+  LoginSheet,
+  SignupDoneScreen,
   SignupScreen,
 } from "./src/screens/AuthScreens";
 type Route =
-  | { kind: "login" }
+  // error: 웹 리다이렉트 로그인이 돌아와서 실패했을 때 안내
+  | { kind: "login"; error?: string }
+  // 가입 완료(자동으로 만든 닉네임 안내)
+  | { kind: "joined"; user: User }
   // 처음 로그인한 사람의 가입 마무리
   | { kind: "signup"; signup: Extract<SignInResult, { kind: "signup" }> }
   | { kind: "account" }
@@ -96,6 +103,12 @@ type Route =
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
   // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
   | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };
+// 목적격 조사: 받침이 있으면 "을", 없으면 "를"(한글이 아니면 "을(를)")
+function objectParticle(word: string) {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  if (code < 0 || code > 11171) return "을(를)";
+  return code % 28 ? "을" : "를";
+}
 // 백엔드 API 주소. 웹 운영은 Netlify 프록시(/api/v1)
 const API_BASE = apiBase(
   process.env.EXPO_PUBLIC_API_URL ||
@@ -106,11 +119,21 @@ const API_BASE = apiBase(
         ? "http://10.0.2.2:8000/api/v1"
         : "http://localhost:8000/api/v1"),
 );
-// 인증 서버. EXPO_PUBLIC_AUTH_MODE=sample이면 앱 안 가짜 서버, api면 실제 백엔드(웹만, 앱은 소셜 SDK 전이라 준비 중).
-// 값이 없으면 로그인 카드가 "준비 중"으로 남는다
-function makeAuth(): AuthApi | null {
+// 인증 서버. EXPO_PUBLIC_AUTH_MODE=sample이면 앱 안 가짜 서버, api면 실제 백엔드
+// (웹은 리다이렉트, 앱은 카카오 SDK. 앱의 네이버·구글은 준비 중). 값이 없으면 로그인 카드가 "준비 중"으로 남는다
+function makeAuth(
+  onTokens: (tokens: TokenPair, previous: string) => void,
+): AuthApi | null {
   const mode = process.env.EXPO_PUBLIC_AUTH_MODE;
   if (mode === "sample") return new SampleAuth();
+  if (mode === "api" && Platform.OS !== "web")
+    return new ApiAuth({
+      base: API_BASE,
+      deviceId,
+      client: "app",
+      social: socialLogin,
+      onTokens,
+    });
   if (mode === "api" && Platform.OS === "web")
     return new ApiAuth({
       base: API_BASE,
@@ -153,14 +176,30 @@ export default function App() {
   // 로그인 세션. 기기에 저장해 다음에 열어도 로그인이 유지된다(F-AUTH-02).
   // 어떤 인증 서버를 쓸지는 makeAuth가 정한다
   const [session, setSession] = useState<Session | null>(null);
-  const auth = useMemo(makeAuth, []);
+  // 로그인 안내 시트(관심 등록 등 로그인이 필요한 동작을 눌렀을 때)
+  const [loginSheet, setLoginSheet] = useState<{ title: string; message: string } | null>(null);
+  // 앱: 보안 저장소에 있는 refresh token. 갱신 결과가 지금 세션 것일 때만 바꿔 저장한다
+  const storedRefresh = useRef<string | undefined>(undefined);
+  const auth = useMemo(
+    () =>
+      makeAuth((tokens, previous) => {
+        if ((storedRefresh.current ?? "") !== previous) return;
+        storedRefresh.current = tokens.refresh_token;
+        void saveRefreshToken(tokens.refresh_token || null);
+        setSession((prev) =>
+          prev && prev.refresh_token === previous ? { ...prev, ...tokens } : prev,
+        );
+      }),
+    [],
+  );
   // 세션을 바꿀 때마다 올린다. 늦게 끝난 복원이 더 새로운 로그인·로그아웃을 덮지 않게 한다
   const sessionVersion = useRef(0);
   const saveSession = (next: Session | null) => {
     sessionVersion.current += 1;
     setSession(next);
+    storedRefresh.current = next?.refresh_token;
     void store("session", next && toStored(next));
-    void saveRefreshToken(next?.refresh_token ?? null);
+    void saveRefreshToken(next?.refresh_token || null);
   };
   const [focus, setFocus] = useState<Focus>();
   // 경매 목록에서 고른 줄. 지도가 그 경매로 이동해 시트를 연다
@@ -229,6 +268,7 @@ export default function App() {
       loadRefreshToken(),
     ]).then(([saved, refreshToken]) => {
       if (!saved || unmounted || !isCurrentSession()) return;
+      storedRefresh.current = refreshToken;
       if (!auth) {
         void store("session", null);
         void saveRefreshToken(null);
@@ -389,8 +429,12 @@ export default function App() {
       })
       .catch((e) => {
         if (!alive) return;
-        setRoute({ kind: "login" });
-        notify(e?.message ?? "로그인하지 못했어요. 다시 시도해 주세요");
+        // 취소했으면 안내 없이 로그인 화면으로(시안 A5)
+        setRoute(
+          e?.code === "CANCELLED"
+            ? { kind: "login" }
+            : { kind: "login", error: e?.message ?? "로그인을 마치지 못했어요" },
+        );
       });
     return () => {
       alive = false;
@@ -503,15 +547,16 @@ export default function App() {
         }}
       />
     );
+  // 로그인하면 들어온 화면(탭)으로 돌아간다. 처음 가입했으면 가입 완료 화면을 먼저 보여 준다
   const signedIn = (signedInRef.current = (next: Session, joined: boolean) => {
     saveSession(next);
+    setLoginSheet(null);
+    if (joined) {
+      setRoute({ kind: "joined", user: next.user });
+      return;
+    }
     setRoute(null);
-    setTab("more");
-    notify(
-      joined
-        ? `가입을 마쳤어요. 반가워요, ${next.user.nickname}님`
-        : `${next.user.nickname}님, 다시 만나 반가워요`,
-    );
+    notify(`${next.user.nickname}님, 다시 만나 반가워요`);
   });
   if (route?.kind === "login" && auth)
     overlay = (
@@ -520,8 +565,11 @@ export default function App() {
         onBack={() => setRoute(null)}
         onSession={(next) => signedIn(next, false)}
         onSignup={(signup) => setRoute({ kind: "signup", signup })}
+        initialError={route.error}
       />
     );
+  if (route?.kind === "joined")
+    overlay = <SignupDoneScreen user={route.user} onDone={() => setRoute(null)} />;
   if (route?.kind === "signup" && auth)
     overlay = (
       <SignupScreen
@@ -539,7 +587,13 @@ export default function App() {
         onBack={() => setRoute(null)}
         notify={notify}
         onUser={(user) => {
-          saveSession({ ...session, user });
+          // 닉네임을 바꾸는 사이 토큰이 갱신됐을 수 있어 지금 세션에 사용자만 바꿔 넣는다
+          setSession((prev) => {
+            if (!prev) return prev;
+            const next = { ...prev, user };
+            void store("session", toStored(next));
+            return next;
+          });
         }}
         onSignedOut={(withdrawn) => {
           saveSession(null);
@@ -683,6 +737,15 @@ export default function App() {
                 onAuctionList={(args) =>
                   setRoute({ kind: "auctions", ...args })
                 }
+                onInterest={
+                  auth && !session
+                    ? (name) =>
+                        setLoginSheet({
+                          title: "관심 단지는 로그인하면 저장돼요",
+                          message: `${name}${objectParticle(name)} 관심 단지에 넣으려면 로그인이 필요해요. 처음이면 바로 가입돼요.`,
+                        })
+                    : undefined
+                }
               />
             </View>
             {tab === "glossary" && (
@@ -776,6 +839,21 @@ export default function App() {
               </Pressable>
             ))}
           </View>
+          {loginSheet && auth && !route && (
+            <View style={{ position: "absolute", inset: 0, zIndex: 60 }}>
+              <LoginSheet
+                auth={auth}
+                title={loginSheet.title}
+                message={loginSheet.message}
+                onClose={() => setLoginSheet(null)}
+                onSession={(next) => signedIn(next, false)}
+                onSignup={(signup) => {
+                  setLoginSheet(null);
+                  setRoute({ kind: "signup", signup });
+                }}
+              />
+            </View>
+          )}
           {overlay && (
             <View
               style={{
