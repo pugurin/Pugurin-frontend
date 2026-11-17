@@ -1,11 +1,10 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { Repository } from "../api/repository";
 import type { SearchResult } from "../api/types";
+import { groupResults, SEARCH_LABEL, SEARCH_TYPES } from "../state/search";
 import type { Recent } from "../state/storage";
 import { C, FONT } from "../theme/tokens";
 
-const groupLabels = { complex: "단지", region: "동네", address: "주소", school: "학교" };
-const types = ["complex", "school", "region", "address"] as const;
 const label = (result: SearchResult) =>
   result.name ?? result.address ?? "검색 결과";
 
@@ -32,7 +31,7 @@ export function WebSearch({
   const listId = useId();
   const searching = query.trim().length >= 2;
   const options = searching
-    ? types.flatMap((type) => results.filter((result) => result.type === type))
+    ? groupResults(results)
     : recent.map((record) => record.result);
   const optionId = (index: number) => `${listId}-option-${index}`;
 
@@ -250,12 +249,16 @@ export function WebSearch({
             aria-label={searching ? "검색 결과" : "최근 검색"}
           >
             {searching
-              ? types.map((type) => {
+              ? SEARCH_TYPES.map((type) => {
                   const group = options.filter(
                     (result) => result.type === type,
                   );
                   return group.length ? (
-                    <div key={type} role="group" aria-label={groupLabels[type]}>
+                    <div
+                      key={type}
+                      role="group"
+                      aria-label={SEARCH_LABEL[type]}
+                    >
                       <div
                         style={{
                           padding: "12px 8px 6px",
@@ -264,7 +267,7 @@ export function WebSearch({
                           fontWeight: 700,
                         }}
                       >
-                        {groupLabels[type]} · {group.length}
+                        {SEARCH_LABEL[type]} · {group.length}
                       </div>
                       {group.map((result) =>
                         resultRow(result, options.indexOf(result)),

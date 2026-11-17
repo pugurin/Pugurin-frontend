@@ -71,6 +71,8 @@ import {
   type StoredSession,
 } from "./src/api/auth";
 import { restoreSession } from "./src/api/restoreSession";
+import { ApiAuth } from "./src/api/apiAuth";
+import { RedirectOAuth, webOAuthConfig } from "./src/auth/webOAuth";
 import { loadRefreshToken, saveRefreshToken } from "./src/state/secureToken";
 import {
   AccountScreen,
@@ -98,6 +100,34 @@ type Route =
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
   // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
   | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };
+// 백엔드 API 주소. 웹 운영은 Netlify 프록시(/api/v1)
+const API_BASE = apiBase(
+  process.env.EXPO_PUBLIC_API_URL ||
+    process.env.EXPO_PUBLIC_API_BASE ||
+    (Platform.OS === "web"
+      ? "http://localhost:8001/api/v1"
+      : Platform.OS === "android"
+        ? "http://10.0.2.2:8000/api/v1"
+        : "http://localhost:8000/api/v1"),
+);
+// 인증 서버. EXPO_PUBLIC_AUTH_MODE=sample이면 앱 안 가짜 서버, api면 실제 백엔드(웹만, 앱은 소셜 SDK 전이라 준비 중).
+// 값이 없으면 로그인 카드가 "준비 중"으로 남는다
+function makeAuth(): AuthApi | null {
+  const mode = process.env.EXPO_PUBLIC_AUTH_MODE;
+  if (mode === "sample") return new SampleAuth();
+  if (mode === "api" && Platform.OS === "web")
+    return new ApiAuth({
+      base: API_BASE,
+      deviceId,
+      oauth: new RedirectOAuth(webOAuthConfig(window.location.origin), {
+        location: window.location,
+        history: window.history,
+        storage: window.sessionStorage,
+      }),
+    });
+  return null;
+}
+
 export default function App() {
   const [fonts] = useFonts({
     Pretendard: require("./assets/fonts/Pretendard-Regular.otf"),
@@ -125,14 +155,9 @@ export default function App() {
   const [redevelopments, setRedevelopments] = useState(false);
   const [recent, setRecent] = useState<Recent[]>([]);
   // 로그인 세션. 기기에 저장해 다음에 열어도 로그인이 유지된다(F-AUTH-02).
-  // 백엔드 인증 API 전이라 EXPO_PUBLIC_AUTH_MODE=sample일 때만 앱 안 가짜 서버(SampleAuth)를 켠다.
-  // 운영 빌드에는 이 값이 없어 로그인 카드가 "준비 중"으로 남는다
+  // 어떤 인증 서버를 쓸지는 makeAuth가 정한다
   const [session, setSession] = useState<Session | null>(null);
-  const auth = useMemo<AuthApi | null>(
-    () =>
-      process.env.EXPO_PUBLIC_AUTH_MODE === "sample" ? new SampleAuth() : null,
-    [],
-  );
+  const auth = useMemo(makeAuth, []);
   // 세션을 바꿀 때마다 올린다. 늦게 끝난 복원이 더 새로운 로그인·로그아웃을 덮지 않게 한다
   const sessionVersion = useRef(0);
   const saveSession = (next: Session | null) => {
@@ -187,22 +212,7 @@ export default function App() {
     return () => document.removeEventListener("keydown", escape);
   }, [popup, route]);
   const repo = useMemo(
-    () =>
-      new Repository(
-        mode,
-        new ApiClient(
-          apiBase(
-            process.env.EXPO_PUBLIC_API_URL ||
-              process.env.EXPO_PUBLIC_API_BASE ||
-              (Platform.OS === "web"
-                ? "http://localhost:8001/api/v1"
-                : Platform.OS === "android"
-                  ? "http://10.0.2.2:8000/api/v1"
-                  : "http://localhost:8000/api/v1"),
-          ),
-          id,
-        ),
-      ),
+    () => new Repository(mode, new ApiClient(API_BASE, id)),
     [mode, id],
   );
   // 관심 등록(별 버튼). 기기 id가 생긴 뒤 서버에서 담아 둔 id를 받는다
@@ -369,6 +379,29 @@ export default function App() {
       sub.remove();
     };
   }, []);
+  // signedIn은 화면 아래에서 정의된다. 처음 그릴 때 등록한 효과가 최신 함수를 부르게 둔다
+  const signedInRef = useRef<(next: Session, joined: boolean) => void>(
+    () => {},
+  );
+  // 웹 소셜 로그인에서 돌아왔으면 로그인을 마친다. 처음 온 사람은 가입 화면으로
+  useEffect(() => {
+    let alive = true;
+    auth
+      ?.completeSignIn?.()
+      .then((r) => {
+        if (!alive || !r) return;
+        if (r.kind === "session") signedInRef.current(r.session, false);
+        else setRoute({ kind: "signup", signup: r });
+      })
+      .catch((e) => {
+        if (!alive) return;
+        setRoute({ kind: "login" });
+        notify(e?.message ?? "로그인하지 못했어요. 다시 시도해 주세요");
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
   if (initError)
     return (
       <SafeAreaView
@@ -476,7 +509,7 @@ export default function App() {
         }}
       />
     );
-  const signedIn = (next: Session, joined: boolean) => {
+  const signedIn = (signedInRef.current = (next: Session, joined: boolean) => {
     saveSession(next);
     setRoute(null);
     setTab("more");
@@ -485,7 +518,7 @@ export default function App() {
         ? `가입을 마쳤어요. 반가워요, ${next.user.nickname}님`
         : `${next.user.nickname}님, 다시 만나 반가워요`,
     );
-  };
+  });
   if (route?.kind === "login" && auth)
     overlay = (
       <LoginScreen

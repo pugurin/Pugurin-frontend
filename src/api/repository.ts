@@ -1,6 +1,9 @@
 import { ApiClient, ApiError } from "./client";
 import { HOSPITAL_TIERS } from "../state/hospital";
-import { REDEVELOPMENT_LIMIT } from "../state/redevelopment";
+import {
+  REDEVELOPMENT_LIMIT,
+  cleanRedevelopment,
+} from "../state/redevelopment";
 import type {
   Analysis,
   Redevelopment,
@@ -160,7 +163,15 @@ export class Repository {
     });
     try {
       const found = await Promise.race([schools, late]);
-      return { ...base, data: [...base.data, ...found] };
+      // 새 백엔드는 학교도 통합 검색에 담아 준다. 같은 학교는 한 번만 둔다
+      const seen = new Set(base.data.flatMap((x) => (x.school ? [x.school.id] : [])));
+      const extra = found.filter((x) => {
+        const id = x.school?.id;
+        if (!id || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+      return { ...base, data: [...base.data, ...extra] };
     } finally {
       clearTimeout(timer);
       if (onAbort) signal?.removeEventListener("abort", onAbort);
@@ -425,7 +436,9 @@ export class Repository {
       stage: stages.join(","),
       page_size: String(REDEVELOPMENT_LIMIT),
     });
-    return this.client.get<Redevelopment[]>(`/redevelopments?${p}`, signal);
+    return this.client
+      .get<Redevelopment[]>(`/redevelopments?${p}`, signal)
+      .then((r) => ({ ...r, data: r.data.map(cleanRedevelopment) }));
   }
   // 단지 주변 학교. 샘플 모드는 서버처럼 직선거리 3km 안에서 학교급별 가까운 3곳을 고른다
   nearby(complexId: string, signal?: AbortSignal): Promise<Envelope<Nearby>> {

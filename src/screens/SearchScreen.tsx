@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, TextInput, View } from "react-native";
 import type { SearchResult } from "../api/types";
 import type { Repository } from "../api/repository";
+import { groupResults, SEARCH_LABEL } from "../state/search";
 import type { Recent } from "../state/storage";
 import { C } from "../theme/tokens";
 import { Header, Icon, IconBtn, StateCard, T, s } from "../components/ui";
@@ -42,7 +43,7 @@ export function SearchScreen({
           .search(q.trim(), controller.signal)
           .then((r) => {
             if (!controller.signal.aborted) {
-              setResults(r.data);
+              setResults(groupResults(r.data));
               setError(null);
             }
           })
@@ -74,13 +75,7 @@ export function SearchScreen({
       <View style={s.between}>
         <View style={{ flex: 1, gap: 4 }}>
           <T size={12} color={C.light}>
-            {r.type === "complex"
-              ? "단지"
-              : r.type === "school"
-                ? "학교"
-                : r.type === "region"
-                ? "동네"
-                : "주소"}
+            {SEARCH_LABEL[r.type]}
           </T>
           <T size={18} bold>
             {r.name ?? r.address}
