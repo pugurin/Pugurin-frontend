@@ -10,7 +10,7 @@ import type {
 } from "../api/types";
 import { StarButton } from "../components/StarButton";
 import { Chip, Header, StateCard, T, s } from "../components/ui";
-import { auctionSourceLine } from "../state/auction";
+import { auctionSourceLine, auctionTitle } from "../state/auction";
 import { InterestsContext } from "../state/interests";
 import { PROPERTY, formatArea, priceLabel } from "../state/market";
 import { C } from "../theme/tokens";
@@ -132,7 +132,13 @@ export function InterestsScreen({
               a={x.auction}
               unit={unit}
               onPress={() => onAuction(x.auction)}
-              trailing={<StarButton kind="auction" id={x.auction.id} />}
+              trailing={
+                <StarButton
+                  kind="auction"
+                  id={x.auction.id}
+                  name={auctionTitle(x.auction)}
+                />
+              }
             />
           ))
         )}
@@ -193,7 +199,7 @@ function ComplexRow({
           </T>
         )}
       </Pressable>
-      <StarButton kind="complex" id={complex.id} />
+      <StarButton kind="complex" id={complex.id} name={complex.name} />
     </View>
   );
 }

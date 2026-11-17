@@ -454,7 +454,7 @@ export function ComplexContent({
           {complex.name}
         </T>
         {onUnit && <UnitToggle unit={unit} onUnit={onUnit} />}
-        <StarButton kind="complex" id={complex.id} />
+        <StarButton kind="complex" id={complex.id} name={complex.name} />
       </View>
       <View style={[s.row, { gap: 8 }]}>
         <T size={14} color={C.muted} style={{ flex: 1 }}>

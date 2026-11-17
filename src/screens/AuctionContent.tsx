@@ -327,7 +327,7 @@ export function AuctionContent({
         <T size={stage === "full" ? 24 : 21} bold style={{ flex: 1 }}>
           {auctionTitle(a)}
         </T>
-        <StarButton kind="auction" id={a.id} />
+        <StarButton kind="auction" id={a.id} name={auctionTitle(a)} />
       </View>
       {sub !== "" && (
         <T size={14} color={C.muted}>

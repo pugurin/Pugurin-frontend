@@ -6,14 +6,23 @@ import { C } from "../theme/tokens";
 import { Icon } from "./ui";
 
 // 단지·경매 시트 제목 옆, 관심 목록 줄 끝의 관심 등록 ★. 담겨 있으면 채운 별과 강조색
-export function StarButton({ kind, id }: { kind: InterestKind; id: string }) {
+// name을 주면 라벨에 넣어 목록에서 어느 단지·물건의 별인지 읽히게 한다
+export function StarButton({
+  kind,
+  id,
+  name,
+}: {
+  kind: InterestKind;
+  id: string;
+  name?: string;
+}) {
   const v = useContext(InterestsContext);
   const on = v.has(kind, id);
   const what = kind === "complex" ? "단지" : "경매";
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`관심 ${what} ${on ? "해제" : "등록"}`}
+      accessibilityLabel={`${name ? `${name} ` : ""}관심 ${what} ${on ? "해제" : "등록"}`}
       aria-pressed={on}
       onPress={() => v.toggle(kind, id)}
       style={({ pressed }) => ({
