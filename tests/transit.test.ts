@@ -7,7 +7,7 @@ const HOME = { lat: 35.163102, lng: 129.163598 }; // 해운대
 const WORK = { lat: 35.154612, lng: 129.059887 }; // 서면
 
 describe("대중교통 길찾기", () => {
-  it("백엔드 /transit/routes로 소수 5자리 좌표를 보낸다", async () => {
+  it("백엔드 /transit/routes로 소수 3자리(약 100m) 좌표를 보낸다", async () => {
     let url = "";
     const data: TransitResult = { routes: [], unavailable_reason: "no_route" };
     const repo = new Repository(
@@ -19,24 +19,44 @@ describe("대중교통 길찾기", () => {
     );
     const result = await repo.transitRoute(HOME, WORK);
     expect(url).toBe(
-      "http://api/api/v1/transit/routes?from_lat=35.16310&from_lng=129.16360&to_lat=35.15461&to_lng=129.05989&limit=3",
+      "http://api/api/v1/transit/routes?from_lat=35.163&from_lng=129.164&to_lat=35.155&to_lng=129.060&limit=3",
     );
     expect(result.data).toEqual(data);
   });
 
-  it("공급처 장애는 서버가 준 오류 코드로 알린다", async () => {
+  it("좌표 형식 오류는 서버가 준 오류 코드로 알린다", async () => {
     const repo = new Repository(
       "api",
       new ApiClient("http://api", "d", async () =>
         new Response(
-          JSON.stringify({ error: { code: "INVALID_PARAMETER", message: "좌표가 올바르지 않아요" } }),
+          JSON.stringify({ error: { code: "VALIDATION_ERROR", message: "좌표가 올바르지 않아요" } }),
           { status: 400 },
         ),
       ),
     );
     await expect(repo.transitRoute(HOME, WORK)).rejects.toMatchObject({
-      code: "INVALID_PARAMETER",
+      code: "VALIDATION_ERROR",
       message: "좌표가 올바르지 않아요",
+    });
+  });
+
+  const failing = (status: number, code?: string) =>
+    new Repository(
+      "api",
+      new ApiClient("http://api", "d", async () =>
+        new Response(JSON.stringify(code ? { error: { code, message: "x" } } : {}), { status }),
+      ),
+    );
+  it("백엔드에 길찾기가 아직 없으면(404) 준비 중으로 알린다", async () => {
+    expect((await failing(404).transitRoute(HOME, WORK)).data).toEqual({
+      routes: [],
+      unavailable_reason: "not_ready",
+    });
+  });
+  it("공급처 장애(503 SOURCE_UNAVAILABLE)는 다시 시도할 수 있는 이유로 바꾼다", async () => {
+    expect((await failing(503, "SOURCE_UNAVAILABLE").transitRoute(HOME, WORK)).data).toEqual({
+      routes: [],
+      unavailable_reason: "source_unavailable",
     });
   });
 

@@ -3,8 +3,10 @@ import { Pressable, ScrollView, View } from "react-native";
 import type { Repository } from "../api/repository";
 import type { TransitResult, TransitRoute } from "../api/transit";
 import {
+  RETRYABLE,
   UNAVAILABLE_TEXT,
   legColor,
+  legInk,
   legText,
   minutesLabel,
   MODE_LABEL,
@@ -15,6 +17,9 @@ import { C } from "../theme/tokens";
 import { Btn, Header, Icon, IconBtn, Section, StateCard, T, s } from "../components/ui";
 
 const SOURCE = "경로 정보: ODsay · 실제 시간은 배차·교통 상황에 따라 달라요";
+// 직장 위치가 기기 밖으로 나간다는 안내. 좌표는 약 100m 단위로 줄여 보낸다
+const PRIVACY =
+  "경로를 찾으려고 집·직장 위치(약 100m 단위)를 우리 서버를 거쳐 ODsay에 보내요. 직장은 이 기기에만 저장돼요";
 const SAMPLE_NOTICE = "샘플 경로예요. 직선거리로 만든 가짜 시간이라 실제와 달라요";
 
 // 경로 조회 공통. from·to가 바뀌면 다시 부른다
@@ -66,6 +71,13 @@ export function CommuteSection({ repo, home }: { repo: Repository; home: Place }
   const { result, error, loading } = useTransit(repo, workplace && home, workplace);
   if (!commute) return null;
   const best = result?.routes[0];
+  const status = loading
+    ? "경로를 찾는 중"
+    : error
+      ? error
+      : best
+        ? `${minutesLabel(best.total_minutes)}, ${summary(best)}`
+        : UNAVAILABLE_TEXT[result?.unavailable_reason ?? "no_route"];
   return (
     <Section title="출퇴근 (대중교통)">
       {!workplace ? (
@@ -78,7 +90,7 @@ export function CommuteSection({ repo, home }: { repo: Repository; home: Place }
       ) : (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${workplace.name}까지 경로 자세히 보기`}
+          accessibilityLabel={`${workplace.name}까지 ${status}. 경로 자세히 보기`}
           onPress={() => commute.openRoute(home)}
           style={[s.card, { gap: 8 }]}
         >
@@ -169,28 +181,31 @@ function RouteCard({
   open: boolean;
   onPress: () => void;
 }) {
+  // 펼친 구간 목록은 버튼 밖에 두어 스크린리더가 한 줄씩 읽게 한다
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ expanded: open }}
-      accessibilityLabel={`경로 ${rank + 1}, ${minutesLabel(route.total_minutes)}`}
-      onPress={onPress}
-      style={[s.card, { gap: 8 }, open && { borderColor: C.greenRule }]}
-    >
-      <View style={s.between}>
-        <T size={22} bold>
-          {minutesLabel(route.total_minutes)}
-        </T>
-        {rank === 0 && (
-          <T size={12} color={C.greenInk}>
-            가장 빠름
+    <View style={[s.card, { gap: 8 }, open && { borderColor: C.greenRule }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`경로 ${rank + 1}${rank === 0 ? ", 가장 빠름" : ""}, ${minutesLabel(route.total_minutes)}, ${summary(route)}`}
+        onPress={onPress}
+        style={{ gap: 8 }}
+      >
+        <View style={s.between}>
+          <T size={22} bold>
+            {minutesLabel(route.total_minutes)}
           </T>
-        )}
-      </View>
-      <T size={13} color={C.muted}>
-        {summary(route)}
-      </T>
-      <LegBar route={route} />
+          {rank === 0 && (
+            <T size={12} color={C.greenInk}>
+              가장 빠름
+            </T>
+          )}
+        </View>
+        <T size={13} color={C.muted}>
+          {summary(route)}
+        </T>
+        <LegBar route={route} />
+      </Pressable>
       {open && (
         <View style={{ marginTop: 6, gap: 2 }}>
           {route.legs.map((l, i) => (
@@ -204,7 +219,7 @@ function RouteCard({
                   backgroundColor: legColor(l),
                 }}
               >
-                <T size={11} bold color="#fff">
+                <T size={11} bold color={legInk(l)}>
                   {MODE_LABEL[l.mode]}
                 </T>
               </View>
@@ -218,7 +233,7 @@ function RouteCard({
           ))}
         </View>
       )}
-    </Pressable>
+    </View>
   );
 }
 
@@ -275,7 +290,14 @@ export function CommuteScreen({
               {loading || error ? (
                 <StateCard loading={loading} error={error} onRetry={() => setRetry((x) => x + 1)} />
               ) : result && result.routes.length === 0 ? (
-                <StateCard empty={UNAVAILABLE_TEXT[result.unavailable_reason ?? "no_route"]} />
+                RETRYABLE.includes(result.unavailable_reason ?? "no_route") ? (
+                  <StateCard
+                    error={UNAVAILABLE_TEXT[result.unavailable_reason!]}
+                    onRetry={() => setRetry((x) => x + 1)}
+                  />
+                ) : (
+                  <StateCard empty={UNAVAILABLE_TEXT[result.unavailable_reason ?? "no_route"]} />
+                )
               ) : (
                 result?.routes.map((r, i) => (
                   <RouteCard
@@ -291,6 +313,12 @@ export function CommuteScreen({
                 {repo.mode === "sample" ? SAMPLE_NOTICE : SOURCE}
               </T>
             </Section>
+            <T size={12} color={C.light}>
+              {PRIVACY}
+            </T>
+            <Btn small secondary icon="close" onPress={() => commute?.clearWorkplace()}>
+              직장 지우기
+            </Btn>
           </>
         )}
       </ScrollView>

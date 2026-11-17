@@ -15,6 +15,7 @@ import {
 } from "../state/auction";
 import { pyeongType } from "../state/market";
 import { C } from "../theme/tokens";
+import { StarButton } from "../components/StarButton";
 
 const KST_OFFSET_MS = 9 * 3600000;
 // 노란 칩(지분 물건). 디자인 토큰에 노랑이 없어 여기서만 쓴다
@@ -322,9 +323,12 @@ export function AuctionContent({
           </Badge>
         )}
       </View>
-      <T size={stage === "full" ? 24 : 21} bold style={{ marginTop: 8 }}>
-        {auctionTitle(a)}
-      </T>
+      <View style={[s.between, { marginTop: 8, alignItems: "flex-start" }]}>
+        <T size={stage === "full" ? 24 : 21} bold style={{ flex: 1 }}>
+          {auctionTitle(a)}
+        </T>
+        <StarButton kind="auction" id={a.id} name={auctionTitle(a)} />
+      </View>
       {sub !== "" && (
         <T size={14} color={C.muted}>
           {sub}

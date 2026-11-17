@@ -15,8 +15,6 @@ export type TransitLeg = {
   end_name: string | null;
   // 탄 정류장 수. 걷기는 null
   stop_count: number | null;
-  // [lng, lat] 목록. 서버가 경로 모양을 못 주면 null
-  path: [number, number][] | null;
 };
 export type TransitRoute = {
   total_minutes: number;
@@ -28,16 +26,21 @@ export type TransitRoute = {
   legs: TransitLeg[];
 };
 // too_close: 출발·도착이 가까워 걸어가는 게 나음(ODsay는 700m 이내면 경로를 주지 않음)
-// no_route: 대중교통 경로 없음 / source_unavailable: 공급처 장애·호출 한도 초과
-export type TransitUnavailable = "too_close" | "no_route" | "source_unavailable";
+// no_route: 대중교통 경로 없음 / source_unavailable: 공급처 장애·호출 한도 초과(다시 시도할 수 있음)
+// not_ready: 백엔드에 길찾기 API가 아직 없음(404). 다시 시도해도 같다
+export type TransitUnavailable =
+  | "too_close"
+  | "no_route"
+  | "source_unavailable"
+  | "not_ready";
 export type TransitResult = {
   routes: TransitRoute[];
   unavailable_reason: TransitUnavailable | null;
 };
 
 export const TRANSIT_ROUTE_LIMIT = 3;
-// 좌표는 소수 5자리(약 1m)로 맞춰 서버 캐시가 잘 맞게 한다
-const coord = (n: number) => n.toFixed(5);
+// 좌표는 소수 3자리(약 100m)로 줄여 보낸다. 직장 위치를 정밀하게 남기지 않고, 서버 캐시도 잘 맞는다
+const coord = (n: number) => n.toFixed(3);
 export function transitQuery(from: LatLng, to: LatLng, limit = TRANSIT_ROUTE_LIMIT) {
   return new URLSearchParams({
     from_lat: coord(from.lat),
@@ -67,8 +70,6 @@ export function sampleTransit(from: LatLng, to: LatLng): Envelope<TransitResult>
     return { data: { routes: [], unavailable_reason: "too_close" } };
   // 실제 이동거리는 직선의 1.3배쯤
   const ride = Math.round(d * 1.3);
-  const mid: [number, number] = [(from.lng + to.lng) / 2, (from.lat + to.lat) / 2];
-  const line: [number, number][] = [[from.lng, from.lat], mid, [to.lng, to.lat]];
   const walk = (m: number, start: string | null, end: string | null): TransitLeg => ({
     mode: "walk",
     minutes: Math.max(1, Math.round(m / 67)),
@@ -77,7 +78,6 @@ export function sampleTransit(from: LatLng, to: LatLng): Envelope<TransitResult>
     start_name: start,
     end_name: end,
     stop_count: null,
-    path: null,
   });
   const make = (legs: TransitLeg[], fare: number): TransitRoute => ({
     total_minutes: legs.reduce((s, l) => s + l.minutes, 0),
@@ -99,7 +99,6 @@ export function sampleTransit(from: LatLng, to: LatLng): Envelope<TransitResult>
         start_name: "출발역",
         end_name: "도착역",
         stop_count: Math.max(1, Math.round(ride / 1200)),
-        path: line,
       },
       walk(300, "도착역", null),
     ],
@@ -116,7 +115,6 @@ export function sampleTransit(from: LatLng, to: LatLng): Envelope<TransitResult>
         start_name: "출발 정류장",
         end_name: "도착 정류장",
         stop_count: Math.max(1, Math.round(ride / 500)),
-        path: line,
       },
       walk(250, "도착 정류장", null),
     ],

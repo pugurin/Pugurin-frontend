@@ -36,6 +36,7 @@ import {
 } from "../components/ui";
 import { auctionSub, dday, ddayKey, formatWon } from "../state/auction";
 import { areaOf } from "./AuctionContent";
+import { StarButton } from "../components/StarButton";
 import { LoadingTip } from "../components/LoadingTip";
 import { Chart } from "../components/Chart";
 import { TransactionRow } from "../components/TransactionRow";
@@ -482,20 +483,7 @@ export function ComplexContent({
           {complex.name}
         </T>
         {onUnit && <UnitToggle unit={unit} onUnit={onUnit} />}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="관심 단지 등록"
-          onPress={() => notify("관심 등록은 2차에서 열려요")}
-          style={{
-            padding: 12,
-            borderWidth: 1,
-            borderStyle: "dashed",
-            borderColor: C.disabled,
-            borderRadius: 12,
-          }}
-        >
-          <Icon name="star" color={C.light} />
-        </Pressable>
+        <StarButton kind="complex" id={complex.id} name={complex.name} />
       </View>
       <View style={[s.row, { gap: 8 }]}>
         <T size={14} color={C.muted} style={{ flex: 1 }}>

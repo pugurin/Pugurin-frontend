@@ -19,6 +19,8 @@ export type CommuteApi = {
   workplace: Place | null;
   // 직장을 고르고, home이 있으면 고른 뒤 그 집에서 길찾기를 연다
   pickWorkplace: (home?: Place) => void;
+  // 기기에 저장한 직장을 지운다
+  clearWorkplace: () => void;
   openRoute: (home: Place) => void;
 };
 const CommuteContext = createContext<CommuteApi | null>(null);
@@ -45,6 +47,9 @@ export const MODE_LABEL: Record<TransitMode, string> = {
   etc: "기타",
 };
 export const legColor = (l: TransitLeg) => l.line?.color ?? MODE_COLOR[l.mode];
+// 구간 배지 글자색. 밝은 회색(도보) 위 흰 글씨는 대비가 약해 진한 글씨를 쓴다
+export const legInk = (l: TransitLeg) =>
+  !l.line?.color && l.mode === "walk" ? "#111110" : "#fff";
 
 // 구간 한 줄 설명. "부산 2호선 · 해운대역 → 서면역 (15개 역)"
 export function legText(l: TransitLeg) {
@@ -62,4 +67,7 @@ export const UNAVAILABLE_TEXT: Record<TransitUnavailable, string> = {
   too_close: "집과 직장이 700m 안이라 걸어가는 게 빨라요",
   no_route: "대중교통으로 가는 경로를 찾지 못했어요",
   source_unavailable: "길찾기 정보를 잠시 불러올 수 없어요. 잠시 뒤 다시 시도해 주세요",
+  not_ready: "대중교통 길찾기는 준비 중이에요",
 };
+// 다시 시도하면 나아질 수 있는 경우
+export const RETRYABLE: TransitUnavailable[] = ["source_unavailable"];
