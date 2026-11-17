@@ -72,7 +72,11 @@ import {
 } from "./src/api/auth";
 import { restoreSession } from "./src/api/restoreSession";
 import { ApiAuth } from "./src/api/apiAuth";
-import { RedirectOAuth, webOAuthConfig } from "./src/auth/webOAuth";
+import {
+  CALLBACK_PATH,
+  RedirectOAuth,
+  webOAuthConfig,
+} from "./src/auth/webOAuth";
 import { loadRefreshToken, saveRefreshToken } from "./src/state/secureToken";
 import {
   AccountScreen,
@@ -227,6 +231,9 @@ export default function App() {
     // 저장한 세션은 인증 서버에 확인한 뒤에만 되살린다(src/api/restoreSession)
     // 버전은 저장소 읽기 전에 기록한다. 읽는 사이에 로그인·로그아웃하면 복원 결과를 버린다
     const restoreVersion = sessionVersion.current;
+    // 소셜 로그인에서 돌아온 참인지는 지금 읽어 둔다. 로그인 마무리가 곧 주소를 첫 화면으로 바꾼다
+    const fromCallback =
+      Platform.OS === "web" && window.location.pathname === CALLBACK_PATH;
     const isCurrentSession = () => sessionVersion.current === restoreVersion;
     let unmounted = false;
     let stopRestore: (() => void) | undefined;
@@ -235,6 +242,8 @@ export default function App() {
       loadRefreshToken(),
     ]).then(([saved, refreshToken]) => {
       if (!saved || unmounted || !isCurrentSession()) return;
+      // 소셜 로그인에서 돌아온 참이면 새 로그인이 세션을 정한다. 옛 세션 갱신이 새 토큰·쿠키를 덮지 않게 건너뛴다
+      if (fromCallback) return;
       if (!auth) {
         void store("session", null);
         void saveRefreshToken(null);
@@ -379,10 +388,17 @@ export default function App() {
       sub.remove();
     };
   }, []);
-  // signedIn은 화면 아래에서 정의된다. 처음 그릴 때 등록한 효과가 최신 함수를 부르게 둔다
-  const signedInRef = useRef<(next: Session, joined: boolean) => void>(
-    () => {},
-  );
+  // 로그인·가입을 마쳤을 때. 글꼴·기기 id 준비 전(아래 early return 전)에도 부를 수 있게 여기서 정의한다
+  const signedIn = (next: Session, joined: boolean) => {
+    saveSession(next);
+    setRoute(null);
+    setTab("more");
+    notify(
+      joined
+        ? `가입을 마쳤어요. 반가워요, ${next.user.nickname}님`
+        : `${next.user.nickname}님, 다시 만나 반가워요`,
+    );
+  };
   // 웹 소셜 로그인에서 돌아왔으면 로그인을 마친다. 처음 온 사람은 가입 화면으로
   useEffect(() => {
     let alive = true;
@@ -390,7 +406,7 @@ export default function App() {
       ?.completeSignIn?.()
       .then((r) => {
         if (!alive || !r) return;
-        if (r.kind === "session") signedInRef.current(r.session, false);
+        if (r.kind === "session") signedIn(r.session, false);
         else setRoute({ kind: "signup", signup: r });
       })
       .catch((e) => {
@@ -509,16 +525,6 @@ export default function App() {
         }}
       />
     );
-  const signedIn = (signedInRef.current = (next: Session, joined: boolean) => {
-    saveSession(next);
-    setRoute(null);
-    setTab("more");
-    notify(
-      joined
-        ? `가입을 마쳤어요. 반가워요, ${next.user.nickname}님`
-        : `${next.user.nickname}님, 다시 만나 반가워요`,
-    );
-  });
   if (route?.kind === "login" && auth)
     overlay = (
       <LoginScreen
