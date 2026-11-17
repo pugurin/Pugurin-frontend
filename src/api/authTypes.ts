@@ -59,6 +59,8 @@ export interface AuthApi {
   // 저장한 세션을 서버에 확인하고 새 세션으로 바꾼다(refresh 후 /users/me).
   // 계정이 없거나 토큰이 만료됐으면 UNAUTHORIZED를 던진다
   restore(saved: StoredSession, refreshToken?: string): Promise<Session>;
+  // 리다이렉트 로그인(웹 실제 서버): 소셜 로그인에서 돌아왔으면 로그인을 마친다. 아니면 null
+  completeSignIn?(): Promise<SignInResult | null>;
 }
 
 export const NICKNAME_MIN = 2;

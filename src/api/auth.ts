@@ -16,8 +16,7 @@ import {
 } from "./authTypes";
 export * from "./authTypes";
 
-// 백엔드 인증 API가 아직 없어 지금은 SampleAuth(앱 안 가짜 서버)만 쓴다.
-// 요청할 API 모양은 docs/BACKEND_AUTH_REQUEST.md에 있다
+// 실제 서버 인증은 ApiAuth(src/api/apiAuth.ts, 웹만). 여기의 SampleAuth는 화면 확인용 가짜 서버다
 // 앱 안 가짜 인증 서버. 가입한 계정을 기기에 저장해서, 같은 소셜 계정으로 다시 로그인하면 바로 들어간다.
 // 실제 소셜 계정에는 연결하지 않는다
 type SampleAccount = { provider: Provider; user: User };
