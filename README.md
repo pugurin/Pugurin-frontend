@@ -19,6 +19,15 @@ iOS 시뮬레이터 API 주소는 localhost:8000, Android 에뮬레이터는 10.
 
 외부 http를 막는 네트워크(학교·회사망 등)에서는 `http://localhost:8081`의 지도가 빈 화면이 된다. 카카오 SDK가 http 페이지에서는 지도 본체와 타일도 http로 받기 때문이다. 이때는 위 두 개에 더해 `npm run web:https`를 실행하고 `https://localhost:8443`을 연다. 처음 실행하면 `.cert/`에 자체 서명 인증서를 만들고(openssl 필요), 브라우저가 처음 한 번 인증서 경고를 띄우면 "고급 → 이동"으로 넘긴다. 카카오 콘솔 JavaScript SDK 도메인에 `https://localhost:8443`도 등록해야 한다.
 
+### 로그인 로컬 시험(웹, 실제 백엔드)
+
+운영(Netlify)처럼 같은 주소·https에서 돌려야 로그인 쿠키와 소셜 리디렉션이 동작한다. `npm run web:https`가 `/api/`를 로컬 백엔드(`PUGURIN_API_TARGET`, 기본 `http://127.0.0.1:8000`)로 넘긴다.
+
+1. 백엔드 `backend/.env`에 `PUGURIN_JWT_SECRET`, 제공자 키, `PUGURIN_AUTH_REDIRECT_URIS=https://localhost:8443/auth/callback`을 넣고 백엔드를 띄운다(백엔드 README의 `docker compose up --build`).
+2. 소셜 콘솔에 리디렉션 주소 `https://localhost:8443/auth/callback`을 등록한다.
+3. 웹 `.env.local`에 `EXPO_PUBLIC_AUTH_MODE=api`, `EXPO_PUBLIC_API_URL=/api/v1`, 제공자 클라이언트 ID(`.env.example`)를 넣는다.
+4. `npx expo start --web --port 8082`와 `PUGURIN_WEB_PORT=8082 npm run web:https`를 띄우고 `https://localhost:8443`을 연다. 이 설정에서는 `http://localhost:8082`로 직접 열면 API를 부르지 못한다.
+
 웹 배포는 Netlify가 [`netlify.toml`](./netlify.toml)대로 한다. main에 머지되면 `npm run build:web`으로 `dist/`를 만들어 올린다. 배포 웹은 같은 주소의 `/api/v1`을 부르고, Netlify가 이를 백엔드로 넘긴다(프록시). 그래서 브라우저가 백엔드를 직접 부르지 않아 CORS 설정이 필요 없다. 백엔드에 HTTPS 도메인이 생기면 `netlify.toml`의 프록시 주소만 바꾼다. `EXPO_PUBLIC_*` 값은 빌드할 때 번들에 들어가므로, 카카오 키나 약관 URL은 Netlify 사이트 설정의 환경 변수에 넣고 다시 배포한다.
 
 ### 카카오맵 키
