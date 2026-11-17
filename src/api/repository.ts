@@ -45,6 +45,12 @@ import {
   sampleTransactions,
 } from "./fixtures";
 import { queryForFilters, TREND_MONTHS } from "../state/market";
+import {
+  sampleTransit,
+  transitQuery,
+  type LatLng,
+  type TransitResult,
+} from "./transit";
 import { LOCAL_SCHOOL_ZONES, LOCAL_ZONE_META } from "./schoolZonesLocal";
 export type Mode = "api" | "sample";
 // 학교 이름 검색에 쓰는 부산 범위(min_lng, min_lat, max_lng, max_lat)
@@ -451,6 +457,19 @@ export class Repository {
       `/complexes/${encodeURIComponent(complexId)}/nearby`,
       signal,
     );
+  }
+  // 집 → 직장 대중교통 경로. 백엔드가 ODsay를 대신 호출한다(키는 서버에만 둔다)
+  transitRoute(
+    from: LatLng,
+    to: LatLng,
+    signal?: AbortSignal,
+  ): Promise<Envelope<TransitResult>> {
+    return this.mode === "sample"
+      ? Promise.resolve(sampleTransit(from, to))
+      : this.client.get<TransitResult>(
+          `/transit/routes?${transitQuery(from, to)}`,
+          signal,
+        );
   }
   // 검색 결과·필지 마커처럼 PNU를 이미 알 때. 응답 형태는 parcelLookup과 같다
   parcel(pnu: string, signal?: AbortSignal) {
