@@ -209,6 +209,23 @@ describe("학교 이름 검색", () => {
     expect(urls.filter((u) => u.includes("/schools?"))).toHaveLength(2);
   });
 
+  it("서버 통합 검색이 이미 준 학교는 앱 목록에서 다시 붙이지 않는다", async () => {
+    const fromServer = { type: "school", name: "연신초등학교", lat: 35.18, lng: 129.08, school: school("e1", "연신초등학교") };
+    const repo = new Repository(
+      "api",
+      new ApiClient("http://api", "d", async (value) => {
+        const u = decodeURIComponent(String(value));
+        return new Response(
+          JSON.stringify({
+            data: u.includes("/schools?") ? [school("e1", "연신초등학교"), school("e2", "연신중학교")] : [fromServer],
+          }),
+        );
+      }),
+    );
+    const r = await repo.search("연신");
+    expect(r.data.map((x) => x.name)).toEqual(["연신초등학교", "연신중학교"]);
+  });
+
   it("샘플 모드는 샘플 학교에서 찾는다", async () => {
     const repo = new Repository("sample", {} as never);
     const r = await repo.search("우동초");

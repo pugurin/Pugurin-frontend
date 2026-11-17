@@ -708,6 +708,9 @@ export function MapHome({
         lng: r.lng,
         zoom: r.region_level === "sigungu" ? 12 : 14,
       });
+    } else if (r.type === "station") {
+      // 역은 지도만 옮긴다(토지 탭이어도 필지를 열지 않는다)
+      move({ type: "move", lat: r.lat, lng: r.lng, zoom: 15 });
     } else {
       if (isLand)
         pendingLand.current = {

@@ -8,7 +8,9 @@ import {
   REDEVELOPMENT_DONE_COLOR,
   REDEVELOPMENT_MAP_STAGES,
   REDEVELOPMENT_STEPS,
+  cleanRedevelopment,
   isDone,
+  realTel,
   shortAreaName,
   stageShort,
   stepIndex,
@@ -96,5 +98,114 @@ describe("Repository.redevelopments 샘플", () => {
     expect(ids).not.toContain("BARA_SAMPLE_005"); // 해제
     expect(ids).not.toContain("BARA_SAMPLE_004"); // 좌표 없음
     expect(r.meta?.source_attribution).toContain("정비사업");
+  });
+});
+
+describe("cleanRedevelopment 실데이터 자리 채움 값", () => {
+  it("0·1로 채운 숫자와 너무 작은 면적은 값 없음으로 바꾼다", () => {
+    const r = cleanRedevelopment(
+      make({
+        households: 0,
+        buildings: 1,
+        union_members: 0,
+        floor_area_ratio: 0,
+        building_coverage_ratio: 1,
+        area_m2: 10.201,
+        area_pyeong: 3.1,
+      }),
+    );
+    expect(r).toMatchObject({
+      households: null,
+      buildings: null,
+      union_members: null,
+      floor_area_ratio: null,
+      building_coverage_ratio: null,
+      area_m2: null,
+      area_pyeong: null,
+    });
+  });
+
+  it("실제 값은 그대로 둔다", () => {
+    const r = cleanRedevelopment(
+      make({
+        households: 3149,
+        floor_area_ratio: 266.78,
+        area_m2: 164437.1,
+        area_pyeong: 49742,
+        contractor: " (주)롯데건설 ",
+        tel: "051-636-5547",
+      }),
+    );
+    expect(r).toMatchObject({
+      households: 3149,
+      floor_area_ratio: 266.78,
+      area_m2: 164437.1,
+      area_pyeong: 49742,
+      contractor: "(주)롯데건설",
+      tel: "051-636-5547",
+    });
+  });
+
+  it("자리만 채운 전화번호는 뺀다", () => {
+    for (const t of [
+      "000-0000-0000",
+      "051-000-0000",
+      "051-0000-000",
+      "010-0000-0000",
+      "0-0-0",
+      "1-1-1",
+    ])
+      expect(realTel(t)).toBeNull();
+    expect(realTel("02-787-0000")).toBe("02-787-0000");
+    expect(realTel(null)).toBeNull();
+  });
+
+  it("\"1\" 같은 글자 칸과 파일명 없는 사진 주소는 뺀다", () => {
+    const dir = "https://dynamice.busan.go.kr/data/busi_ara/";
+    const r = cleanRedevelopment(
+      make({
+        architect: "1",
+        scale: " ",
+        images: {
+          view: dir,
+          location: `${dir}a.png`,
+          panorama: dir,
+          layout: dir,
+        },
+      }),
+    );
+    expect(r.architect).toBeNull();
+    expect(r.scale).toBeNull();
+    expect(r.images).toEqual({
+      view: null,
+      location: `${dir}a.png`,
+      panorama: null,
+      layout: null,
+    });
+    const none = cleanRedevelopment(
+      make({ images: { view: dir, location: dir, panorama: dir, layout: dir } }),
+    );
+    expect(none.images).toBeNull();
+  });
+});
+
+describe("Repository.redevelopments API", () => {
+  it("요청 값을 맞춰 보내고 받은 구역의 자리 채움 값을 걸러 준다", async () => {
+    const get = async (path: string) => {
+      expect(path).toContain("/redevelopments?bbox=");
+      expect(path).toContain("stage=planned%2C");
+      expect(path).toContain("page_size=500");
+      return {
+        data: [make({ tel: "000-0000-0000", union_members: 0 })],
+        meta: undefined,
+      };
+    };
+    const repo = new Repository("api", { get } as never);
+    const r = await repo.redevelopments(
+      [129.13, 35.15, 129.17, 35.18],
+      REDEVELOPMENT_MAP_STAGES,
+    );
+    expect(r.data[0].tel).toBeNull();
+    expect(r.data[0].union_members).toBeNull();
   });
 });

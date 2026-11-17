@@ -85,3 +85,59 @@ export function shortAreaName(name: string): string {
   const v = short || name;
   return v.length > 12 ? `${v.slice(0, 11)}…` : v;
 }
+
+// 원천이 빈 값을 0·1로 채운 숫자 칸. 이 값 이하는 값 없음으로 본다
+const PLACEHOLDER_MAX = 1;
+// 이보다 작은 구역 면적(㎡)은 입력 오류로 본다(원천에 1㎡, 10㎡ 같은 값이 있다)
+const MIN_AREA_M2 = 100;
+// 원천이 빈 글자 칸에 넣은 값
+const PLACEHOLDER_TEXT = new Set(["", "0", "1", "-"]);
+
+const realCount = (v: number | null) =>
+  v != null && v > PLACEHOLDER_MAX ? v : null;
+
+const realText = (v: string | null) =>
+  v == null || PLACEHOLDER_TEXT.has(v.trim()) ? null : v.trim();
+
+// 000-0000-0000, 051-000-0000, 0-0-0처럼 자리만 채운 번호는 뺀다
+export function realTel(v: string | null): string | null {
+  const tel = realText(v);
+  if (!tel) return null;
+  const groups = tel.split(/\D+/).filter(Boolean);
+  if (groups.join("").length < 9) return null;
+  if (groups.length >= 2 && /^0+$/.test(groups[1])) return null;
+  return tel;
+}
+
+// 파일명 없이 폴더 주소만 온 사진은 열리지 않으니 뺀다
+const realImage = (v: string | null) =>
+  v && !v.endsWith("/") ? v : null;
+
+// 실데이터의 자리 채움 값을 값 없음(null)으로 바꾼다. 화면에 "용적률 0%"·가짜 전화번호가 뜨지 않게 한다
+export function cleanRedevelopment(r: Redevelopment): Redevelopment {
+  const areaOk = r.area_m2 != null && r.area_m2 >= MIN_AREA_M2;
+  const images = r.images && {
+    view: realImage(r.images.view),
+    location: realImage(r.images.location),
+    panorama: realImage(r.images.panorama),
+    layout: realImage(r.images.layout),
+  };
+  return {
+    ...r,
+    area_m2: areaOk ? r.area_m2 : null,
+    area_pyeong: areaOk ? r.area_pyeong : null,
+    households: realCount(r.households),
+    buildings: realCount(r.buildings),
+    union_members: realCount(r.union_members),
+    floor_area_ratio: realCount(r.floor_area_ratio),
+    building_coverage_ratio: realCount(r.building_coverage_ratio),
+    scale: realText(r.scale),
+    business_entity: realText(r.business_entity),
+    contractor: realText(r.contractor),
+    engineer: realText(r.engineer),
+    architect: realText(r.architect),
+    specialists: realText(r.specialists),
+    tel: realTel(r.tel),
+    images: images && Object.values(images).some(Boolean) ? images : null,
+  };
+}

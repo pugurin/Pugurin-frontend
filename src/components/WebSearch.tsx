@@ -4,8 +4,15 @@ import type { SearchResult } from "../api/types";
 import type { Recent } from "../state/storage";
 import { C, FONT } from "../theme/tokens";
 
-const groupLabels = { complex: "단지", region: "동네", address: "주소", school: "학교" };
-const types = ["complex", "school", "region", "address"] as const;
+const groupLabels = {
+  region: "동네",
+  station: "지하철역",
+  school: "학교",
+  complex: "단지",
+  address: "주소",
+};
+// 동네가 맨 위. 백엔드도 같은 순서로 준다
+const types = ["region", "station", "school", "complex", "address"] as const;
 const label = (result: SearchResult) =>
   result.name ?? result.address ?? "검색 결과";
 

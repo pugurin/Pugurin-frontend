@@ -153,8 +153,11 @@ export type Term = {
   example: string;
 };
 export type SearchResult = {
-  type: "complex" | "region" | "address" | "school";
+  type: "complex" | "region" | "address" | "school" | "station";
   name?: string;
+  // type이 station일 때: 카카오 장소 ID와 노선(예: "부산도시철도 2호선")
+  station_id?: string;
+  line?: string | null;
   address?: string;
   complex_id?: string;
   region_code?: string;
@@ -163,7 +166,7 @@ export type SearchResult = {
   lat: number;
   lng: number;
   bbox?: BBox;
-  // type이 school이면 그 학교. 백엔드 통합 검색에는 학교가 없어 앱이 학교 목록에서 찾아 붙인다
+  // type이 school이면 그 학교. 백엔드 통합 검색이 주고, 옛 백엔드면 앱이 학교 목록에서 찾아 붙인다
   school?: School;
 };
 export type Metrics = {
