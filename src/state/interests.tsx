@@ -33,8 +33,10 @@ type Sets = Record<InterestKind, Set<string>>;
 type Entry = {
   kind: InterestKind;
   id: string;
-  // 서버가 마지막으로 확인해 준 값(처음엔 누르기 전 화면 값)
-  confirmed: boolean;
+  // 서버가 마지막으로 확인해 준 값. GET /interests를 받기 전에 누른 별은 아직 모른다(null)
+  confirmed: boolean | null;
+  // 처음 누르기 전 화면 값. 서버 값을 모르는 채로 실패했을 때 잠깐 보여 준다
+  initial: boolean;
   // 사용자가 마지막으로 고른 값
   desired: boolean;
   // 요청이 나가 있는지
@@ -134,9 +136,18 @@ export function useInterests(
       (err) => {
         if (gen !== generation.current) return;
         e.busy = false;
-        e.desired = e.confirmed;
-        show(e.kind, e.id, e.confirmed);
         notifyRef.current(err?.message ?? "관심 등록을 처리하지 못했어요");
+        if (e.confirmed !== null) {
+          e.desired = e.confirmed;
+          show(e.kind, e.id, e.confirmed);
+          return;
+        }
+        // 목록을 받기 전에 누른 별이라 서버 값을 모른다. 누르기 전 값으로 두고 목록을 다시 받아 맞춘다
+        // (이미 담긴 단지를 꺼짐으로 잘못 되돌리지 않게)
+        entries.current.delete(`${e.kind}:${e.id}`);
+        show(e.kind, e.id, e.initial);
+        loaded.current = false;
+        load();
       },
     );
   };
@@ -148,7 +159,14 @@ export function useInterests(
       const now = shown.current[kind].has(id);
       let e = entries.current.get(key);
       if (!e) {
-        e = { kind, id, confirmed: now, desired: now, busy: false };
+        e = {
+          kind,
+          id,
+          confirmed: loaded.current ? now : null,
+          initial: now,
+          desired: now,
+          busy: false,
+        };
         entries.current.set(key, e);
       }
       e.desired = !now;

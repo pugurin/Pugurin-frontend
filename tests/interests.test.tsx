@@ -308,6 +308,27 @@ describe("별 연타", () => {
     (await next("PUT")).resolve(json({ data: {} }));
   });
 
+  it("목록을 받기 전에 누른 별이 실패하면, 끔으로 단정하지 않고 서버 목록으로 맞춘다", async () => {
+    const notify = vi.fn();
+    const { repo, next } = controlledServer();
+    render(
+      <Harness repo={repo} notify={notify}>
+        <StarButton kind="complex" id="c1" />
+      </Harness>,
+    );
+    const get = await next("GET");
+    // 서버에는 이미 담겨 있지만 아직 모르는 채로 누른다(화면: 꺼짐 → 켬)
+    fireEvent.click(screen.getByRole("button", { name: "관심 단지 등록" }));
+    const put = await next("PUT");
+    await act(async () =>
+      put.resolve(json({ error: { code: "SERVER_ERROR", message: "잠시 후 다시 시도해 주세요" } }, 500)),
+    );
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("잠시 후 다시 시도해 주세요"));
+    await act(async () => get.resolve(json({ data: { complexes: ["c1"], auctions: [] } })));
+    // 서버 값(담김)으로 켜진다
+    expect(await screen.findByRole("button", { name: "관심 단지 해제" })).toBeTruthy();
+  });
+
   it("시작할 때 목록을 못 받으면 별을 누를 때 다시 받는다", async () => {
     let gets = 0;
     const fetcher = (async (_url: string, init?: RequestInit) => {
