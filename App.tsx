@@ -83,6 +83,12 @@ import {
   LoginScreen,
   SignupScreen,
 } from "./src/screens/AuthScreens";
+import { CommuteScreen } from "./src/screens/Commute";
+import {
+  CommuteProvider,
+  placeFromSearch,
+  type Place,
+} from "./src/state/commute";
 type Route =
   | { kind: "login" }
   // 처음 로그인한 사람의 가입 마무리
@@ -103,7 +109,11 @@ type Route =
   | { kind: "interests"; tab: InterestKind }
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
   // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
-  | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };
+  | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string }
+  // 직장 고르기. home이 있으면 고른 뒤 그 집의 길찾기로 간다
+  | { kind: "workplace"; home?: Place }
+  // 집 → 직장 대중교통 길찾기
+  | { kind: "commute"; home: Place };
 // 백엔드 API 주소. 웹 운영은 Netlify 프록시(/api/v1)
 const API_BASE = apiBase(
   process.env.EXPO_PUBLIC_API_URL ||
@@ -158,6 +168,11 @@ export default function App() {
   // 지도 재개발 레이어. 처음엔 꺼짐이고 켠 상태를 저장한다
   const [redevelopments, setRedevelopments] = useState(false);
   const [recent, setRecent] = useState<Recent[]>([]);
+  // 출퇴근 길찾기의 직장. 이 기기에만 저장한다
+  const [workplace, setWorkplace] = useState<Place | null>(null);
+  // 대중교통 길찾기. 백엔드(/transit/routes)가 준비될 때까지 실제 API 모드에서는 EXPO_PUBLIC_TRANSIT=on일 때만 켠다
+  const transitEnabled =
+    mode === "sample" || process.env.EXPO_PUBLIC_TRANSIT === "on";
   // 로그인 세션. 기기에 저장해 다음에 열어도 로그인이 유지된다(F-AUTH-02).
   // 어떤 인증 서버를 쓸지는 makeAuth가 정한다
   const [session, setSession] = useState<Session | null>(null);
@@ -268,6 +283,7 @@ export default function App() {
     loadStored<"평" | "㎡">("unit", "평").then(setUnit);
     loadStored<"normal" | "satellite">("base", "normal").then(setBase);
     loadStored<boolean>("cad", false).then(setCad);
+    loadStored<Place | null>("workplace", null).then(setWorkplace);
     loadStored<boolean>("schools", false).then(setSchools);
     loadStored<boolean>("hospitals", false).then(setHospitals);
     loadStored<boolean>("redevelopments", false).then(setRedevelopments);
@@ -573,6 +589,34 @@ export default function App() {
         }
       />
     );
+  if (route?.kind === "workplace")
+    overlay = (
+      <SearchScreen
+        title="직장 찾기"
+        placeholder="회사 주소·지하철역 검색"
+        // 동네(구·동)는 중심점이라 시간이 틀리게 나온다. 주소·역·단지·학교만 고른다
+        types={["address", "station", "complex", "school"]}
+        repo={repo}
+        onSelect={(r) => {
+          const place = placeFromSearch(r);
+          setWorkplace(place);
+          void store("workplace", place);
+          notify(`직장을 정했어요 · ${place.name}`);
+          setRoute(route.home ? { kind: "commute", home: route.home } : null);
+        }}
+        onBack={() =>
+          setRoute(route.home && workplace ? { kind: "commute", home: route.home } : null)
+        }
+      />
+    );
+  if (route?.kind === "commute")
+    overlay = (
+      <CommuteScreen
+        repo={repo}
+        home={route.home}
+        onBack={() => setRoute(null)}
+      />
+    );
   if (route?.kind === "transactions")
     overlay = (
       <TransactionsScreen
@@ -628,6 +672,23 @@ export default function App() {
           onTerm: (term) => setRoute({ kind: "term", term, map: true }),
         }}
       >
+        <CommuteProvider
+          value={
+            transitEnabled
+              ? {
+                  workplace,
+                  pickWorkplace: (home) => setRoute({ kind: "workplace", home }),
+                  clearWorkplace: () => {
+                    setWorkplace(null);
+                    void store("workplace", null);
+                    setRoute(null);
+                    notify("직장을 지웠어요");
+                  },
+                  openRoute: (home) => setRoute({ kind: "commute", home }),
+                }
+              : null
+          }
+        >
         <SafeAreaView
           style={{ flex: 1, backgroundColor: width > 600 ? "#EAEAE5" : C.bg }}
         >
@@ -880,6 +941,7 @@ export default function App() {
             />
           </View>
         </SafeAreaView>
+        </CommuteProvider>
       </LearningProvider>
     </InterestsProvider>
   );

@@ -44,6 +44,7 @@ import type { SheetStage } from "../components/Sheet";
 import { HAS_KAKAO } from "../map/kakaoRuntime";
 import { RoadviewModal } from "../roadview/RoadviewModal";
 import { NearbySchoolsSection } from "./NearbySchools";
+import { CommuteSection } from "./Commute";
 import { LoanCalculator } from "../components/LoanCalculator";
 import { latestSale } from "../state/loan";
 
@@ -675,6 +676,15 @@ export function ComplexContent({
                     )
                   )}
                 </Section>
+                <CommuteSection
+                  repo={repo}
+                  home={{
+                    name: complex.name,
+                    address: complex.address,
+                    lat: complex.lat,
+                    lng: complex.lng,
+                  }}
+                />
                 <NearbySchoolsSection complexId={complex.id} repo={repo} />
               </View>
               <View style={{ flex: twoColumns ? 1 : undefined, minWidth: 0 }}>
