@@ -8,12 +8,12 @@ import {
 } from "../src/auth/webOAuth";
 
 const config: OAuthConfig = {
-  redirectUri: "https://pugurin.netlify.app/auth/callback",
+  redirectUri: "https://pugurin.vercel.app/auth/callback",
   clientIds: { kakao: "kakao-rest", naver: "naver-id", google: "google-id" },
 };
 
 // 브라우저 대역: 주소창·기록·세션 저장소
-function browser(href = "https://pugurin.netlify.app/") {
+function browser(href = "https://pugurin.vercel.app/") {
   const store = new Map<string, string>();
   const env = {
     location: { href, assign: (url: string) => (env.location.href = url) },
@@ -87,7 +87,7 @@ describe("리다이렉트 로그인", () => {
     const oauth = new RedirectOAuth(config, env);
     await oauth.start("google");
     const { state, verifier } = JSON.parse(store.get("pugurin.oauth")!);
-    env.location.href = `https://pugurin.netlify.app/auth/callback?code=abc&state=${state}`;
+    env.location.href = `https://pugurin.vercel.app/auth/callback?code=abc&state=${state}`;
     expect(oauth.finish()).toEqual({
       provider: "google",
       code: "abc",
@@ -95,7 +95,7 @@ describe("리다이렉트 로그인", () => {
       redirect_uri: config.redirectUri,
       code_verifier: verifier,
     });
-    expect(env.location.href).toBe("https://pugurin.netlify.app/");
+    expect(env.location.href).toBe("https://pugurin.vercel.app/");
     expect(store.has("pugurin.oauth")).toBe(false);
     // 한 번 쓴 코드는 다시 꺼내지 않는다
     expect(oauth.finish()).toBeNull();
@@ -109,15 +109,15 @@ describe("리다이렉트 로그인", () => {
       false,
     );
     const { state } = JSON.parse(store.get("pugurin.oauth")!);
-    env.location.href = `https://pugurin.netlify.app/auth/callback?code=abc&state=${state}`;
+    env.location.href = `https://pugurin.vercel.app/auth/callback?code=abc&state=${state}`;
     expect(oauth.finish()).not.toHaveProperty("code_verifier");
   });
 
   it("콜백 주소가 아니면 아무것도 하지 않는다", () => {
-    const { env } = browser("https://pugurin.netlify.app/?code=abc&state=x");
+    const { env } = browser("https://pugurin.vercel.app/?code=abc&state=x");
     expect(new RedirectOAuth(config, env).finish()).toBeNull();
     expect(env.location.href).toBe(
-      "https://pugurin.netlify.app/?code=abc&state=x",
+      "https://pugurin.vercel.app/?code=abc&state=x",
     );
   });
 
@@ -126,10 +126,10 @@ describe("리다이렉트 로그인", () => {
     const oauth = new RedirectOAuth(config, env);
     await oauth.start("kakao");
     env.location.href =
-      "https://pugurin.netlify.app/auth/callback?code=abc&state=other";
+      "https://pugurin.vercel.app/auth/callback?code=abc&state=other";
     expect(() => oauth.finish()).toThrow(ApiError);
     env.location.href =
-      "https://pugurin.netlify.app/auth/callback?code=abc&state=other";
+      "https://pugurin.vercel.app/auth/callback?code=abc&state=other";
     expect(() => oauth.finish()).toThrow("다시 로그인해 주세요");
   });
 
@@ -138,7 +138,7 @@ describe("리다이렉트 로그인", () => {
     const oauth = new RedirectOAuth(config, env);
     await oauth.start("naver");
     const { state } = JSON.parse(store.get("pugurin.oauth")!);
-    env.location.href = `https://pugurin.netlify.app/auth/callback?error=access_denied&state=${state}`;
+    env.location.href = `https://pugurin.vercel.app/auth/callback?error=access_denied&state=${state}`;
     expect(() => oauth.finish()).toThrow("로그인을 취소했어요");
   });
 
@@ -148,6 +148,6 @@ describe("리다이렉트 로그인", () => {
     await expect(oauth.start("naver")).rejects.toThrow(
       "네이버 로그인은 아직 준비 중이에요",
     );
-    expect(env.location.href).toBe("https://pugurin.netlify.app/");
+    expect(env.location.href).toBe("https://pugurin.vercel.app/");
   });
 });

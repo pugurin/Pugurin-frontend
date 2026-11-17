@@ -28,7 +28,7 @@ iOS 시뮬레이터 API 주소는 localhost:8000, Android 에뮬레이터는 10.
 3. 웹 `.env.local`에 `EXPO_PUBLIC_AUTH_MODE=api`, `EXPO_PUBLIC_API_URL=/api/v1`, 제공자 클라이언트 ID(`.env.example`)를 넣는다.
 4. `npx expo start --web --port 8082`와 `PUGURIN_WEB_PORT=8082 npm run web:https`를 띄우고 `https://localhost:8443`을 연다. 이 설정에서는 `http://localhost:8082`로 직접 열면 API를 부르지 못한다.
 
-웹 배포는 Vercel이 [`vercel.json`](./vercel.json)대로 한다(2026-11 Netlify 무료 크레딧 소진으로 옮김. `netlify.toml`은 옮김이 끝날 때까지 남겨 둔다). main에 머지되면 `npm run build:web`으로 `dist/`를 만들어 올리고, PR마다 미리보기가 뜬다. 배포 웹은 같은 주소의 `/api/v1`을 부르고, Vercel이 이를 백엔드로 넘긴다(프록시). 그래서 브라우저가 백엔드를 직접 부르지 않아 CORS 설정이 필요 없고, 로그인 쿠키도 같은 주소에서 오간다. 백엔드 주소가 바뀌면 `vercel.json`의 `/api` 대상만 바꾼다(반드시 https).
+웹 배포는 Vercel이 [`vercel.json`](./vercel.json)대로 한다(2026-11 Netlify 무료 크레딧 소진으로 옮김). main에 머지되면 `npm run build:web`으로 `dist/`를 만들어 올리고, PR마다 미리보기가 뜬다. 배포 웹은 같은 주소의 `/api/v1`을 부르고, Vercel이 이를 백엔드로 넘긴다(프록시). 그래서 브라우저가 백엔드를 직접 부르지 않아 CORS 설정이 필요 없고, 로그인 쿠키도 같은 주소에서 오간다. 백엔드 주소가 바뀌면 `vercel.json`의 `/api` 대상만 바꾼다(반드시 https).
 
 `EXPO_PUBLIC_*` 값은 빌드할 때 번들에 들어가므로 Vercel 프로젝트 설정의 환경 변수에 넣고 다시 배포한다.
 

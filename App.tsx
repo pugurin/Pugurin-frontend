@@ -104,7 +104,7 @@ type Route =
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
   // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
   | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };
-// 백엔드 API 주소. 웹 운영은 Netlify 프록시(/api/v1)
+// 백엔드 API 주소. 웹 운영은 Vercel 프록시(/api/v1)
 const API_BASE = apiBase(
   process.env.EXPO_PUBLIC_API_URL ||
     process.env.EXPO_PUBLIC_API_BASE ||
