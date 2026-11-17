@@ -13,10 +13,10 @@
 [context.deploy-preview.environment]
   EXPO_PUBLIC_AUTH_MODE = "sample"
 
-# 백엔드에 HTTPS 도메인이 생기면 to를 그 주소로 바꾼다
+# 백엔드 HTTPS(sslip.io 무료 주소, Caddy가 인증서 자동 발급). 도메인을 사면 to를 그 주소로 바꾼다
 [[redirects]]
   from = "/api/*"
-  to = "http://34.64.207.41/api/:splat"
+  to = "https://34-64-207-41.sslip.io/api/:splat"
   status = 200
   force = true
 
