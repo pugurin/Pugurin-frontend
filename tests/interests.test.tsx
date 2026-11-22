@@ -107,15 +107,69 @@ describe("관심 등록 API", () => {
 function Harness({
   repo,
   notify,
+  account = "user-1",
+  needLogin = () => {},
   children,
 }: {
   repo: Repository;
   notify: (m: string) => void;
+  account?: string | null;
+  needLogin?: () => void;
   children: React.ReactNode;
 }) {
-  const value = useInterests(repo, notify);
+  const value = useInterests(repo, notify, account, needLogin);
   return <InterestsProvider value={value}>{children}</InterestsProvider>;
 }
+
+describe("로그인", () => {
+  it("로그인하지 않았으면 서버에 묻지 않고, 별을 누르면 로그인 안내만 띄운다", async () => {
+    const needLogin = vi.fn();
+    const { calls, repo } = fakeServer();
+    render(
+      <Harness
+        repo={repo}
+        notify={() => {}}
+        account={null}
+        needLogin={needLogin}
+      >
+        <StarButton kind="complex" id="c1" />
+      </Harness>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "관심 단지 등록" }));
+    expect(needLogin).toHaveBeenCalledTimes(1);
+    // 별은 켜지지 않는다
+    expect(screen.getByRole("button", { name: "관심 단지 등록" })).toBeTruthy();
+    await act(async () => {});
+    expect(calls).toEqual([]);
+  });
+
+  it("다른 계정으로 바뀌면 별을 비우고 그 계정의 목록을 다시 받는다", async () => {
+    let owner = "a";
+    const { calls, repo } = fakeServer(() =>
+      json({
+        data: { complexes: owner === "a" ? ["c1"] : [], auctions: [] },
+      }),
+    );
+    const view = (account: string | null) => (
+      <Harness repo={repo} notify={() => {}} account={account}>
+        <StarButton kind="complex" id="c1" />
+      </Harness>
+    );
+    const { rerender } = render(view("a"));
+    await screen.findByRole("button", { name: "관심 단지 해제" });
+    // 로그아웃하면 바로 꺼진다
+    rerender(view(null));
+    expect(screen.getByRole("button", { name: "관심 단지 등록" })).toBeTruthy();
+    owner = "b";
+    rerender(view("b"));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.url.endsWith("/interests"))).toHaveLength(
+        2,
+      ),
+    );
+    expect(screen.getByRole("button", { name: "관심 단지 등록" })).toBeTruthy();
+  });
+});
 
 describe("별 버튼", () => {
   it("앱을 켤 때 받은 id로 켜지고, 누르면 먼저 꺼진 뒤 DELETE를 보낸다", async () => {

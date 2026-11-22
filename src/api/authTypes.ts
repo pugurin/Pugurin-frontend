@@ -61,6 +61,9 @@ export interface AuthApi {
   restore(saved: StoredSession, refreshToken?: string): Promise<Session>;
   // 리다이렉트 로그인(웹 실제 서버): 소셜 로그인에서 돌아왔으면 로그인을 마친다. 아니면 null
   completeSignIn?(): Promise<SignInResult | null>;
+  // 데이터 API(관심 목록)에 붙일 최신 access token과 만료됐을 때의 갱신. 실제 서버 인증만 있다
+  accessToken?(): string | undefined;
+  refreshAccess?(): Promise<string>;
 }
 
 export const NICKNAME_MIN = 2;

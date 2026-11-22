@@ -62,7 +62,7 @@ const SCHOOL_SEARCH_LIMIT = 10;
 export const SCHOOL_SEARCH_WAIT_MS = 800;
 // 서버가 종류별로 받아 주는 관심 개수 상한. 넘으면 409 CONFLICT
 export const INTEREST_LIMIT = 200;
-// 샘플 모드의 관심 목록. 서버처럼 기기 하나에 한 벌이고, 앱을 다시 켜면 비어 있다
+// 샘플 모드의 관심 목록. 앱을 켜는 동안 한 벌이고(계정을 가리지 않는다), 다시 켜면 비어 있다
 const sampleInterests: Record<InterestKind, Map<string, string>> = {
   complex: new Map(),
   auction: new Map(),

@@ -222,6 +222,22 @@ describe("실제 인증 서버(웹)", () => {
     expect(calls.filter((c) => c.url === "/auth/refresh")).toHaveLength(1);
   });
 
+  it("다른 요청(관심 목록)이 쓸 access token을 알려 주고, 갱신하면 새 토큰으로 바꾼다", async () => {
+    const { auth } = make({
+      "POST /auth/oauth/kakao": signedIn,
+      "POST /auth/refresh": () =>
+        json(200, { data: { access_token: "a2" }, meta: {} }),
+    });
+    expect(auth.accessToken()).toBeUndefined();
+    const make2 = make({ "POST /auth/oauth/kakao": signedIn }, kakaoCode);
+    await make2.auth.completeSignIn();
+    expect(make2.auth.accessToken()).toBe("a1");
+    expect(await auth.refreshAccess()).toBe("a2");
+    expect(auth.accessToken()).toBe("a2");
+    await auth.signOut().catch(() => {});
+    expect(auth.accessToken()).toBeUndefined();
+  });
+
   it("갱신이 401이면 다시 로그인하라고 알린다", async () => {
     const { auth } = make({
       "POST /auth/refresh": () =>

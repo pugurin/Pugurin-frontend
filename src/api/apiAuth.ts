@@ -111,6 +111,16 @@ export class ApiAuth implements AuthApi {
     return this.refreshing;
   }
 
+  // 관심 목록처럼 데이터 API에 붙일 access token(가장 최근 것). 로그인 전·로그아웃 뒤엔 undefined
+  accessToken(): string | undefined {
+    return this.access;
+  }
+
+  // 데이터 API가 401을 받았을 때 쿠키로 갱신한다
+  refreshAccess(): Promise<string> {
+    return this.refresh();
+  }
+
   // 로그인이 필요한 요청. access token이 만료됐으면(401) 한 번 갱신하고 다시 보낸다
   private async authed<T>(
     method: string,

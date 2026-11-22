@@ -53,6 +53,7 @@ import { InterestsScreen } from "./src/screens/InterestsScreen";
 import { InterestsProvider, useInterests } from "./src/state/interests";
 import type { InterestKind } from "./src/api/types";
 import { Brand } from "./src/components/Brand";
+import { LoginAsk } from "./src/components/LoginAsk";
 import { LoadingTip } from "./src/components/LoadingTip";
 import { LearningProvider } from "./src/glossary/LearningContext";
 import { MatchingScreen } from "./src/screens/MatchingScreen";
@@ -215,12 +216,33 @@ export default function App() {
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
   }, [popup, route]);
+  // 데이터 API가 쓸 access token. repo를 다시 만들지 않게 ref로 읽는다
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
   const repo = useMemo(
-    () => new Repository(mode, new ApiClient(API_BASE, id)),
-    [mode, id],
+    () =>
+      new Repository(
+        mode,
+        new ApiClient(API_BASE, id, fetch, {
+          token: () =>
+            sessionRef.current
+              ? (auth?.accessToken?.() ?? sessionRef.current.access_token)
+              : undefined,
+          refresh: async () =>
+            sessionRef.current ? auth?.refreshAccess?.() : undefined,
+        }),
+      ),
+    [mode, id, auth],
   );
-  // 관심 등록(별 버튼). 기기 id가 생긴 뒤 서버에서 담아 둔 id를 받는다
-  const interests = useInterests(repo, (m) => notify(m), !!id);
+  // 로그인하지 않고 관심 별·관심 목록을 눌렀을 때 띄우는 안내
+  const [loginAsk, setLoginAsk] = useState(false);
+  // 관심 등록(별 버튼)은 로그인한 계정에 저장한다. 계정이 바뀌면 그 계정의 id를 다시 받는다
+  const interests = useInterests(
+    repo,
+    (m) => notify(m),
+    id && session ? session.user.id : null,
+    () => setLoginAsk(true),
+  );
   useEffect(() => {
     deviceId()
       .then(setId)
@@ -728,7 +750,9 @@ export default function App() {
                   onLogin={auth ? () => setRoute({ kind: "login" }) : undefined}
                   onAccount={() => setRoute({ kind: "account" })}
                   onInterests={(kind) =>
-                    setRoute({ kind: "interests", tab: kind })
+                    session
+                      ? setRoute({ kind: "interests", tab: kind })
+                      : setLoginAsk(true)
                   }
                   interestCount={interests.count}
                   mode={mode}
@@ -869,6 +893,15 @@ export default function App() {
                 </T>
               </View>
             )}
+            <LoginAsk
+              visible={loginAsk}
+              onCancel={() => setLoginAsk(false)}
+              onLogin={() => {
+                setLoginAsk(false);
+                if (auth) setRoute({ kind: "login" });
+                else notify("지금은 로그인을 쓸 수 없어요");
+              }}
+            />
             <TermPopup
               term={popup}
               anchor={popupAnchor}
