@@ -8,6 +8,7 @@ import type {
   Analysis,
   Redevelopment,
   RedevelopmentStage,
+  RedevelopmentZone,
   Auction,
   AuctionDetail,
   AuctionInterest,
@@ -36,6 +37,8 @@ import {
   SCHOOL_ZONE_META,
   REDEVELOPMENTS,
   REDEVELOPMENT_META,
+  REDEVELOPMENT_ZONES,
+  REDEVELOPMENT_ZONE_META,
   AUCTIONS,
   AUCTION_META,
   COMPLEXES,
@@ -439,6 +442,30 @@ export class Repository {
     return this.client
       .get<Redevelopment[]>(`/redevelopments?${p}`, signal)
       .then((r) => ({ ...r, data: r.data.map(cleanRedevelopment) }));
+  }
+  // 화면 영역 안의 정비구역 경계. zoom을 주면 서버가 화면 1px보다 작은 굴곡을 줄여 보낸다
+  redevelopmentZones(
+    bbox: BBox,
+    zoom: number,
+    signal?: AbortSignal,
+  ): Promise<Envelope<RedevelopmentZone[]>> {
+    if (this.mode === "sample") {
+      const [w, s, e, n] = bbox;
+      const data = REDEVELOPMENT_ZONES.filter((z) =>
+        z.geometry.coordinates
+          .flat(2)
+          .some(([lng, lat]) => lng >= w && lng <= e && lat >= s && lat <= n),
+      );
+      return Promise.resolve({ data, meta: REDEVELOPMENT_ZONE_META });
+    }
+    const p = new URLSearchParams({
+      bbox: bbox.join(","),
+      zoom: String(Math.round(zoom)),
+    });
+    return this.client.get<RedevelopmentZone[]>(
+      `/redevelopment-zones?${p}`,
+      signal,
+    );
   }
   // 단지 주변 학교. 샘플 모드는 서버처럼 직선거리 3km 안에서 학교급별 가까운 3곳을 고른다
   nearby(complexId: string, signal?: AbortSignal): Promise<Envelope<Nearby>> {

@@ -3,7 +3,8 @@ import { webRuntime } from "../src/map/kakaoRuntime";
 import { fullState, markerState } from "../src/map/bridge";
 import type { MapProps } from "../src/map/types";
 import type { Auction, ComplexMarker, Redevelopment, School } from "../src/api/types";
-import { REDEVELOPMENTS } from "../src/api/fixtures";
+import { REDEVELOPMENTS, REDEVELOPMENT_ZONES } from "../src/api/fixtures";
+import { redevelopmentZoneShapes } from "../src/state/redevelopment";
 
 // 카카오 SDK 대역. 런타임이 부르는 API만 흉내 낸다
 function fakeKakao() {
@@ -518,6 +519,47 @@ describe("병원 원", () => {
     receive(fullState(props({ hospitalAreas: [] })));
     expect(circles()).toHaveLength(0);
     expect(labels()).toHaveLength(0);
+  });
+});
+
+describe("정비구역 경계", () => {
+  const shapes = (selected: string | null = null) =>
+    redevelopmentZoneShapes(REDEVELOPMENT_ZONES.slice(0, 1), 15, selected);
+  const faces = () => fake.shapes.filter((s) => s.map && s.options.strokeColor === "#C2410C" && s.options.fillColor);
+  const hatch = () => fake.shapes.filter((s) => s.map && s.options.strokeColor === "#C2410C" && !s.options.fillColor);
+
+  it("재개발 색 옅은 면과 사선 빗금으로 그린다", () => {
+    start("test-key", props({ redevelopmentZones: shapes() }));
+    expect(faces()).toHaveLength(1);
+    expect(faces()[0].options).toMatchObject({ fillOpacity: 0.07, strokeWeight: 2, zIndex: 0 });
+    expect(hatch().length).toBe(shapes()[0].hatch.length);
+    expect(hatch().length).toBeGreaterThan(10);
+    expect(hatch()[0].options).toMatchObject({ strokeWeight: 1, zIndex: 0 });
+  });
+
+  it("고른 경계는 굵고 진하게 칠한다", () => {
+    start("test-key", props({ redevelopmentZones: shapes("redevzone:SAMPLE_ZONE_1") }));
+    expect(faces()[0].options).toMatchObject({ strokeWeight: 3.5, fillOpacity: 0.16 });
+  });
+
+  it("면이나 빗금을 누르면 경계 id로 marker만 보내고 지도 클릭으로 처리하지 않는다", async () => {
+    const { events, map } = start("test-key", props({ redevelopmentZones: shapes() }));
+    fake.trigger(faces()[0], "click");
+    fake.trigger(map, "click", { latLng: new fake.kakao.maps.LatLng(35.1668, 129.1502) });
+    fake.trigger(hatch()[0], "click");
+    await new Promise((r) => setTimeout(r, 10));
+    expect(events.filter((e) => e.type === "marker")).toEqual([
+      { type: "marker", id: "redevzone:SAMPLE_ZONE_1" },
+      { type: "marker", id: "redevzone:SAMPLE_ZONE_1" },
+    ]);
+    expect(events.some((e) => e.type === "mapClick")).toBe(false);
+  });
+
+  it("빈 배열을 받으면 지운다", () => {
+    const { receive } = start("test-key", props({ redevelopmentZones: shapes() }));
+    receive(fullState(props({ redevelopmentZones: [] })));
+    expect(faces()).toHaveLength(0);
+    expect(hatch()).toHaveLength(0);
   });
 });
 

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Image, Linking, View } from "react-native";
-import type { Meta, Redevelopment } from "../api/types";
+import type { Meta, Redevelopment, RedevelopmentZone } from "../api/types";
 import { Btn, T, s } from "../components/ui";
 import {
   REDEVELOPMENT_COLOR,
@@ -8,6 +8,7 @@ import {
   REDEVELOPMENT_KIND_LABEL,
   REDEVELOPMENT_SOURCE,
   REDEVELOPMENT_STEPS,
+  REDEVELOPMENT_ZONE_SOURCE,
   isDone,
   stageShort,
   stepIndex,
@@ -113,12 +114,20 @@ export function RedevelopmentContent({
           {r.location}
         </T>
       )}
-      {!r.location_precise && (
+      {r.position_source === "zone" ? (
         <View style={[s.card, { marginTop: 8 }]}>
           <T size={14} color={C.ink2}>
-            지도의 위치는 구역이 아니라 동 중심이에요
+            지도의 위치는 정비구역 경계 안의 대표 지점이에요
           </T>
         </View>
+      ) : (
+        !r.location_precise && (
+          <View style={[s.card, { marginTop: 8 }]}>
+            <T size={14} color={C.ink2}>
+              지도의 위치는 구역이 아니라 동 중심이에요
+            </T>
+          </View>
+        )
       )}
       <T size={15} bold style={{ marginTop: 16 }}>
         {step ? `지금 단계: ${step.label}` : `지금 단계: ${stageShort(r)}`}
@@ -168,7 +177,54 @@ export function RedevelopmentContent({
         </View>
       )}
       <T size={13} color={C.muted} style={{ marginTop: 12 }}>
-        {`구역 경계는 공개되지 않아 대표 지점만 표시해요\n출처: ${REDEVELOPMENT_SOURCE}${asOf ? ` · 기준일 ${asOf}` : ""}`}
+        {r.zone_id
+          ? `출처: ${REDEVELOPMENT_SOURCE}${asOf ? ` · 기준일 ${asOf}` : ""}\n구역 경계: ${REDEVELOPMENT_ZONE_SOURCE}`
+          : `구역 경계는 공개되지 않아 대표 지점만 표시해요\n출처: ${REDEVELOPMENT_SOURCE}${asOf ? ` · 기준일 ${asOf}` : ""}`}
+      </T>
+    </>
+  );
+}
+
+// 우리 정비사업 구역과 이어지지 않은 정비구역 경계의 짧은 시트. 경계 파일에 있는 것(이름·고시)만 보여 준다
+export function RedevelopmentZoneContent({
+  zone,
+  meta,
+}: {
+  zone: RedevelopmentZone;
+  meta?: Meta;
+}) {
+  const asOf = meta?.data_as_of?.slice(0, 10).replaceAll("-", ".");
+  const designated = zone.designated_on?.replaceAll("-", ".");
+  const title =
+    zone.area_name ?? zone.name ?? zone.notice ?? "이름 없는 정비구역";
+  return (
+    <>
+      <View style={[s.row, { flexWrap: "wrap" }]}>
+        <Badge bg={REDEVELOPMENT_COLOR} ink="#fff">
+          정비구역
+        </Badge>
+        {zone.kind && <Badge>{REDEVELOPMENT_KIND_LABEL[zone.kind]}</Badge>}
+      </View>
+      <T size={21} bold style={{ marginTop: 8 }}>
+        {title}
+      </T>
+      {zone.notice && zone.notice !== title && (
+        <T size={14} color={C.muted}>
+          {zone.notice}
+        </T>
+      )}
+      {designated && (
+        <T size={14} color={C.muted} style={{ marginTop: 4 }}>
+          고시일 {designated}
+        </T>
+      )}
+      <View style={[s.card, { marginTop: 12 }]}>
+        <T size={14} color={C.ink2}>
+          부산시 정비사업 정보에서 이 구역의 사업 단계를 찾지 못했어요
+        </T>
+      </View>
+      <T size={13} color={C.muted} style={{ marginTop: 12 }}>
+        {`출처: ${REDEVELOPMENT_ZONE_SOURCE}${asOf ? ` · 기준일 ${asOf}` : ""}`}
       </T>
     </>
   );

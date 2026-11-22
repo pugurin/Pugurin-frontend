@@ -15,7 +15,12 @@ import { REDEVELOPMENTS, REDEVELOPMENT_META } from "../src/api/fixtures";
 import type { Repository } from "../src/api/repository";
 vi.mock("react-native", async () => ({
   ...(await vi.importActual("react-native")),
-  useWindowDimensions: () => ({ width: 390, height: 800, scale: 1, fontScale: 1 }),
+  useWindowDimensions: () => ({
+    width: 390,
+    height: 800,
+    scale: 1,
+    fontScale: 1,
+  }),
 }));
 vi.mock("expo-location", () => ({}));
 vi.mock("../src/components/Sheet", () => ({
@@ -52,22 +57,75 @@ vi.mock("../src/map/MapCanvas", () => ({
         >
           구역 누르기
         </button>
+        <button
+          onClick={() => props.onEvent({ type: "marker", id: "redevzone:Z1" })}
+        >
+          이어진 경계 누르기
+        </button>
+        <button
+          onClick={() => props.onEvent({ type: "marker", id: "redevzone:Z2" })}
+        >
+          안 이어진 경계 누르기
+        </button>
       </>
     );
   },
 }));
 afterEach(cleanup);
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-function setup(impl?: (...a: any[]) => Promise<any>, on = true) {
+const ring = [
+  [129.15, 35.16],
+  [129.152, 35.16],
+  [129.152, 35.162],
+  [129.15, 35.16],
+];
+const ZONES = [
+  {
+    zone_id: "Z1",
+    name: "우동1재개발정비구역",
+    notice: null,
+    designated_on: "2016-12-21",
+    geometry: { type: "MultiPolygon", coordinates: [[ring]] },
+    redevelopment_id: "BARA_SAMPLE_001",
+    area_name: "우동1구역 재개발",
+    kind: "redevelopment",
+    stage: "disposal_approved",
+  },
+  {
+    zone_id: "Z2",
+    name: null,
+    notice: "부산광역시 고시 제2016-415호",
+    designated_on: "2016-12-21",
+    geometry: { type: "MultiPolygon", coordinates: [[ring]] },
+    redevelopment_id: null,
+    area_name: null,
+    kind: null,
+    stage: null,
+  },
+];
+const ZONE_META = {
+  data_as_of: "2026-11-22T21:00:00+09:00",
+  source_attribution: "브이월드 용도지역지구정보(정비구역)",
+};
+function setup(impl?: (...a: any[]) => Promise<any>, on = true, zones = true) {
   const redevelopments = vi.fn(
-    impl ?? (async () => ({ data: REDEVELOPMENTS.slice(0, 3), meta: REDEVELOPMENT_META })),
+    impl ??
+      (async () => ({
+        data: REDEVELOPMENTS.slice(0, 3),
+        meta: REDEVELOPMENT_META,
+      })),
   );
+  const redevelopmentZones = vi.fn(async () => ({
+    data: ZONES,
+    meta: ZONE_META,
+  }));
   const onRedevelopments = vi.fn();
   const repo = {
     mode: "api",
     markers: vi.fn(async () => ({ data: { markers: [] }, meta: {} })),
     auctions: vi.fn(async () => ({ data: [], meta: {} })),
     redevelopments,
+    ...(zones ? { redevelopmentZones } : {}),
   } as unknown as Repository;
   const draw = (v: boolean) => (
     <MapHome
@@ -97,7 +155,13 @@ function setup(impl?: (...a: any[]) => Promise<any>, on = true) {
     fireEvent.click(screen.getByText("지도 이동"));
     await act(() => wait(300));
   };
-  return { redevelopments, onRedevelopments, moveTo, rerender: (v: boolean) => rerender(draw(v)) };
+  return {
+    redevelopments,
+    redevelopmentZones,
+    onRedevelopments,
+    moveTo,
+    rerender: (v: boolean) => rerender(draw(v)),
+  };
 }
 
 describe("재개발 레이어", () => {
@@ -145,5 +209,60 @@ describe("재개발 레이어", () => {
     await moveTo(14);
     expect(await screen.findByText("재개발 정보를 준비 중이에요")).toBeTruthy();
     expect(map.props.redevelopments).toEqual([]);
+  });
+});
+
+describe("정비구역 경계", () => {
+  it("켜면 줌 12 이상에서 경계를 bbox·줌으로 불러 빗금과 함께 지도에 넘긴다", async () => {
+    const { redevelopmentZones, moveTo } = setup();
+    await moveTo(11);
+    expect(redevelopmentZones).not.toHaveBeenCalled();
+    await moveTo(15);
+    await waitFor(() => expect(redevelopmentZones).toHaveBeenCalled());
+    const [bbox, zoom] = redevelopmentZones.mock.calls[0] as any[];
+    expect(bbox).toHaveLength(4);
+    expect(zoom).toBe(15);
+    const shapes = map.props.redevelopmentZones;
+    expect(shapes.map((x: any) => x.id)).toEqual([
+      "redevzone:Z1",
+      "redevzone:Z2",
+    ]);
+    expect(shapes[0].polygons).toEqual([[ring]]);
+    expect(Array.isArray(shapes[0].hatch)).toBe(true);
+  });
+
+  it("우리 구역과 이어진 경계를 누르면 그 구역 시트를 연다", async () => {
+    const { moveTo } = setup();
+    await moveTo(15);
+    await waitFor(() => expect(map.props.redevelopmentZones.length).toBe(2));
+    await waitFor(() => expect(map.props.redevelopments.length).toBe(3));
+    fireEvent.click(screen.getByText("이어진 경계 누르기"));
+    const sheet = await screen.findByTestId("sheet");
+    expect(sheet.textContent).toContain("우동1구역 재개발");
+    expect(sheet.textContent).toContain("지금 단계: 관리처분계획인가");
+    expect(map.props.selected).toBe("redev:BARA_SAMPLE_001");
+  });
+
+  it("이어지지 않은 경계를 누르면 고시 정보와 출처만 있는 짧은 시트를 연다", async () => {
+    const { moveTo } = setup();
+    await moveTo(15);
+    await waitFor(() => expect(map.props.redevelopmentZones.length).toBe(2));
+    fireEvent.click(screen.getByText("안 이어진 경계 누르기"));
+    const sheet = await screen.findByTestId("sheet");
+    expect(sheet.textContent).toContain("정비구역");
+    expect(sheet.textContent).toContain("부산광역시 고시 제2016-415호");
+    expect(sheet.textContent).toContain("고시일 2016.12.21");
+    expect(sheet.textContent).toContain(
+      "출처: 브이월드 용도지역지구정보(정비구역)",
+    );
+    expect(map.props.selected).toBe("redevzone:Z2");
+    expect(map.props.redevelopmentZones[1].selected).toBe(true);
+  });
+
+  it("경계 API가 없는 저장소여도 마커는 그대로 보인다", async () => {
+    const { moveTo } = setup(undefined, true, false);
+    await moveTo(14);
+    await waitFor(() => expect(map.props.redevelopments.length).toBe(3));
+    expect(map.props.redevelopmentZones ?? []).toEqual([]);
   });
 });

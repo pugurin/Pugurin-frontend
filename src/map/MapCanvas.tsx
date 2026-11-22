@@ -37,7 +37,7 @@ export default function MapCanvas(p: MapProps) {
   useEffect(() => post(layerState(p)), [p.base, p.cadastral, p.roadview]);
   useEffect(
     () => post(shapeState(p)),
-    [p.selectionPoint, p.parcelGeometry, p.userLocation, p.hospitalAreas, p.schoolZone],
+    [p.selectionPoint, p.parcelGeometry, p.userLocation, p.hospitalAreas, p.schoolZone, p.redevelopmentZones],
   );
   useEffect(() => {
     if (p.command) post(p.command);

@@ -305,7 +305,7 @@ export type RedevelopmentStage =
   | "transferred"
   | "dissolved"
   | "unknown";
-// 정비사업 구역(`/redevelopments`). 경계 폴리곤은 없고, 좌표는 지번을 지오코딩한 점이다
+// 정비사업 구역(`/redevelopments`). 좌표는 지번을 지오코딩한 점이고, 없으면 이어진 정비구역 경계의 대표점이다
 export type Redevelopment = {
   id: string;
   area_name: string;
@@ -318,8 +318,12 @@ export type Redevelopment = {
   location_kind: "lot" | "office" | "none";
   lat: number | null;
   lng: number | null;
-  // false면 지번이 아니라 법정동 중심점이다
+  // false면 지번이 아니라 법정동 중심점(또는 정비구역 경계의 대표점)이다
   location_precise: boolean;
+  // 위치 출처: lot(지번 좌표) / zone(이어진 정비구역 경계의 대표점) / none. 옛 서버는 보내지 않는다
+  position_source?: "lot" | "zone" | "none";
+  // 이어진 정비구역 경계(`/redevelopment-zones`의 zone_id)
+  zone_id?: string | null;
   area_m2: number | null;
   area_pyeong: number | null;
   households: number | null;
@@ -342,6 +346,20 @@ export type Redevelopment = {
   } | null;
   source_url: string | null;
   is_closed: boolean;
+};
+// 정비구역 경계(`/redevelopment-zones`, 브이월드 정비구역 SHP). 우리 구역과 이어지면 그 이름·종류·단계가 있다
+export type RedevelopmentZone = {
+  zone_id: string;
+  // 원천 이름. 비었거나 안내 문구면 null
+  name: string | null;
+  // 이름 대신 고시 번호만 있을 때(예: 부산광역시 고시 제2016-415호)
+  notice: string | null;
+  designated_on: string | null;
+  geometry: { type: "MultiPolygon"; coordinates: [number, number][][][] };
+  redevelopment_id: string | null;
+  area_name: string | null;
+  kind: RedevelopmentKind | null;
+  stage: RedevelopmentStage | null;
 };
 export type AuctionSource = "court" | "public";
 export type AuctionGroup =

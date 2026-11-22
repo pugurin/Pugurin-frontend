@@ -36,6 +36,7 @@ export const shapeState = (p: MapProps) => ({
   selection: selectionFeatures(p.selectionPoint, p.parcelGeometry),
   user: userLocationFeatures(p.userLocation),
   zone: p.schoolZone ?? null,
+  redevZones: p.redevelopmentZones ?? [],
   // 런타임은 병원 수만 쓰므로 목록은 보내지 않는다
   areas: (p.hospitalAreas ?? []).map((a) => ({
     id: a.id,

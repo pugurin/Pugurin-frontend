@@ -4,6 +4,7 @@ import { USER_LOCATION_COLOR } from "./userLocation";
 import { HOSPITAL_COLOR } from "../state/hospital";
 import { SCHOOL_LEVEL } from "../state/school";
 import { SELECTION_COLOR } from "./selection";
+import { REDEVELOPMENT_COLOR } from "../state/redevelopment";
 
 export const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? "";
 export const HAS_KAKAO = KAKAO_KEY.length > 0;
@@ -25,6 +26,7 @@ var SELECTION_COLOR = ${JSON.stringify(SELECTION_COLOR)};
 var USER_COLOR = ${JSON.stringify(USER_LOCATION_COLOR)};
 var HOSPITAL_COLOR = ${JSON.stringify(HOSPITAL_COLOR)};
 var ZONE_COLOR = ${JSON.stringify(SCHOOL_LEVEL.elementary.color)};
+var REDEV_ZONE_COLOR = ${JSON.stringify(REDEVELOPMENT_COLOR)};
 var waiting = null;
 
 // SDK는 한 번만 넣고, 동시에 부른 쪽은 같은 결과를 기다린다
@@ -259,6 +261,25 @@ window.pugurinKakaoMap = function (el, config, send) {
       });
       if (g.type === 'LineString') shapes.push(new kakao.maps.Polyline(Object.assign({ path: paths([g.coordinates])[0] }, line)));
     });
+    // 정비구역 경계. 재개발 색 테두리·옅은 채움에 45° 빗금(미리 잘라 둔 사선)을 얹어 학구도(빗금 없음)와 구분한다.
+    // 면·빗금 어디를 눌러도 그 구역 id로 알린다(지도 클릭으로는 넘기지 않는다)
+    (state.redevZones || []).forEach(function (z) {
+      var pick = function () {
+        markerClick = Date.now();
+        send({ type: 'marker', id: z.id });
+      };
+      var weight = z.selected ? 3.5 : 2;
+      z.polygons.forEach(function (poly) {
+        var shape = new kakao.maps.Polygon({ path: paths(poly), strokeColor: REDEV_ZONE_COLOR, strokeWeight: weight, strokeOpacity: 0.9, fillColor: REDEV_ZONE_COLOR, fillOpacity: z.selected ? 0.16 : 0.07, zIndex: 0 });
+        kakao.maps.event.addListener(shape, 'click', pick);
+        shapes.push(shape);
+      });
+      z.hatch.forEach(function (seg) {
+        var line = new kakao.maps.Polyline({ path: [latLng(seg[0][1], seg[0][0]), latLng(seg[1][1], seg[1][0])], strokeColor: REDEV_ZONE_COLOR, strokeWeight: 1, strokeOpacity: z.selected ? 0.75 : 0.45, zIndex: 0 });
+        kakao.maps.event.addListener(line, 'click', pick);
+        shapes.push(line);
+      });
+    });
     // 초등학교 통학구역. 학교 색 굵은 테두리와 반투명 채움으로 마커·필지 아래에 그린다
     var zone = state.zone;
     var zonePolys = !zone ? [] : zone.type === 'Polygon' ? [zone.coordinates] : zone.type === 'MultiPolygon' ? zone.coordinates : [];
@@ -319,7 +340,7 @@ window.pugurinKakaoMap = function (el, config, send) {
       if (!map) return;
       applyLayers();
       if ('items' in m) renderMarkers();
-      if ('selection' in m || 'user' in m || 'areas' in m || 'zone' in m) renderShapes();
+      if ('selection' in m || 'user' in m || 'areas' in m || 'zone' in m || 'redevZones' in m) renderShapes();
     } else if (m.type === 'move' || m.type === 'zoom') {
       if (!map) { pending = m; return; }
       if (m.type === 'move') move(m);

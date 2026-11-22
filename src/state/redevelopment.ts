@@ -2,6 +2,7 @@ import type {
   Redevelopment,
   RedevelopmentKind,
   RedevelopmentStage,
+  RedevelopmentZone,
 } from "../api/types";
 
 // 진행 중인 구역 마커 색(흰 바탕 위 굵은 글자 대비 4.5:1 이상)
@@ -13,6 +14,11 @@ export const REDEVELOPMENT_MIN_ZOOM = 12;
 // 화면 영역 하나에서 받는 구역 수(서버 page_size 최대)
 export const REDEVELOPMENT_LIMIT = 500;
 export const REDEVELOPMENT_SOURCE = "부산광역시 정비사업 정보";
+export const REDEVELOPMENT_ZONE_SOURCE = "브이월드 용도지역지구정보(정비구역)";
+// 정비구역 빗금 간격(화면 px). 학구도(빗금 없는 파랑 면)와 구분된다
+export const HATCH_SPACING_PX = 10;
+// 구역 하나에 긋는 사선 수 상한. 넘으면(멀리서 본 큰 구역) 빗금 없이 면만 칠한다
+const HATCH_MAX_LINES = 600;
 
 export const REDEVELOPMENT_KIND_LABEL: Record<RedevelopmentKind, string> = {
   redevelopment: "재개발",
@@ -140,4 +146,87 @@ export function cleanRedevelopment(r: Redevelopment): Redevelopment {
     tel: realTel(r.tel),
     images: images && Object.values(images).some(Boolean) ? images : null,
   };
+}
+
+// ── 정비구역 경계 ─────────────────────────────────────
+
+export type LngLat = [number, number];
+export type RedevelopmentZoneShape = {
+  // 마커 id와 같은 꼴(redevzone:경계ID). 누르면 이 id로 이벤트가 온다
+  id: string;
+  // GeoJSON MultiPolygon 좌표: 다각형마다 [바깥 고리, 구멍…]
+  polygons: LngLat[][][];
+  // 구역 안으로 잘라 낸 45° 사선
+  hatch: [LngLat, LngLat][];
+  selected: boolean;
+};
+
+// 다각형(바깥 고리 + 구멍) 안에만 45° 사선을 spacingM 간격으로 긋는다.
+// 구역 첫 점 기준으로 m 평면에 펴서 사선과 변의 교점을 구하고, 짝수-홀수 규칙으로 안쪽 구간만 남긴다
+export function hatchSegments(
+  rings: LngLat[][],
+  spacingM: number,
+): [LngLat, LngLat][] {
+  const first = rings[0]?.[0];
+  if (!first || !(spacingM > 0)) return [];
+  const [lng0, lat0] = first;
+  const kx = 111320 * Math.cos((lat0 * Math.PI) / 180);
+  const ky = 110540;
+  const xy = rings.map((ring) =>
+    ring.map(([lng, lat]) => [(lng - lng0) * kx, (lat - lat0) * ky]),
+  );
+  // 사선은 x - y = c. 사선 사이 수직 간격이 spacingM이면 c는 spacingM·√2씩 커진다
+  const us = xy.flat().map(([x, y]) => x - y);
+  const min = Math.min(...us);
+  const max = Math.max(...us);
+  const step = spacingM * Math.SQRT2;
+  if ((max - min) / step > HATCH_MAX_LINES) return [];
+  const back = (c: number, v: number): LngLat => {
+    const x = (c + v) / 2;
+    const y = (v - c) / 2;
+    return [lng0 + x / kx, lat0 + y / ky];
+  };
+  const out: [LngLat, LngLat][] = [];
+  for (let c = Math.ceil(min / step) * step; c <= max; c += step) {
+    const vs: number[] = [];
+    for (const ring of xy) {
+      for (let i = 0; i + 1 < ring.length; i++) {
+        const [x1, y1] = ring[i];
+        const [x2, y2] = ring[i + 1];
+        const u1 = x1 - y1;
+        const u2 = x2 - y2;
+        // 반열린 구간으로 꼭짓점을 두 번 세지 않는다
+        if ((u1 <= c && c < u2) || (u2 <= c && c < u1)) {
+          const t = (c - u1) / (u2 - u1);
+          vs.push(x1 + t * (x2 - x1) + (y1 + t * (y2 - y1)));
+        }
+      }
+    }
+    vs.sort((a, b) => a - b);
+    for (let i = 0; i + 1 < vs.length; i += 2)
+      out.push([back(c, vs[i]), back(c, vs[i + 1])]);
+  }
+  return out;
+}
+
+// 화면 1px의 길이(m). 앱 줌 = 18 - 카카오 레벨, 카카오 레벨 L에서 1px = 2^(L-3) m
+const metersPerPx = (zoom: number) => 2 ** (15 - zoom);
+
+// 지도에 넘길 정비구역 도형. 빗금 간격은 줌에 맞춰 화면에서 늘 HATCH_SPACING_PX가 되게 한다
+export function redevelopmentZoneShapes(
+  zones: RedevelopmentZone[],
+  zoom: number,
+  selected: string | null,
+): RedevelopmentZoneShape[] {
+  const spacing = HATCH_SPACING_PX * metersPerPx(Math.round(zoom));
+  return zones.map((z) => {
+    const id = `redevzone:${z.zone_id}`;
+    const polygons = z.geometry.coordinates as LngLat[][][];
+    return {
+      id,
+      polygons,
+      hatch: polygons.flatMap((rings) => hatchSegments(rings, spacing)),
+      selected: id === selected,
+    };
+  });
 }

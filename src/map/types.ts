@@ -1,6 +1,7 @@
 import type { Geometry } from "geojson";
 import type { SelectionPoint } from "./selection";
 import type { HospitalArea } from "../state/hospital";
+import type { RedevelopmentZoneShape } from "../state/redevelopment";
 import type { UserLocation } from "./userLocation";
 import type {
   Auction,
@@ -42,6 +43,8 @@ export type MapProps = {
   parcelGeometry?: Geometry | null;
   // 고른 초등학교의 통학구역 경계. 있으면 학교 색으로 칠한다
   schoolZone?: Geometry | null;
+  // 정비구역 경계(재개발 색 + 빗금). 누르면 { type: "marker", id: "redevzone:…" }
+  redevelopmentZones?: RedevelopmentZoneShape[];
   // 지도에 그릴 병원 원. 없으면 그리지 않는다
   hospitalAreas?: HospitalArea[];
   // 위치 권한을 받아 확인한 내 위치. 없으면 표시하지 않는다
