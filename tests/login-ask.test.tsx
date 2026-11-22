@@ -23,3 +23,14 @@ describe("로그인 안내 창", () => {
     expect(screen.queryByText("로그인이 필요해요")).toBeNull();
   });
 });
+
+describe("로그인 안내 창 바깥", () => {
+  it("어두운 바깥을 누르면 취소하고, 안쪽 카드를 누르면 닫히지 않는다", () => {
+    const onCancel = vi.fn();
+    render(<LoginAsk visible onCancel={onCancel} onLogin={() => {}} />);
+    fireEvent.click(screen.getByLabelText("로그인 안내"));
+    expect(onCancel).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText("로그인 안내 닫기"));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+});

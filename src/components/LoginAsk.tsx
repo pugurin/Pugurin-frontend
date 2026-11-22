@@ -19,7 +19,10 @@ export function LoginAsk({
       animationType="fade"
       onRequestClose={onCancel}
     >
-      <View
+      {/* 바깥 어두운 곳을 누르면 취소. 안쪽 카드는 Pressable이라 눌림이 바깥으로 새지 않는다 */}
+      <Pressable
+        accessibilityLabel="로그인 안내 닫기"
+        onPress={onCancel}
         style={{
           flex: 1,
           backgroundColor: "rgba(17,17,16,.45)",
@@ -67,7 +70,7 @@ export function LoginAsk({
             </Btn>
           </View>
         </Pressable>
-      </View>
+      </Pressable>
     </Modal>
   );
 }
