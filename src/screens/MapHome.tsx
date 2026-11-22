@@ -675,8 +675,8 @@ export function MapHome({
         ? `redevzone:${selected.redev.zone_id}`
         : null;
   const redevShapes = useMemo(
-    () => redevelopmentZoneShapes(redevZones, camera.zoom, selectedZone),
-    [redevZones, Math.round(camera.zoom), selectedZone],
+    () => redevelopmentZoneShapes(redevZones, camera.zoom),
+    [redevZones, Math.round(camera.zoom)],
   );
   const areas = useMemo(
     () =>
@@ -1508,6 +1508,7 @@ export function MapHome({
             hospitalAreas={areas}
             redevelopments={redevList}
             redevelopmentZones={redevShapes}
+            redevelopmentZoneSelected={selectedZone}
             selected={
               selected?.kind === "complex"
                 ? selected.id

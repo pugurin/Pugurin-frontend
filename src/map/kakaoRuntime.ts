@@ -105,7 +105,7 @@ window.pugurinKakaoMap = function (el, config, send) {
   var SCHOOL_BADGE_X = 14.5;
   // 꼬리 높이. 꼬리는 상자 밖(bottom:-7px)에 그려져 offsetHeight에 들어가지 않는다
   var TAIL = 7;
-  var map = null, destroyed = false, overlays = [], shapes = [], pending = null, markerClick = 0;
+  var map = null, destroyed = false, overlays = [], shapes = [], zones = [], pending = null, markerClick = 0;
   var state = { items: [], base: 'normal', cadastral: false, roadview: false, selection: null, user: null };
   var overlaysOn = {};
   addStyle();
@@ -261,26 +261,6 @@ window.pugurinKakaoMap = function (el, config, send) {
       });
       if (g.type === 'LineString') shapes.push(new kakao.maps.Polyline(Object.assign({ path: paths([g.coordinates])[0] }, line)));
     });
-    // 정비구역 경계. 재개발 색 테두리·옅은 채움에 45° 빗금(미리 잘라 둔 사선)을 얹어 학구도(빗금 없음)와 구분한다.
-    // 면·빗금 어디를 눌러도 그 구역 id로 알린다(지도 클릭으로는 넘기지 않는다)
-    (state.redevZones || []).forEach(function (z) {
-      var pick = function () {
-        markerClick = Date.now();
-        send({ type: 'marker', id: z.id });
-      };
-      var weight = z.selected ? 3.5 : 2;
-      z.polygons.forEach(function (poly) {
-        // 정비예정구역(아직 지정 전)은 점선 테두리로 구분한다
-        var shape = new kakao.maps.Polygon({ path: paths(poly), strokeColor: REDEV_ZONE_COLOR, strokeWeight: weight, strokeOpacity: 0.9, strokeStyle: z.dashed ? 'shortdash' : 'solid', fillColor: REDEV_ZONE_COLOR, fillOpacity: z.selected ? 0.16 : 0.07, zIndex: 0 });
-        kakao.maps.event.addListener(shape, 'click', pick);
-        shapes.push(shape);
-      });
-      z.hatch.forEach(function (seg) {
-        var line = new kakao.maps.Polyline({ path: [latLng(seg[0][1], seg[0][0]), latLng(seg[1][1], seg[1][0])], strokeColor: REDEV_ZONE_COLOR, strokeWeight: 1, strokeOpacity: z.selected ? 0.75 : 0.45, zIndex: 0 });
-        kakao.maps.event.addListener(line, 'click', pick);
-        shapes.push(line);
-      });
-    });
     // 초등학교 통학구역. 학교 색 굵은 테두리와 반투명 채움으로 마커·필지 아래에 그린다
     var zone = state.zone;
     var zonePolys = !zone ? [] : zone.type === 'Polygon' ? [zone.coordinates] : zone.type === 'MultiPolygon' ? zone.coordinates : [];
@@ -303,6 +283,46 @@ window.pugurinKakaoMap = function (el, config, send) {
       shapes.push(new kakao.maps.CustomOverlay({ position: pos, content: label, xAnchor: 0.5, yAnchor: 0.5, zIndex: 4, clickable: true }));
     });
     shapes.forEach(function (s) { s.setMap(map); });
+  }
+
+  // 정비구역 경계. 재개발 색 테두리·옅은 채움에 45° 빗금(미리 잘라 둔 사선)을 얹어 학구도(빗금 없음)와 구분한다.
+  // 면·빗금 어디를 눌러도 그 구역 id로 알린다(지도 클릭으로는 넘기지 않는다).
+  // 빗금 도형이 많아 경계가 바뀔 때만 다시 만들고, 고르기는 applyZoneSelection이 옵션만 바꾼다
+  function renderZones() {
+    zones.forEach(function (z) { z.faces.concat(z.lines).forEach(function (s) { s.setMap(null); }); });
+    zones = [];
+    if (!map) return;
+    (state.redevZones || []).forEach(function (z) {
+      var pick = function () {
+        markerClick = Date.now();
+        send({ type: 'marker', id: z.id });
+      };
+      var entry = { id: z.id, faces: [], lines: [] };
+      z.polygons.forEach(function (poly) {
+        // 정비예정구역(아직 지정 전)은 점선 테두리로 구분한다
+        var face = new kakao.maps.Polygon({ path: paths(poly), strokeColor: REDEV_ZONE_COLOR, strokeWeight: 2, strokeOpacity: 0.9, strokeStyle: z.dashed ? 'shortdash' : 'solid', fillColor: REDEV_ZONE_COLOR, fillOpacity: 0.07, zIndex: 0 });
+        kakao.maps.event.addListener(face, 'click', pick);
+        entry.faces.push(face);
+      });
+      z.hatch.forEach(function (seg) {
+        var line = new kakao.maps.Polyline({ path: [latLng(seg[0][1], seg[0][0]), latLng(seg[1][1], seg[1][0])], strokeColor: REDEV_ZONE_COLOR, strokeWeight: 1, strokeOpacity: 0.45, zIndex: 0 });
+        kakao.maps.event.addListener(line, 'click', pick);
+        entry.lines.push(line);
+      });
+      entry.faces.concat(entry.lines).forEach(function (s) { s.setMap(map); });
+      zones.push(entry);
+    });
+    applyZoneSelection();
+  }
+
+  function applyZoneSelection() {
+    zones.forEach(function (z) {
+      var on = z.id === state.redevZoneSelected;
+      if (z.on === on) return;
+      z.on = on;
+      z.faces.forEach(function (f) { f.setOptions({ strokeWeight: on ? 3.5 : 2, fillOpacity: on ? 0.16 : 0.07 }); });
+      z.lines.forEach(function (l) { l.setOptions({ strokeOpacity: on ? 0.75 : 0.45 }); });
+    });
   }
 
   function applyLayers() {
@@ -341,7 +361,9 @@ window.pugurinKakaoMap = function (el, config, send) {
       if (!map) return;
       applyLayers();
       if ('items' in m) renderMarkers();
-      if ('selection' in m || 'user' in m || 'areas' in m || 'zone' in m || 'redevZones' in m) renderShapes();
+      if ('selection' in m || 'user' in m || 'areas' in m || 'zone' in m) renderShapes();
+      if ('redevZones' in m) renderZones();
+      else if ('redevZoneSelected' in m) applyZoneSelection();
     } else if (m.type === 'move' || m.type === 'zoom') {
       if (!map) { pending = m; return; }
       if (m.type === 'move') move(m);
@@ -351,6 +373,7 @@ window.pugurinKakaoMap = function (el, config, send) {
     } else if (m.type === 'destroy') {
       destroyed = true;
       overlays.concat(shapes).forEach(function (o) { o.setMap(null); });
+      zones.forEach(function (z) { z.faces.concat(z.lines).forEach(function (o) { o.setMap(null); }); });
     }
   }
 
@@ -372,6 +395,7 @@ window.pugurinKakaoMap = function (el, config, send) {
     applyLayers();
     renderMarkers();
     renderShapes();
+    renderZones();
     send({ type: 'ready' });
     camera();
     if (pending) { var p = pending; pending = null; receive(p); }

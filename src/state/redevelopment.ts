@@ -19,6 +19,8 @@ export const REDEVELOPMENT_ZONE_SOURCE = "브이월드 용도지역지구정보"
 export const HATCH_SPACING_PX = 10;
 // 구역 하나에 긋는 사선 수 상한. 넘으면(멀리서 본 큰 구역) 빗금 없이 면만 칠한다
 const HATCH_MAX_LINES = 600;
+// 화면 전체에 긋는 사선 수 상한. 넘으면 작은 구역부터 빗금을 빼고 면만 칠한다(사선 하나하나가 지도 도형이라 무겁다)
+export const REDEV_HATCH_TOTAL_MAX = 2000;
 
 export const REDEVELOPMENT_KIND_LABEL: Record<RedevelopmentKind, string> = {
   redevelopment: "재개발",
@@ -158,7 +160,6 @@ export type RedevelopmentZoneShape = {
   polygons: LngLat[][][];
   // 구역 안으로 잘라 낸 45° 사선
   hatch: [LngLat, LngLat][];
-  selected: boolean;
   // 정비예정구역(아직 지정 전)은 점선 테두리
   dashed: boolean;
 };
@@ -222,21 +223,41 @@ export function hatchSegments(
 const metersPerPx = (zoom: number) => 2 ** (15 - zoom);
 
 // 지도에 넘길 정비구역 도형. 빗금 간격은 줌에 맞춰 화면에서 늘 HATCH_SPACING_PX가 되게 한다
+// 바깥 고리 넓이(경위도 그대로, 크기 비교용)
+function ringArea(ring: LngLat[]): number {
+  let a = 0;
+  for (let k = 0; k < ring.length - 1; k++)
+    a += ring[k][0] * ring[k + 1][1] - ring[k + 1][0] * ring[k][1];
+  return Math.abs(a) / 2;
+}
+
+// 고른 구역 표시는 따로 넘긴다(고르기만 바뀌면 빗금을 다시 계산·그리지 않게)
 export function redevelopmentZoneShapes(
   zones: RedevelopmentZone[],
   zoom: number,
-  selected: string | null,
 ): RedevelopmentZoneShape[] {
   const spacing = HATCH_SPACING_PX * metersPerPx(Math.round(zoom));
-  return zones.map((z) => {
-    const id = `redevzone:${z.zone_id}`;
+  const shapes = zones.map((z) => {
     const polygons = z.geometry.coordinates as LngLat[][][];
     return {
-      id,
+      id: `redevzone:${z.zone_id}`,
       polygons,
       hatch: polygons.flatMap((rings) => hatchSegments(rings, spacing)),
-      selected: id === selected,
       dashed: z.layer === "planned",
+      area: polygons.reduce((n, rings) => n + ringArea(rings[0] ?? []), 0),
     };
   });
+  // 큰 구역부터 상한까지 빗금을 남긴다
+  let left = REDEV_HATCH_TOTAL_MAX;
+  const keep = new Set<string>();
+  for (const s of [...shapes].sort((a, b) => b.area - a.area)) {
+    if (s.hatch.length <= left) {
+      keep.add(s.id);
+      left -= s.hatch.length;
+    }
+  }
+  return shapes.map(({ area: _area, ...s }) => ({
+    ...s,
+    hatch: keep.has(s.id) ? s.hatch : [],
+  }));
 }

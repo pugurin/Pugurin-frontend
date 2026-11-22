@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { webRuntime } from "../src/map/kakaoRuntime";
-import { fullState, markerState } from "../src/map/bridge";
+import { fullState, markerState, shapeState } from "../src/map/bridge";
 import type { MapProps } from "../src/map/types";
 import type { Auction, ComplexMarker, Redevelopment, School } from "../src/api/types";
 import { REDEVELOPMENTS, REDEVELOPMENT_ZONES } from "../src/api/fixtures";
@@ -26,6 +26,7 @@ function fakeKakao() {
     map: unknown = null;
     constructor(public options: any) { shapes.push(this); }
     setMap(m: unknown) { this.map = m; }
+    setOptions(o: any) { this.options = { ...this.options, ...o }; }
   }
   class KakaoMap {
     center: LatLng;
@@ -523,8 +524,7 @@ describe("병원 원", () => {
 });
 
 describe("정비구역 경계", () => {
-  const shapes = (selected: string | null = null) =>
-    redevelopmentZoneShapes(REDEVELOPMENT_ZONES.slice(0, 1), 15, selected);
+  const shapes = () => redevelopmentZoneShapes(REDEVELOPMENT_ZONES.slice(0, 1), 15);
   const faces = () => fake.shapes.filter((s) => s.map && s.options.strokeColor === "#C2410C" && s.options.fillColor);
   const hatch = () => fake.shapes.filter((s) => s.map && s.options.strokeColor === "#C2410C" && !s.options.fillColor);
 
@@ -538,8 +538,31 @@ describe("정비구역 경계", () => {
   });
 
   it("고른 경계는 굵고 진하게 칠한다", () => {
-    start("test-key", props({ redevelopmentZones: shapes("redevzone:SAMPLE_ZONE_1") }));
+    start("test-key", props({ redevelopmentZones: shapes(), redevelopmentZoneSelected: "redevzone:SAMPLE_ZONE_1" }));
     expect(faces()[0].options).toMatchObject({ strokeWeight: 3.5, fillOpacity: 0.16 });
+  });
+
+  it("고르기만 바뀌면 다시 만들지 않고 옵션만 바꾼다", () => {
+    const { receive } = start("test-key", props({ redevelopmentZones: shapes() }));
+    const before = fake.shapes.length;
+    const face = faces()[0];
+    receive({ type: "state", redevZoneSelected: "redevzone:SAMPLE_ZONE_1" });
+    expect(fake.shapes.length).toBe(before);
+    expect(faces()[0]).toBe(face);
+    expect(face.options).toMatchObject({ strokeWeight: 3.5, fillOpacity: 0.16 });
+    expect(hatch()[0].options.strokeOpacity).toBe(0.75);
+    receive({ type: "state", redevZoneSelected: null });
+    expect(face.options).toMatchObject({ strokeWeight: 2, fillOpacity: 0.07 });
+    expect(hatch()[0].options.strokeOpacity).toBe(0.45);
+  });
+
+  it("내 위치·필지 선택이 바뀌어도 정비구역은 다시 그리지 않는다", () => {
+    const { receive } = start("test-key", props({ redevelopmentZones: shapes() }));
+    const face = faces()[0];
+    const lines = hatch().length;
+    receive(shapeState(props({ redevelopmentZones: shapes(), userLocation: { lat: 35.16, lng: 129.16 } })));
+    expect(faces()).toEqual([face]);
+    expect(hatch()).toHaveLength(lines);
   });
 
   it("면이나 빗금을 누르면 경계 id로 marker만 보내고 지도 클릭으로 처리하지 않는다", async () => {

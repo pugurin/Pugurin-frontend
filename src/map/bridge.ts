@@ -36,7 +36,6 @@ export const shapeState = (p: MapProps) => ({
   selection: selectionFeatures(p.selectionPoint, p.parcelGeometry),
   user: userLocationFeatures(p.userLocation),
   zone: p.schoolZone ?? null,
-  redevZones: p.redevelopmentZones ?? [],
   // 런타임은 병원 수만 쓰므로 목록은 보내지 않는다
   areas: (p.hospitalAreas ?? []).map((a) => ({
     id: a.id,
@@ -46,10 +45,21 @@ export const shapeState = (p: MapProps) => ({
     count: a.members.length,
   })),
 });
+// 정비구역은 빗금 도형이 많아 따로 보낸다: 경계가 바뀔 때만 다시 그리고, 고르기는 옵션만 바꾼다
+export const redevZoneState = (p: MapProps) => ({
+  type: "state" as const,
+  redevZones: p.redevelopmentZones ?? [],
+});
+export const redevZoneSelectedState = (p: MapProps) => ({
+  type: "state" as const,
+  redevZoneSelected: p.redevelopmentZoneSelected ?? null,
+});
 export const fullState = (p: MapProps) => ({
   ...markerState(p),
   ...layerState(p),
   ...shapeState(p),
+  ...redevZoneState(p),
+  ...redevZoneSelectedState(p),
 });
 
 // 런타임 메시지를 MapProps 콜백으로 넘긴다. boot는 각 컴포넌트가 따로 처리한다

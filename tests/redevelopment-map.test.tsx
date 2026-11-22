@@ -259,7 +259,7 @@ describe("정비구역 경계", () => {
       "출처: 브이월드 용도지역지구정보",
     );
     expect(map.props.selected).toBe("redevzone:Z2");
-    expect(map.props.redevelopmentZones[1].selected).toBe(true);
+    expect(map.props.redevelopmentZoneSelected).toBe("redevzone:Z2");
   });
 
   it("경계 API가 없는 저장소여도 마커는 그대로 보인다", async () => {

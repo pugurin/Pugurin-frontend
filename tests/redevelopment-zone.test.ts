@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   HATCH_SPACING_PX,
+  REDEV_HATCH_TOTAL_MAX,
   hatchSegments,
   redevelopmentZoneShapes,
   type LngLat,
@@ -81,18 +82,17 @@ const zone = (over: Partial<RedevelopmentZone>): RedevelopmentZone => ({
 });
 
 describe("지도에 넘길 정비구역 도형", () => {
-  it("구역마다 테두리 고리와 줌에 맞춘 빗금, 고른 구역 표시를 넘긴다", () => {
-    const [s] = redevelopmentZoneShapes([zone({})], 15, "redevzone:Z1");
+  it("구역마다 테두리 고리와 줌에 맞춘 빗금을 넘긴다(고른 구역은 따로 넘긴다)", () => {
+    const [s] = redevelopmentZoneShapes([zone({})], 15);
     expect(s.id).toBe("redevzone:Z1");
-    expect(s.selected).toBe(true);
+    expect("selected" in s).toBe(false);
     expect(s.polygons).toEqual([[square(0, 0, 100)]]);
     // 줌 15는 1px = 1m라 간격 HATCH_SPACING_PX m
     expect(s.hatch).toEqual(
       hatchSegments([square(0, 0, 100)], HATCH_SPACING_PX),
     );
     // 줌을 줄이면 간격이 넓어져 선이 줄어든다
-    const [far] = redevelopmentZoneShapes([zone({})], 14, null);
-    expect(far.selected).toBe(false);
+    const [far] = redevelopmentZoneShapes([zone({})], 14);
     expect(far.hatch.length).toBeLessThan(s.hatch.length);
   });
 
@@ -100,9 +100,43 @@ describe("지도에 넘길 정비구역 도형", () => {
     const [zoneShape, planned] = redevelopmentZoneShapes(
       [zone({}), zone({ zone_id: "Z2", layer: "planned" })],
       15,
-      null,
     );
     expect(zoneShape.dashed).toBe(false);
     expect(planned.dashed).toBe(true);
+  });
+});
+
+describe("화면 전체 빗금 상한", () => {
+  it("빗금이 상한을 넘으면 작은 구역부터 빗금을 빼고 면만 남긴다", () => {
+    // 500m 구역 하나(빗금 약 70개)와 100m 구역 여러 개(각 약 14개)
+    const big = zone({
+      zone_id: "BIG",
+      geometry: { type: "MultiPolygon", coordinates: [[square(0, 0, 500)]] },
+    });
+    const smalls = Array.from({ length: 200 }, (_, i) =>
+      zone({
+        zone_id: `S${i}`,
+        geometry: {
+          type: "MultiPolygon",
+          coordinates: [[square(1000 + i * 150, 0, 100)]],
+        },
+      }),
+    );
+    const shapes = redevelopmentZoneShapes([...smalls, big], 15);
+    const total = shapes.reduce((n, s) => n + s.hatch.length, 0);
+    expect(total).toBeLessThanOrEqual(REDEV_HATCH_TOTAL_MAX);
+    // 큰 구역은 빗금이 남고, 빗금이 빠진 작은 구역도 면(고리)은 그대로다
+    expect(
+      shapes.find((s) => s.id === "redevzone:BIG")!.hatch.length,
+    ).toBeGreaterThan(0);
+    const bare = shapes.filter((s) => s.hatch.length === 0);
+    expect(bare.length).toBeGreaterThan(0);
+    expect(bare.every((s) => s.polygons.length === 1)).toBe(true);
+    // 넘지 않으면 하나도 빼지 않는다
+    expect(
+      redevelopmentZoneShapes(smalls.slice(0, 3), 15).every(
+        (s) => s.hatch.length > 0,
+      ),
+    ).toBe(true);
   });
 });
