@@ -143,7 +143,9 @@ export function MoreScreen({
               )}
             </View>
             <T size={14} color={C.muted}>
-              관심 목록은 이 기기에 저장돼요. 앱을 지우면 사라져요
+              {user
+                ? "관심 목록은 내 계정에 저장돼요"
+                : "로그인하면 관심 목록을 계정에 저장해요"}
             </T>
           </Section>
         )}

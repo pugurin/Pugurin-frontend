@@ -152,7 +152,7 @@ export function InterestsScreen({
           </T>
         )}
         <T size={13} color={C.light} style={{ textAlign: "center" }}>
-          관심 목록은 이 기기에 저장돼요. 앱을 지우면 사라져요
+          관심 목록은 내 계정에 저장돼요
         </T>
       </View>
     </View>

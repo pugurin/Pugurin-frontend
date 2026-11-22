@@ -302,6 +302,7 @@ describe("더보기 계정 카드", () => {
     notify: () => {},
     todayEnabled: true,
     onTodayEnabled: () => {},
+    onInterests: () => {},
   };
   it("로그인 전에는 로그인 카드, 뒤에는 닉네임 카드를 보여 준다", () => {
     const onLogin = vi.fn();
@@ -309,6 +310,8 @@ describe("더보기 계정 카드", () => {
     fireEvent.click(screen.getByRole("button", { name: "로그인 · 회원가입" }));
     expect(onLogin).toHaveBeenCalled();
     expect(screen.getByText("네이버·카카오·구글 계정으로 바로 시작해요")).toBeTruthy();
+    // 관심 목록은 기기가 아니라 계정에 저장한다
+    expect(screen.getByText("로그인하면 관심 목록을 계정에 저장해요")).toBeTruthy();
     const onAccount = vi.fn();
     rerender(
       <MoreScreen
@@ -318,6 +321,8 @@ describe("더보기 계정 카드", () => {
       />,
     );
     expect(screen.getByText("구글 계정으로 로그인했어요")).toBeTruthy();
+    expect(screen.queryByText(/이 기기에 저장돼요/)).toBeNull();
+    expect(screen.getByText("관심 목록은 내 계정에 저장돼요")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "부산사람 내 정보" }));
     expect(onAccount).toHaveBeenCalled();
   });
