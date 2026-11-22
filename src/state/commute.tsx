@@ -1,9 +1,18 @@
 import React, { createContext, useContext } from "react";
 import type { SearchResult } from "../api/types";
-import type { TransitLeg, TransitMode, TransitUnavailable } from "../api/transit";
+import type {
+  TransitLeg,
+  TransitMode,
+  TransitUnavailable,
+} from "../api/transit";
 
 // 길찾기의 출발·도착 한 곳. 집은 단지, 직장은 검색으로 고른 곳
-export type Place = { name: string; address?: string; lat: number; lng: number };
+export type Place = {
+  name: string;
+  address?: string;
+  lat: number;
+  lng: number;
+};
 
 export function placeFromSearch(r: SearchResult): Place {
   return {
@@ -66,7 +75,8 @@ export function legText(l: TransitLeg) {
 export const UNAVAILABLE_TEXT: Record<TransitUnavailable, string> = {
   too_close: "집과 직장이 700m 안이라 걸어가는 게 빨라요",
   no_route: "대중교통으로 가는 경로를 찾지 못했어요",
-  source_unavailable: "길찾기 정보를 잠시 불러올 수 없어요. 잠시 뒤 다시 시도해 주세요",
+  source_unavailable:
+    "길찾기 정보를 잠시 불러올 수 없어요. 잠시 뒤 다시 시도해 주세요",
   not_ready: "대중교통 길찾기는 준비 중이에요",
 };
 // 다시 시도하면 나아질 수 있는 경우

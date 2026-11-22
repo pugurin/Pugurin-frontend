@@ -29,10 +29,7 @@ export type TransitRoute = {
 // no_route: 대중교통 경로 없음 / source_unavailable: 공급처 장애·호출 한도 초과(다시 시도할 수 있음)
 // not_ready: 백엔드에 길찾기 API가 아직 없음(404). 다시 시도해도 같다
 export type TransitUnavailable =
-  | "too_close"
-  | "no_route"
-  | "source_unavailable"
-  | "not_ready";
+  "too_close" | "no_route" | "source_unavailable" | "not_ready";
 export type TransitResult = {
   routes: TransitRoute[];
   unavailable_reason: TransitUnavailable | null;
@@ -41,7 +38,11 @@ export type TransitResult = {
 export const TRANSIT_ROUTE_LIMIT = 3;
 // 좌표는 소수 3자리(약 100m)로 줄여 보낸다. 직장 위치를 정밀하게 남기지 않고, 서버 캐시도 잘 맞는다
 const coord = (n: number) => n.toFixed(3);
-export function transitQuery(from: LatLng, to: LatLng, limit = TRANSIT_ROUTE_LIMIT) {
+export function transitQuery(
+  from: LatLng,
+  to: LatLng,
+  limit = TRANSIT_ROUTE_LIMIT,
+) {
   return new URLSearchParams({
     from_lat: coord(from.lat),
     from_lng: coord(from.lng),
@@ -56,7 +57,9 @@ export function distanceM(a: LatLng, b: LatLng) {
   const r = Math.PI / 180;
   const h =
     Math.sin(((b.lat - a.lat) * r) / 2) ** 2 +
-    Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(((b.lng - a.lng) * r) / 2) ** 2;
+    Math.cos(a.lat * r) *
+      Math.cos(b.lat * r) *
+      Math.sin(((b.lng - a.lng) * r) / 2) ** 2;
   return 2 * 6371000 * Math.asin(Math.sqrt(h));
 }
 
@@ -64,13 +67,20 @@ export const TOO_CLOSE_M = 700;
 const BUS = { name: "샘플 버스 1001", color: "#3B82F6" };
 const SUBWAY = { name: "샘플 지하철 2호선", color: "#22C55E" };
 // 샘플 모드: 직선거리로 그럴듯한 경로 2개를 만든다(지하철 위주·버스 위주). 실제 경로가 아니다
-export function sampleTransit(from: LatLng, to: LatLng): Envelope<TransitResult> {
+export function sampleTransit(
+  from: LatLng,
+  to: LatLng,
+): Envelope<TransitResult> {
   const d = distanceM(from, to);
   if (d <= TOO_CLOSE_M)
     return { data: { routes: [], unavailable_reason: "too_close" } };
   // 실제 이동거리는 직선의 1.3배쯤
   const ride = Math.round(d * 1.3);
-  const walk = (m: number, start: string | null, end: string | null): TransitLeg => ({
+  const walk = (
+    m: number,
+    start: string | null,
+    end: string | null,
+  ): TransitLeg => ({
     mode: "walk",
     minutes: Math.max(1, Math.round(m / 67)),
     distance_m: m,
@@ -81,9 +91,14 @@ export function sampleTransit(from: LatLng, to: LatLng): Envelope<TransitResult>
   });
   const make = (legs: TransitLeg[], fare: number): TransitRoute => ({
     total_minutes: legs.reduce((s, l) => s + l.minutes, 0),
-    transfer_count: Math.max(0, legs.filter((l) => l.mode !== "walk").length - 1),
+    transfer_count: Math.max(
+      0,
+      legs.filter((l) => l.mode !== "walk").length - 1,
+    ),
     fare,
-    walk_minutes: legs.filter((l) => l.mode === "walk").reduce((s, l) => s + l.minutes, 0),
+    walk_minutes: legs
+      .filter((l) => l.mode === "walk")
+      .reduce((s, l) => s + l.minutes, 0),
     distance_m: legs.reduce((s, l) => s + l.distance_m, 0),
     legs,
   });
@@ -120,6 +135,8 @@ export function sampleTransit(from: LatLng, to: LatLng): Envelope<TransitResult>
     ],
     1550,
   );
-  const routes = [subway, bus].sort((a, b) => a.total_minutes - b.total_minutes);
+  const routes = [subway, bus].sort(
+    (a, b) => a.total_minutes - b.total_minutes,
+  );
   return { data: { routes, unavailable_reason: null } };
 }

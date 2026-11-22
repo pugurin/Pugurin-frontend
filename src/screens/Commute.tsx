@@ -14,16 +14,31 @@ import {
   type Place,
 } from "../state/commute";
 import { C } from "../theme/tokens";
-import { Btn, Header, Icon, IconBtn, Section, StateCard, T, s } from "../components/ui";
+import {
+  Btn,
+  Header,
+  Icon,
+  IconBtn,
+  Section,
+  StateCard,
+  T,
+  s,
+} from "../components/ui";
 
 const SOURCE = "경로 정보: ODsay · 실제 시간은 배차·교통 상황에 따라 달라요";
 // 직장 위치가 기기 밖으로 나간다는 안내. 좌표는 약 100m 단위로 줄여 보낸다
 const PRIVACY =
   "경로를 찾으려고 집·직장 위치(약 100m 단위)를 우리 서버를 거쳐 ODsay에 보내요. 직장은 이 기기에만 저장돼요";
-const SAMPLE_NOTICE = "샘플 경로예요. 직선거리로 만든 가짜 시간이라 실제와 달라요";
+const SAMPLE_NOTICE =
+  "샘플 경로예요. 직선거리로 만든 가짜 시간이라 실제와 달라요";
 
 // 경로 조회 공통. from·to가 바뀌면 다시 부른다
-function useTransit(repo: Repository, from: Place | null, to: Place | null, retry = 0) {
+function useTransit(
+  repo: Repository,
+  from: Place | null,
+  to: Place | null,
+  retry = 0,
+) {
   const [result, setResult] = useState<TransitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -56,19 +71,40 @@ const summary = (r: TransitRoute) =>
 // 구간을 시간 비율대로 이어 붙인 막대
 function LegBar({ route }: { route: TransitRoute }) {
   return (
-    <View style={{ flexDirection: "row", height: 10, borderRadius: 5, overflow: "hidden", gap: 2 }}>
+    <View
+      style={{
+        flexDirection: "row",
+        height: 10,
+        borderRadius: 5,
+        overflow: "hidden",
+        gap: 2,
+      }}
+    >
       {route.legs.map((l, i) => (
-        <View key={i} style={{ flex: Math.max(1, l.minutes), backgroundColor: legColor(l) }} />
+        <View
+          key={i}
+          style={{ flex: Math.max(1, l.minutes), backgroundColor: legColor(l) }}
+        />
       ))}
     </View>
   );
 }
 
 // 단지 시트의 출퇴근 칸. 직장이 없으면 설정 버튼, 있으면 가장 빠른 경로 요약
-export function CommuteSection({ repo, home }: { repo: Repository; home: Place }) {
+export function CommuteSection({
+  repo,
+  home,
+}: {
+  repo: Repository;
+  home: Place;
+}) {
   const commute = useCommute();
   const workplace = commute?.workplace ?? null;
-  const { result, error, loading } = useTransit(repo, workplace && home, workplace);
+  const { result, error, loading } = useTransit(
+    repo,
+    workplace && home,
+    workplace,
+  );
   if (!commute) return null;
   const best = result?.routes[0];
   const status = loading
@@ -82,7 +118,9 @@ export function CommuteSection({ repo, home }: { repo: Repository; home: Place }
     <Section title="출퇴근 (대중교통)">
       {!workplace ? (
         <View style={[s.card, { gap: 10 }]}>
-          <T color={C.muted}>직장을 정하면 이 단지에서 출근 시간을 보여드려요</T>
+          <T color={C.muted}>
+            직장을 정하면 이 단지에서 출근 시간을 보여드려요
+          </T>
           <Btn small icon="work" onPress={() => commute.pickWorkplace(home)}>
             직장 설정하기
           </Btn>
@@ -162,7 +200,12 @@ function PlaceRow({
   );
   const style = [s.row, { gap: 10, paddingVertical: 10 }];
   return onPress ? (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label} 바꾸기`} onPress={onPress} style={style}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label} 바꾸기`}
+      onPress={onPress}
+      style={style}
+    >
       {body}
     </Pressable>
   ) : (
@@ -209,7 +252,13 @@ function RouteCard({
       {open && (
         <View style={{ marginTop: 6, gap: 2 }}>
           {route.legs.map((l, i) => (
-            <View key={i} style={[s.row, { gap: 10, alignItems: "flex-start", paddingVertical: 6 }]}>
+            <View
+              key={i}
+              style={[
+                s.row,
+                { gap: 10, alignItems: "flex-start", paddingVertical: 6 },
+              ]}
+            >
               <View
                 style={{
                   width: 40,
@@ -288,7 +337,11 @@ export function CommuteScreen({
             </View>
             <Section title="대중교통 경로">
               {loading || error ? (
-                <StateCard loading={loading} error={error} onRetry={() => setRetry((x) => x + 1)} />
+                <StateCard
+                  loading={loading}
+                  error={error}
+                  onRetry={() => setRetry((x) => x + 1)}
+                />
               ) : result && result.routes.length === 0 ? (
                 RETRYABLE.includes(result.unavailable_reason ?? "no_route") ? (
                   <StateCard
@@ -296,7 +349,11 @@ export function CommuteScreen({
                     onRetry={() => setRetry((x) => x + 1)}
                   />
                 ) : (
-                  <StateCard empty={UNAVAILABLE_TEXT[result.unavailable_reason ?? "no_route"]} />
+                  <StateCard
+                    empty={
+                      UNAVAILABLE_TEXT[result.unavailable_reason ?? "no_route"]
+                    }
+                  />
                 )
               ) : (
                 result?.routes.map((r, i) => (
@@ -316,7 +373,12 @@ export function CommuteScreen({
             <T size={12} color={C.light}>
               {PRIVACY}
             </T>
-            <Btn small secondary icon="close" onPress={() => commute?.clearWorkplace()}>
+            <Btn
+              small
+              secondary
+              icon="close"
+              onPress={() => commute?.clearWorkplace()}
+            >
               직장 지우기
             </Btn>
           </>
