@@ -448,7 +448,10 @@ export default function App() {
         setRoute(
           e?.code === "CANCELLED"
             ? { kind: "login" }
-            : { kind: "login", error: e?.message ?? "로그인을 마치지 못했어요" },
+            : {
+                kind: "login",
+                error: e?.message ?? "로그인을 마치지 못했어요",
+              },
         );
       });
     return () => {
@@ -583,6 +586,12 @@ export default function App() {
         signup={route.signup}
         onBack={() => setRoute({ kind: "login" })}
         onSession={(next) => signedIn(next, true)}
+        onExpired={() =>
+          setRoute({
+            kind: "login",
+            error: "가입 시간이 지났어요. 다시 로그인해 주세요",
+          })
+        }
       />
     );
   if (route?.kind === "account" && auth && session)

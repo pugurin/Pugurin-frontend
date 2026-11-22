@@ -223,6 +223,45 @@ describe("로그인·가입 화면", () => {
     expect(screen.getByRole("alert").textContent).toContain("다른 계정으로 시작할 수 있어요");
   });
 
+  it("로그인 진행 중에 화면을 닫으면 늦게 온 결과로 로그인하지 않는다", async () => {
+    const auth = new SampleAuth(0);
+    let finish!: (r: any) => void;
+    auth.signIn = vi.fn(() => new Promise<any>((r) => (finish = r)));
+    const onSession = vi.fn();
+    const onSignup = vi.fn();
+    const view = render(<LoginScreen auth={auth} onBack={() => {}} onSession={onSession} onSignup={onSignup} />);
+    fireEvent.click(screen.getByRole("button", { name: "카카오로 시작하기" }));
+    view.unmount();
+    finish({ kind: "session", session: {} });
+    await flush();
+    expect(onSession).not.toHaveBeenCalled();
+    expect(onSignup).not.toHaveBeenCalled();
+  });
+
+  it("웹 리다이렉트 실패 안내는 다시 시도하면 지운다", async () => {
+    const auth = new SampleAuth(0);
+    auth.signIn = vi.fn(() => new Promise<any>(() => {}));
+    render(
+      <LoginScreen auth={auth} onBack={() => {}} onSession={() => {}} onSignup={() => {}} initialError="로그인을 마치지 못했어요" />,
+    );
+    expect(screen.getByRole("alert").textContent).toContain("로그인을 마치지 못했어요");
+    fireEvent.click(screen.getByRole("button", { name: "카카오로 시작하기" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("가입 토큰이 만료돼 401이면 로그인부터 다시 하게 한다", async () => {
+    const auth = new SampleAuth(0);
+    const signup = await auth.signIn("kakao");
+    if (signup.kind !== "signup") throw new Error();
+    auth.signUp = vi.fn().mockRejectedValue(new ApiError("만료", "UNAUTHORIZED"));
+    const onExpired = vi.fn();
+    render(<SignupScreen auth={auth} signup={signup} onBack={() => {}} onSession={() => {}} onExpired={onExpired} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "모두 동의" }));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 시작하기" }));
+    await flush();
+    expect(onExpired).toHaveBeenCalled();
+  });
+
   it("약관 동의: 필수 3개를 켜야 시작할 수 있고, 닉네임은 자동으로 만든다", async () => {
     const auth = new SampleAuth(0);
     const signup = await auth.signIn("naver");

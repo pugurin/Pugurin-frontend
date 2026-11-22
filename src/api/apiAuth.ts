@@ -141,7 +141,10 @@ export class ApiAuth implements AuthApi {
       return Promise.reject(
         new ApiError("다시 로그인해 주세요", "UNAUTHORIZED"),
       );
-    this.refreshing = this.call<{ access_token: string; refresh_token?: string | null }>(
+    this.refreshing = this.call<{
+      access_token: string;
+      refresh_token?: string | null;
+    }>(
       "POST",
       "/auth/refresh",
       this.app ? { refresh_token: previous } : undefined,
@@ -152,7 +155,10 @@ export class ApiAuth implements AuthApi {
           const next = r!.refresh_token ?? "";
           this.rotated.set(previous, next);
           this.refreshToken = next;
-          this.onTokens?.({ access_token: this.access, refresh_token: next }, previous);
+          this.onTokens?.(
+            { access_token: this.access, refresh_token: next },
+            previous,
+          );
         }
         return this.access;
       })
@@ -257,7 +263,11 @@ export class ApiAuth implements AuthApi {
   }
 
   async signOut(session?: Session): Promise<void> {
-    const refresh_token = this.latest(session?.refresh_token || this.refreshToken);
+    // 갱신이 진행 중이면 끝나길 기다린다. 옛 토큰으로 로그아웃하면 서버에서 회전된 새 토큰이 살아남는다
+    await this.refreshing?.catch(() => {});
+    const refresh_token = this.latest(
+      session?.refresh_token || this.refreshToken,
+    );
     this.access = undefined;
     this.refreshToken = "";
     await this.call(
