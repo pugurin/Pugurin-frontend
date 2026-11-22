@@ -350,6 +350,8 @@ export type Redevelopment = {
 // 정비구역 경계(`/redevelopment-zones`, 브이월드 정비구역 SHP). 우리 구역과 이어지면 그 이름·종류·단계가 있다
 export type RedevelopmentZone = {
   zone_id: string;
+  // zone: 정비구역, promotion: 재정비촉진구역, planned: 정비예정구역(아직 구역 지정 전). 옛 서버는 보내지 않는다
+  layer?: "zone" | "promotion" | "planned";
   // 원천 이름. 비었거나 안내 문구면 null
   name: string | null;
   // 이름 대신 고시 번호만 있을 때(예: 부산광역시 고시 제2016-415호)

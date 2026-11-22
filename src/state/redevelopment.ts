@@ -14,7 +14,7 @@ export const REDEVELOPMENT_MIN_ZOOM = 12;
 // 화면 영역 하나에서 받는 구역 수(서버 page_size 최대)
 export const REDEVELOPMENT_LIMIT = 500;
 export const REDEVELOPMENT_SOURCE = "부산광역시 정비사업 정보";
-export const REDEVELOPMENT_ZONE_SOURCE = "브이월드 용도지역지구정보(정비구역)";
+export const REDEVELOPMENT_ZONE_SOURCE = "브이월드 용도지역지구정보";
 // 정비구역 빗금 간격(화면 px). 학구도(빗금 없는 파랑 면)와 구분된다
 export const HATCH_SPACING_PX = 10;
 // 구역 하나에 긋는 사선 수 상한. 넘으면(멀리서 본 큰 구역) 빗금 없이 면만 칠한다
@@ -159,7 +159,16 @@ export type RedevelopmentZoneShape = {
   // 구역 안으로 잘라 낸 45° 사선
   hatch: [LngLat, LngLat][];
   selected: boolean;
+  // 정비예정구역(아직 지정 전)은 점선 테두리
+  dashed: boolean;
 };
+
+// 경계 종류 이름(시트 배지)
+export const REDEVELOPMENT_ZONE_LAYER_LABEL = {
+  zone: "정비구역",
+  promotion: "재정비촉진구역",
+  planned: "정비예정구역",
+} as const;
 
 // 다각형(바깥 고리 + 구멍) 안에만 45° 사선을 spacingM 간격으로 긋는다.
 // 구역 첫 점 기준으로 m 평면에 펴서 사선과 변의 교점을 구하고, 짝수-홀수 규칙으로 안쪽 구간만 남긴다
@@ -227,6 +236,7 @@ export function redevelopmentZoneShapes(
       polygons,
       hatch: polygons.flatMap((rings) => hatchSegments(rings, spacing)),
       selected: id === selected,
+      dashed: z.layer === "planned",
     };
   });
 }

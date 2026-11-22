@@ -82,6 +82,7 @@ const ring = [
 const ZONES = [
   {
     zone_id: "Z1",
+    layer: "zone",
     name: "우동1재개발정비구역",
     notice: null,
     designated_on: "2016-12-21",
@@ -93,6 +94,7 @@ const ZONES = [
   },
   {
     zone_id: "Z2",
+    layer: "planned",
     name: null,
     notice: "부산광역시 고시 제2016-415호",
     designated_on: "2016-12-21",
@@ -105,7 +107,7 @@ const ZONES = [
 ];
 const ZONE_META = {
   data_as_of: "2026-11-22T21:00:00+09:00",
-  source_attribution: "브이월드 용도지역지구정보(정비구역)",
+  source_attribution: "브이월드 용도지역지구정보",
 };
 function setup(impl?: (...a: any[]) => Promise<any>, on = true, zones = true) {
   const redevelopments = vi.fn(
@@ -249,11 +251,12 @@ describe("정비구역 경계", () => {
     await waitFor(() => expect(map.props.redevelopmentZones.length).toBe(2));
     fireEvent.click(screen.getByText("안 이어진 경계 누르기"));
     const sheet = await screen.findByTestId("sheet");
-    expect(sheet.textContent).toContain("정비구역");
+    // 정비예정구역은 종류 배지로 알린다(아직 구역 지정 전)
+    expect(sheet.textContent).toContain("정비예정구역");
     expect(sheet.textContent).toContain("부산광역시 고시 제2016-415호");
     expect(sheet.textContent).toContain("고시일 2016.12.21");
     expect(sheet.textContent).toContain(
-      "출처: 브이월드 용도지역지구정보(정비구역)",
+      "출처: 브이월드 용도지역지구정보",
     );
     expect(map.props.selected).toBe("redevzone:Z2");
     expect(map.props.redevelopmentZones[1].selected).toBe(true);

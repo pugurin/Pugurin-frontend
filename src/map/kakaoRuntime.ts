@@ -270,7 +270,8 @@ window.pugurinKakaoMap = function (el, config, send) {
       };
       var weight = z.selected ? 3.5 : 2;
       z.polygons.forEach(function (poly) {
-        var shape = new kakao.maps.Polygon({ path: paths(poly), strokeColor: REDEV_ZONE_COLOR, strokeWeight: weight, strokeOpacity: 0.9, fillColor: REDEV_ZONE_COLOR, fillOpacity: z.selected ? 0.16 : 0.07, zIndex: 0 });
+        // 정비예정구역(아직 지정 전)은 점선 테두리로 구분한다
+        var shape = new kakao.maps.Polygon({ path: paths(poly), strokeColor: REDEV_ZONE_COLOR, strokeWeight: weight, strokeOpacity: 0.9, strokeStyle: z.dashed ? 'shortdash' : 'solid', fillColor: REDEV_ZONE_COLOR, fillOpacity: z.selected ? 0.16 : 0.07, zIndex: 0 });
         kakao.maps.event.addListener(shape, 'click', pick);
         shapes.push(shape);
       });

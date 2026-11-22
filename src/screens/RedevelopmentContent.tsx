@@ -8,6 +8,7 @@ import {
   REDEVELOPMENT_KIND_LABEL,
   REDEVELOPMENT_SOURCE,
   REDEVELOPMENT_STEPS,
+  REDEVELOPMENT_ZONE_LAYER_LABEL,
   REDEVELOPMENT_ZONE_SOURCE,
   isDone,
   stageShort,
@@ -201,7 +202,7 @@ export function RedevelopmentZoneContent({
     <>
       <View style={[s.row, { flexWrap: "wrap" }]}>
         <Badge bg={REDEVELOPMENT_COLOR} ink="#fff">
-          정비구역
+          {REDEVELOPMENT_ZONE_LAYER_LABEL[zone.layer ?? "zone"]}
         </Badge>
         {zone.kind && <Badge>{REDEVELOPMENT_KIND_LABEL[zone.kind]}</Badge>}
       </View>

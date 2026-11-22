@@ -68,6 +68,7 @@ describe("정비구역 빗금", () => {
 
 const zone = (over: Partial<RedevelopmentZone>): RedevelopmentZone => ({
   zone_id: "Z1",
+  layer: "zone",
   name: "가상1재개발정비구역",
   notice: null,
   designated_on: "2020-01-01",
@@ -93,5 +94,15 @@ describe("지도에 넘길 정비구역 도형", () => {
     const [far] = redevelopmentZoneShapes([zone({})], 14, null);
     expect(far.selected).toBe(false);
     expect(far.hatch.length).toBeLessThan(s.hatch.length);
+  });
+
+  it("정비예정구역은 아직 지정 전이라 점선으로 표시하도록 종류를 넘긴다", () => {
+    const [zoneShape, planned] = redevelopmentZoneShapes(
+      [zone({}), zone({ zone_id: "Z2", layer: "planned" })],
+      15,
+      null,
+    );
+    expect(zoneShape.dashed).toBe(false);
+    expect(planned.dashed).toBe(true);
   });
 });

@@ -555,6 +555,12 @@ describe("정비구역 경계", () => {
     expect(events.some((e) => e.type === "mapClick")).toBe(false);
   });
 
+  it("정비예정구역은 점선 테두리로 그린다", () => {
+    const planned = shapes().map((x) => ({ ...x, dashed: true }));
+    start("test-key", props({ redevelopmentZones: planned }));
+    expect(faces()[0].options.strokeStyle).toBe("shortdash");
+  });
+
   it("빈 배열을 받으면 지운다", () => {
     const { receive } = start("test-key", props({ redevelopmentZones: shapes() }));
     receive(fullState(props({ redevelopmentZones: [] })));

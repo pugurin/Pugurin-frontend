@@ -862,7 +862,7 @@ export const REDEVELOPMENTS: Redevelopment[] = [
 // 모양은 지어낸 것이다(실제 구역 경계가 아니다)
 export const REDEVELOPMENT_ZONE_META: Meta = {
   data_as_of: "2026-11-22T21:00:00+09:00",
-  source_attribution: "브이월드 용도지역지구정보(정비구역)",
+  source_attribution: "브이월드 용도지역지구정보",
 };
 const box = (
   lng: number,
@@ -879,6 +879,7 @@ const box = (
 export const REDEVELOPMENT_ZONES: RedevelopmentZone[] = [
   {
     zone_id: "SAMPLE_ZONE_1",
+    layer: "zone",
     name: "우동1재개발정비구역",
     notice: null,
     designated_on: "2018-05-10",
@@ -893,6 +894,7 @@ export const REDEVELOPMENT_ZONES: RedevelopmentZone[] = [
   },
   {
     zone_id: "SAMPLE_ZONE_2",
+    layer: "zone",
     name: null,
     notice: "부산광역시 고시 제2016-415호",
     designated_on: "2016-12-21",
