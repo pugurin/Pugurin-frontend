@@ -49,6 +49,9 @@ import {
 } from "./src/screens/MoreScreen";
 import { TransactionsScreen } from "./src/screens/TransactionsScreen";
 import { AuctionsScreen } from "./src/screens/AuctionsScreen";
+import { InterestsScreen } from "./src/screens/InterestsScreen";
+import { InterestsProvider, useInterests } from "./src/state/interests";
+import type { InterestKind } from "./src/api/types";
 import { Brand } from "./src/components/Brand";
 import { LoadingTip } from "./src/components/LoadingTip";
 import { LearningProvider } from "./src/glossary/LearningContext";
@@ -70,13 +73,16 @@ import {
 } from "./src/api/auth";
 import { restoreSession } from "./src/api/restoreSession";
 import { ApiAuth, type TokenPair } from "./src/api/apiAuth";
-import { RedirectOAuth, webOAuthConfig } from "./src/auth/webOAuth";
+import {
+  CALLBACK_PATH,
+  RedirectOAuth,
+  webOAuthConfig,
+} from "./src/auth/webOAuth";
 import { socialLogin } from "./src/auth/socialLogin";
 import { loadRefreshToken, saveRefreshToken } from "./src/state/secureToken";
 import {
   AccountScreen,
   LoginScreen,
-  LoginSheet,
   SignupDoneScreen,
   SignupScreen,
 } from "./src/screens/AuthScreens";
@@ -100,16 +106,11 @@ type Route =
     }
   | { kind: "terms"; name: TermKind }
   | { kind: "date" }
+  | { kind: "interests"; tab: InterestKind }
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
   // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
   | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };
-// 목적격 조사: 받침이 있으면 "을", 없으면 "를"(한글이 아니면 "을(를)")
-function objectParticle(word: string) {
-  const code = word.charCodeAt(word.length - 1) - 0xac00;
-  if (code < 0 || code > 11171) return "을(를)";
-  return code % 28 ? "을" : "를";
-}
-// 백엔드 API 주소. 웹 운영은 Netlify 프록시(/api/v1)
+// 백엔드 API 주소. 웹 운영은 Vercel 프록시(/api/v1)
 const API_BASE = apiBase(
   process.env.EXPO_PUBLIC_API_URL ||
     process.env.EXPO_PUBLIC_API_BASE ||
@@ -176,8 +177,6 @@ export default function App() {
   // 로그인 세션. 기기에 저장해 다음에 열어도 로그인이 유지된다(F-AUTH-02).
   // 어떤 인증 서버를 쓸지는 makeAuth가 정한다
   const [session, setSession] = useState<Session | null>(null);
-  // 로그인 안내 시트(관심 등록 등 로그인이 필요한 동작을 눌렀을 때)
-  const [loginSheet, setLoginSheet] = useState<{ title: string; message: string } | null>(null);
   // 앱: 보안 저장소에 있는 refresh token. 갱신 결과가 지금 세션 것일 때만 바꿔 저장한다
   const storedRefresh = useRef<string | undefined>(undefined);
   const auth = useMemo(
@@ -187,7 +186,9 @@ export default function App() {
         storedRefresh.current = tokens.refresh_token;
         void saveRefreshToken(tokens.refresh_token || null);
         setSession((prev) =>
-          prev && prev.refresh_token === previous ? { ...prev, ...tokens } : prev,
+          prev && prev.refresh_token === previous
+            ? { ...prev, ...tokens }
+            : prev,
         );
       }),
     [],
@@ -250,6 +251,8 @@ export default function App() {
     () => new Repository(mode, new ApiClient(API_BASE, id)),
     [mode, id],
   );
+  // 관심 등록(별 버튼). 기기 id가 생긴 뒤 서버에서 담아 둔 id를 받는다
+  const interests = useInterests(repo, (m) => notify(m), !!id);
   useEffect(() => {
     deviceId()
       .then(setId)
@@ -260,6 +263,9 @@ export default function App() {
     // 저장한 세션은 인증 서버에 확인한 뒤에만 되살린다(src/api/restoreSession)
     // 버전은 저장소 읽기 전에 기록한다. 읽는 사이에 로그인·로그아웃하면 복원 결과를 버린다
     const restoreVersion = sessionVersion.current;
+    // 소셜 로그인에서 돌아온 참인지는 지금 읽어 둔다. 로그인 마무리가 곧 주소를 첫 화면으로 바꾼다
+    const fromCallback =
+      Platform.OS === "web" && window.location.pathname === CALLBACK_PATH;
     const isCurrentSession = () => sessionVersion.current === restoreVersion;
     let unmounted = false;
     let stopRestore: (() => void) | undefined;
@@ -269,6 +275,8 @@ export default function App() {
     ]).then(([saved, refreshToken]) => {
       if (!saved || unmounted || !isCurrentSession()) return;
       storedRefresh.current = refreshToken;
+      // 소셜 로그인에서 돌아온 참이면 새 로그인이 세션을 정한다. 옛 세션 갱신이 새 토큰·쿠키를 덮지 않게 건너뛴다
+      if (fromCallback) return;
       if (!auth) {
         void store("session", null);
         void saveRefreshToken(null);
@@ -413,10 +421,17 @@ export default function App() {
       sub.remove();
     };
   }, []);
-  // signedIn은 화면 아래에서 정의된다. 처음 그릴 때 등록한 효과가 최신 함수를 부르게 둔다
-  const signedInRef = useRef<(next: Session, joined: boolean) => void>(
-    () => {},
-  );
+  // 로그인·가입을 마쳤을 때. 글꼴·기기 id 준비 전(아래 early return 전)에도 부를 수 있게 여기서 정의한다.
+  // 로그인하면 들어온 화면(탭)으로 돌아간다. 처음 가입했으면 가입 완료 화면을 먼저 보여 준다
+  const signedIn = (next: Session, joined: boolean) => {
+    saveSession(next);
+    if (joined) {
+      setRoute({ kind: "joined", user: next.user });
+      return;
+    }
+    setRoute(null);
+    notify(`${next.user.nickname}님, 다시 만나 반가워요`);
+  };
   // 웹 소셜 로그인에서 돌아왔으면 로그인을 마친다. 처음 온 사람은 가입 화면으로
   useEffect(() => {
     let alive = true;
@@ -424,7 +439,7 @@ export default function App() {
       ?.completeSignIn?.()
       .then((r) => {
         if (!alive || !r) return;
-        if (r.kind === "session") signedInRef.current(r.session, false);
+        if (r.kind === "session") signedIn(r.session, false);
         else setRoute({ kind: "signup", signup: r });
       })
       .catch((e) => {
@@ -547,17 +562,6 @@ export default function App() {
         }}
       />
     );
-  // 로그인하면 들어온 화면(탭)으로 돌아간다. 처음 가입했으면 가입 완료 화면을 먼저 보여 준다
-  const signedIn = (signedInRef.current = (next: Session, joined: boolean) => {
-    saveSession(next);
-    setLoginSheet(null);
-    if (joined) {
-      setRoute({ kind: "joined", user: next.user });
-      return;
-    }
-    setRoute(null);
-    notify(`${next.user.nickname}님, 다시 만나 반가워요`);
-  });
   if (route?.kind === "login" && auth)
     overlay = (
       <LoginScreen
@@ -569,7 +573,9 @@ export default function App() {
       />
     );
   if (route?.kind === "joined")
-    overlay = <SignupDoneScreen user={route.user} onDone={() => setRoute(null)} />;
+    overlay = (
+      <SignupDoneScreen user={route.user} onDone={() => setRoute(null)} />
+    );
   if (route?.kind === "signup" && auth)
     overlay = (
       <SignupScreen
@@ -628,6 +634,26 @@ export default function App() {
         unit={unit}
       />
     );
+  const showAuction = (a: {
+    id: string;
+    lat: number | null;
+    lng: number | null;
+  }) => {
+    setAuctionFocus({ id: a.id, lat: a.lat, lng: a.lng, nonce: Date.now() });
+    setTab("map");
+    setRoute(null);
+  };
+  if (route?.kind === "interests")
+    overlay = (
+      <InterestsScreen
+        repo={repo}
+        initialTab={route.tab}
+        unit={unit}
+        onBack={() => setRoute(null)}
+        onComplex={openComplex}
+        onAuction={showAuction}
+      />
+    );
   if (route?.kind === "auctions")
     overlay = (
       <AuctionsScreen
@@ -638,295 +664,271 @@ export default function App() {
         name={route.name}
         unit={unit}
         onBack={() => setRoute(null)}
-        onAuction={(a) => {
-          setAuctionFocus({
-            id: a.id,
-            lat: a.lat,
-            lng: a.lng,
-            nonce: Date.now(),
-          });
-          setTab("map");
-          setRoute(null);
-        }}
+        onAuction={showAuction}
       />
     );
   return (
-    <LearningProvider
-      value={{
-        terms,
-        tipsEnabled,
-        onTerm: (term) => setRoute({ kind: "term", term, map: true }),
-      }}
-    >
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: width > 600 ? "#EAEAE5" : C.bg }}
+    <InterestsProvider value={interests}>
+      <LearningProvider
+        value={{
+          terms,
+          tipsEnabled,
+          onTerm: (term) => setRoute({ kind: "term", term, map: true }),
+        }}
       >
-        <StatusBar barStyle="dark-content" />
-        <View
-          style={{
-            flex: 1,
-            width: "100%",
-            maxWidth: wide ? undefined : 420,
-            alignSelf: "center",
-            backgroundColor: C.bg,
-            position: "relative",
-            ...(Platform.OS === "web"
-              ? { boxShadow: "0 0 40px rgba(17,17,16,.08)" }
-              : {}),
-          }}
+        <SafeAreaView
+          style={{ flex: 1, backgroundColor: width > 600 ? "#EAEAE5" : C.bg }}
         >
-          <View style={{ flex: 1, position: "relative" }}>
-            <View
-              style={{
-                position: "absolute",
-                inset: 0,
-                opacity: tab === "map" ? 1 : 0,
-                pointerEvents: tab === "map" ? "auto" : "none",
-              }}
-            >
-              <MapHome
-                key={mode}
-                repo={repo}
-                filters={filters}
-                onFilters={setFilters}
-                onSearch={() => setRoute({ kind: "search" })}
-                onGlossary={() => setTab("glossary")}
-                interactionBlocked={!!popup || !!route || tab !== "map"}
-                onFilter={() => setRoute({ kind: "filter" })}
-                onList={(args) => setRoute({ kind: "transactions", ...args })}
-                onDate={() => setRoute({ kind: "date" })}
-                unit={unit}
-                onUnit={(u) => {
-                  setUnit(u);
-                  void store("unit", u);
-                }}
-                base={base}
-                onBase={(b) => {
-                  setBase(b);
-                  void store("base", b);
-                }}
-                cadastral={cad}
-                onCadastral={(c) => {
-                  setCad(c);
-                  void store("cad", c);
-                }}
-                schools={schools}
-                onSchools={(on) => {
-                  setSchools(on);
-                  void store("schools", on);
-                }}
-                hospitals={hospitals}
-                onHospitals={(on) => {
-                  setHospitals(on);
-                  void store("hospitals", on);
-                }}
-                redevelopments={redevelopments}
-                onRedevelopments={(on) => {
-                  setRedevelopments(on);
-                  void store("redevelopments", on);
-                }}
-                focus={focus}
-                focusAuction={auctionFocus}
-                onHelp={onHelp}
-                notify={notify}
-                onMeta={setDataMeta}
-                onParcel={setLastParcel}
-                onToday={() => setRoute({ kind: "matching" })}
-                auction={auction}
-                onAuction={setAuction}
-                onAuctionList={(args) =>
-                  setRoute({ kind: "auctions", ...args })
-                }
-                onInterest={
-                  auth && !session
-                    ? (name) =>
-                        setLoginSheet({
-                          title: "관심 단지는 로그인하면 저장돼요",
-                          message: `${name}${objectParticle(name)} 관심 단지에 넣으려면 로그인이 필요해요. 처음이면 바로 가입돼요.`,
-                        })
-                    : undefined
-                }
-              />
-            </View>
-            {tab === "glossary" && (
-              <GlossaryScreen
-                terms={terms}
-                loading={termsLoading}
-                error={termsError}
-                onRetry={() => setTermsRetry((x) => x + 1)}
-                onTerm={(term) => setRoute({ kind: "term", term, map: false })}
-                today={todayEnabled ? learning : undefined}
-                onToday={() => setRoute({ kind: "matching" })}
-              />
-            )}
-            {tab === "more" && (
-              <MoreScreen
-                user={session?.user ?? null}
-                onLogin={auth ? () => setRoute({ kind: "login" }) : undefined}
-                onAccount={() => setRoute({ kind: "account" })}
-                mode={mode}
-                date={
-                  dataMeta?.data_as_of ??
-                  (mode === "sample" ? "2026-10-05" : undefined)
-                }
-                onMode={(m) => {
-                  setFocus(undefined);
-                  setAuctionFocus(null);
-                  setDataMeta(undefined);
-                  setMode(m);
-                  notify(
-                    m === "sample"
-                      ? "샘플 데이터로 화면을 보여드려요"
-                      : "백엔드 API에 연결합니다",
-                  );
-                }}
-                onDate={() => setRoute({ kind: "date" })}
-                onTerms={(name) => setRoute({ kind: "terms", name })}
-                notify={notify}
-                tipsEnabled={tipsEnabled}
-                onTipsEnabled={(on) => {
-                  setTipsEnabled(on);
-                  void store("tips_enabled", on);
-                }}
-                todayEnabled={todayEnabled}
-                onTodayEnabled={(on) => {
-                  setTodayEnabled(on);
-                  void store("today_enabled", on);
-                }}
-              />
-            )}
-          </View>
+          <StatusBar barStyle="dark-content" />
           <View
             style={{
-              height: 54,
-              flexDirection: "row",
-              borderTopWidth: 1,
-              borderColor: C.rule,
-              backgroundColor: C.surface,
-              zIndex: 40,
+              flex: 1,
+              width: "100%",
+              maxWidth: wide ? undefined : 420,
+              alignSelf: "center",
+              backgroundColor: C.bg,
+              position: "relative",
+              ...(Platform.OS === "web"
+                ? { boxShadow: "0 0 40px rgba(17,17,16,.08)" }
+                : {}),
             }}
           >
-            {(
-              [
-                ["map", "지도", "map"],
-                ["glossary", "용어사전", "book"],
-                ["more", "더보기", "more"],
-              ] as const
-            ).map(([k, label, icon]) => (
-              <Pressable
-                key={k}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: tab === k }}
-                onPress={() => {
-                  setTab(k);
-                  setRoute(null);
-                }}
+            <View style={{ flex: 1, position: "relative" }}>
+              <View
                 style={{
-                  flex: 1,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 3,
+                  position: "absolute",
+                  inset: 0,
+                  opacity: tab === "map" ? 1 : 0,
+                  pointerEvents: tab === "map" ? "auto" : "none",
                 }}
               >
-                <Icon name={icon} color={tab === k ? C.ink : C.light} />
-                <T
-                  size={14}
-                  bold={tab === k}
-                  color={tab === k ? C.ink : C.light}
-                >
-                  {label}
-                </T>
-              </Pressable>
-            ))}
-          </View>
-          {loginSheet && auth && !route && (
-            <View style={{ position: "absolute", inset: 0, zIndex: 60 }}>
-              <LoginSheet
-                auth={auth}
-                title={loginSheet.title}
-                message={loginSheet.message}
-                onClose={() => setLoginSheet(null)}
-                onSession={(next) => signedIn(next, false)}
-                onSignup={(signup) => {
-                  setLoginSheet(null);
-                  setRoute({ kind: "signup", signup });
-                }}
-              />
-            </View>
-          )}
-          {overlay && (
-            <View
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundColor: wide ? "rgba(17,17,16,.24)" : C.bg,
-                zIndex: 50,
-                alignItems: wide ? "center" : undefined,
-                justifyContent: wide ? "center" : undefined,
-              }}
-            >
-              {wide && (
-                <Pressable
-                  accessibilityLabel="화면 닫기"
-                  onPress={() => setRoute(null)}
-                  style={{ position: "absolute", inset: 0 }}
+                <MapHome
+                  key={mode}
+                  repo={repo}
+                  filters={filters}
+                  onFilters={setFilters}
+                  onSearch={() => setRoute({ kind: "search" })}
+                  onGlossary={() => setTab("glossary")}
+                  interactionBlocked={!!popup || !!route || tab !== "map"}
+                  onFilter={() => setRoute({ kind: "filter" })}
+                  onList={(args) => setRoute({ kind: "transactions", ...args })}
+                  onDate={() => setRoute({ kind: "date" })}
+                  unit={unit}
+                  onUnit={(u) => {
+                    setUnit(u);
+                    void store("unit", u);
+                  }}
+                  base={base}
+                  onBase={(b) => {
+                    setBase(b);
+                    void store("base", b);
+                  }}
+                  cadastral={cad}
+                  onCadastral={(c) => {
+                    setCad(c);
+                    void store("cad", c);
+                  }}
+                  schools={schools}
+                  onSchools={(on) => {
+                    setSchools(on);
+                    void store("schools", on);
+                  }}
+                  hospitals={hospitals}
+                  onHospitals={(on) => {
+                    setHospitals(on);
+                    void store("hospitals", on);
+                  }}
+                  redevelopments={redevelopments}
+                  onRedevelopments={(on) => {
+                    setRedevelopments(on);
+                    void store("redevelopments", on);
+                  }}
+                  focus={focus}
+                  focusAuction={auctionFocus}
+                  onHelp={onHelp}
+                  notify={notify}
+                  onMeta={setDataMeta}
+                  onParcel={setLastParcel}
+                  onToday={() => setRoute({ kind: "matching" })}
+                  auction={auction}
+                  onAuction={setAuction}
+                  onAuctionList={(args) =>
+                    setRoute({ kind: "auctions", ...args })
+                  }
+                />
+              </View>
+              {tab === "glossary" && (
+                <GlossaryScreen
+                  terms={terms}
+                  loading={termsLoading}
+                  error={termsError}
+                  onRetry={() => setTermsRetry((x) => x + 1)}
+                  onTerm={(term) =>
+                    setRoute({ kind: "term", term, map: false })
+                  }
+                  today={todayEnabled ? learning : undefined}
+                  onToday={() => setRoute({ kind: "matching" })}
                 />
               )}
-              <View
-                style={
-                  wide
-                    ? {
-                        width: route?.kind === "search" && desktop ? 520 : 560,
-                        maxWidth: "95%",
-                        height:
-                          route?.kind === "search" && desktop
-                            ? undefined
-                            : "92%",
-                        maxHeight: "92%",
-                        backgroundColor: C.bg,
-                        borderRadius: 14,
-                        overflow: "hidden",
-                        ...(route?.kind === "search" && desktop
-                          ? { position: "absolute", left: 190, top: 72 }
-                          : {}),
-                      }
-                    : { flex: 1 }
-                }
-              >
-                {overlay}
-              </View>
+              {tab === "more" && (
+                <MoreScreen
+                  user={session?.user ?? null}
+                  onLogin={auth ? () => setRoute({ kind: "login" }) : undefined}
+                  onAccount={() => setRoute({ kind: "account" })}
+                  onInterests={(kind) =>
+                    setRoute({ kind: "interests", tab: kind })
+                  }
+                  interestCount={interests.count}
+                  mode={mode}
+                  date={
+                    dataMeta?.data_as_of ??
+                    (mode === "sample" ? "2026-10-05" : undefined)
+                  }
+                  onMode={(m) => {
+                    setFocus(undefined);
+                    setAuctionFocus(null);
+                    setDataMeta(undefined);
+                    setMode(m);
+                    notify(
+                      m === "sample"
+                        ? "샘플 데이터로 화면을 보여드려요"
+                        : "백엔드 API에 연결합니다",
+                    );
+                  }}
+                  onDate={() => setRoute({ kind: "date" })}
+                  onTerms={(name) => setRoute({ kind: "terms", name })}
+                  notify={notify}
+                  tipsEnabled={tipsEnabled}
+                  onTipsEnabled={(on) => {
+                    setTipsEnabled(on);
+                    void store("tips_enabled", on);
+                  }}
+                  todayEnabled={todayEnabled}
+                  onTodayEnabled={(on) => {
+                    setTodayEnabled(on);
+                    void store("today_enabled", on);
+                  }}
+                />
+              )}
             </View>
-          )}
-          {toast !== "" && (
             <View
-              pointerEvents="none"
               style={{
-                position: "absolute",
-                left: 18,
-                right: 18,
-                bottom: route ? 24 : 82,
-                padding: 14,
-                borderRadius: 12,
-                backgroundColor: C.primary,
-                zIndex: 100,
+                height: 54,
+                flexDirection: "row",
+                borderTopWidth: 1,
+                borderColor: C.rule,
+                backgroundColor: C.surface,
+                zIndex: 40,
               }}
             >
-              <T color={C.bg} style={{ textAlign: "center" }}>
-                {toast}
-              </T>
+              {(
+                [
+                  ["map", "지도", "map"],
+                  ["glossary", "용어사전", "book"],
+                  ["more", "더보기", "more"],
+                ] as const
+              ).map(([k, label, icon]) => (
+                <Pressable
+                  key={k}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: tab === k }}
+                  onPress={() => {
+                    setTab(k);
+                    setRoute(null);
+                  }}
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 3,
+                  }}
+                >
+                  <Icon name={icon} color={tab === k ? C.ink : C.light} />
+                  <T
+                    size={14}
+                    bold={tab === k}
+                    color={tab === k ? C.ink : C.light}
+                  >
+                    {label}
+                  </T>
+                </Pressable>
+              ))}
             </View>
-          )}
-          <TermPopup
-            term={popup}
-            anchor={popupAnchor}
-            onClose={() => setPopup(null)}
-            onDetail={(term) => {
-              setPopup(null);
-              setRoute({ kind: "term", term, map: tab === "map" });
-            }}
-          />
-        </View>
-      </SafeAreaView>
-    </LearningProvider>
+            {overlay && (
+              <View
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  backgroundColor: wide ? "rgba(17,17,16,.24)" : C.bg,
+                  zIndex: 50,
+                  alignItems: wide ? "center" : undefined,
+                  justifyContent: wide ? "center" : undefined,
+                }}
+              >
+                {wide && (
+                  <Pressable
+                    accessibilityLabel="화면 닫기"
+                    onPress={() => setRoute(null)}
+                    style={{ position: "absolute", inset: 0 }}
+                  />
+                )}
+                <View
+                  style={
+                    wide
+                      ? {
+                          width:
+                            route?.kind === "search" && desktop ? 520 : 560,
+                          maxWidth: "95%",
+                          height:
+                            route?.kind === "search" && desktop
+                              ? undefined
+                              : "92%",
+                          maxHeight: "92%",
+                          backgroundColor: C.bg,
+                          borderRadius: 14,
+                          overflow: "hidden",
+                          ...(route?.kind === "search" && desktop
+                            ? { position: "absolute", left: 190, top: 72 }
+                            : {}),
+                        }
+                      : { flex: 1 }
+                  }
+                >
+                  {overlay}
+                </View>
+              </View>
+            )}
+            {toast !== "" && (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  left: 18,
+                  right: 18,
+                  bottom: route ? 24 : 82,
+                  padding: 14,
+                  borderRadius: 12,
+                  backgroundColor: C.primary,
+                  zIndex: 100,
+                }}
+              >
+                <T color={C.bg} style={{ textAlign: "center" }}>
+                  {toast}
+                </T>
+              </View>
+            )}
+            <TermPopup
+              term={popup}
+              anchor={popupAnchor}
+              onClose={() => setPopup(null)}
+              onDetail={(term) => {
+                setPopup(null);
+                setRoute({ kind: "term", term, map: tab === "map" });
+              }}
+            />
+          </View>
+        </SafeAreaView>
+      </LearningProvider>
+    </InterestsProvider>
   );
 }

@@ -47,14 +47,17 @@ const SOURCES: readonly (readonly [AuctionSource | undefined, string])[] = [
 ];
 const NOT_READY = "경매 정보를 준비 중이에요";
 
-function AuctionRow({
+// 경매 목록 한 줄. trailing(관심 목록의 ★ 등)은 눌림 영역 밖 오른쪽에 둔다
+export function AuctionRow({
   a,
   unit,
   onPress,
+  trailing,
 }: {
   a: Auction;
   unit: "평" | "㎡";
   onPress: () => void;
+  trailing?: React.ReactNode;
 }) {
   const d = dday(a, new Date());
   const compare = compareLine(a);
@@ -65,17 +68,19 @@ function AuctionRow({
   ]
     .filter(Boolean)
     .join(" · ");
-  return (
+  const row = (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
-        {
-          paddingVertical: 14,
-          gap: 5,
-          borderBottomWidth: 1,
-          borderColor: C.rule,
-        },
+        trailing
+          ? { flex: 1, paddingVertical: 14, gap: 5 }
+          : {
+              paddingVertical: 14,
+              gap: 5,
+              borderBottomWidth: 1,
+              borderColor: C.rule,
+            },
         pressed && { opacity: 0.7 },
       ]}
     >
@@ -124,6 +129,15 @@ function AuctionRow({
         </T>
       )}
     </Pressable>
+  );
+  if (!trailing) return row;
+  return (
+    <View
+      style={[s.row, { gap: 10, borderBottomWidth: 1, borderColor: C.rule }]}
+    >
+      {row}
+      {trailing}
+    </View>
   );
 }
 

@@ -18,6 +18,47 @@ export class ApiClient {
     private deviceId: string,
     private fetcher: typeof fetch = fetch,
   ) {}
+  // 쓰기 요청(관심 등록 PUT·해제 DELETE). 204는 본문이 없어 null을 준다
+  async send<T>(
+    method: "PUT" | "DELETE",
+    path: string,
+  ): Promise<Envelope<T> | null> {
+    let response: Response;
+    try {
+      response = await this.fetcher.call(
+        globalThis,
+        `${this.base.replace(/\/$/, "")}${path}`,
+        {
+          method,
+          headers: { "X-Device-Id": this.deviceId, Accept: "application/json" },
+        },
+      );
+    } catch {
+      throw new ApiError(
+        "네트워크에 연결할 수 없어요. 연결 상태를 확인해 주세요",
+      );
+    }
+    if (response.status === 204) return null;
+    let body: any;
+    try {
+      body = await response.json();
+    } catch {
+      throw new ApiError("서버 응답을 읽을 수 없어요", "INVALID_RESPONSE");
+    }
+    if (!response.ok) {
+      const code =
+        body?.error?.code ??
+        (response.status === 404 ? "RESOURCE_NOT_FOUND" : "SERVER_ERROR");
+      throw new ApiError(
+        code === "DATA_NOT_READY"
+          ? DATA_NOT_READY_MESSAGE
+          : (body?.error?.message ?? "요청을 처리할 수 없어요"),
+        code,
+        Number(response.headers.get("Retry-After")) || undefined,
+      );
+    }
+    return body;
+  }
   async get<T>(path: string, signal?: AbortSignal): Promise<Envelope<T>> {
     const cached = this.cache.get(path);
     const headers: Record<string, string> = {

@@ -36,6 +36,7 @@ import {
 } from "../components/ui";
 import { auctionSub, dday, ddayKey, formatWon } from "../state/auction";
 import { areaOf } from "./AuctionContent";
+import { StarButton } from "../components/StarButton";
 import { LoadingTip } from "../components/LoadingTip";
 import { Chart } from "../components/Chart";
 import { TransactionRow } from "../components/TransactionRow";
@@ -279,7 +280,6 @@ export function ComplexContent({
   onUnit,
   onAuction,
   onAuctionList,
-  onInterest,
 }: {
   id: string;
   repo: Repository;
@@ -292,8 +292,6 @@ export function ComplexContent({
   onUnit?: (u: "평" | "㎡") => void;
   onAuction?: (id: string) => void;
   onAuctionList?: (complexId: string, name: string) => void;
-  // 관심 등록. 로그인하지 않았으면 App이 로그인 안내 시트를 띄운다
-  onInterest?: (name: string) => void;
 }) {
   const { width } = useWindowDimensions();
   const twoColumns = Platform.OS === "web" && width >= 768 && width < 1024;
@@ -484,22 +482,7 @@ export function ComplexContent({
           {complex.name}
         </T>
         {onUnit && <UnitToggle unit={unit} onUnit={onUnit} />}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="관심 단지 등록"
-          onPress={() =>
-            onInterest ? onInterest(complex.name) : notify("관심 등록은 2차에서 열려요")
-          }
-          style={{
-            padding: 12,
-            borderWidth: 1,
-            borderStyle: "dashed",
-            borderColor: C.disabled,
-            borderRadius: 12,
-          }}
-        >
-          <Icon name="star" color={C.light} />
-        </Pressable>
+        <StarButton kind="complex" id={complex.id} name={complex.name} />
       </View>
       <View style={[s.row, { gap: 8 }]}>
         <T size={14} color={C.muted} style={{ flex: 1 }}>
@@ -530,7 +513,10 @@ export function ComplexContent({
                 {
                   ...tx,
                   supply_area_pyeong: complex.area_types.find(
-                    (a) => a.exclusive_area_m2 === tx.exclusive_area_m2,
+                    (a) =>
+                      tx.exclusive_area_m2 != null &&
+                      Math.round(a.exclusive_area_m2) ===
+                        Math.round(tx.exclusive_area_m2),
                   )?.supply_area_pyeong,
                 },
                 unit,
@@ -666,7 +652,10 @@ export function ComplexContent({
                       tx={{
                         ...t,
                         supply_area_pyeong: complex.area_types.find(
-                          (a) => a.exclusive_area_m2 === t.exclusive_area_m2,
+                          (a) =>
+                            t.exclusive_area_m2 != null &&
+                            Math.round(a.exclusive_area_m2) ===
+                              Math.round(t.exclusive_area_m2),
                         )?.supply_area_pyeong,
                       }}
                       unit={unit}

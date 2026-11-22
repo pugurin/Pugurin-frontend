@@ -378,7 +378,7 @@ describe("더보기 계정 카드", () => {
 
   it("로그인을 열지 않은 빌드에서는 준비 중 카드만 보여 준다", () => {
     render(<MoreScreen {...base} user={null} />);
-    expect(screen.getByText("로그인과 관심 기능은 다음 단계에서 준비하고 있어요")).toBeTruthy();
+    expect(screen.getByText("로그인은 다음 단계에서 준비하고 있어요")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "로그인 · 회원가입" })).toBeNull();
   });
 });

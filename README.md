@@ -19,12 +19,33 @@ iOS 시뮬레이터 API 주소는 localhost:8000, Android 에뮬레이터는 10.
 
 외부 http를 막는 네트워크(학교·회사망 등)에서는 `http://localhost:8081`의 지도가 빈 화면이 된다. 카카오 SDK가 http 페이지에서는 지도 본체와 타일도 http로 받기 때문이다. 이때는 위 두 개에 더해 `npm run web:https`를 실행하고 `https://localhost:8443`을 연다. 처음 실행하면 `.cert/`에 자체 서명 인증서를 만들고(openssl 필요), 브라우저가 처음 한 번 인증서 경고를 띄우면 "고급 → 이동"으로 넘긴다. 카카오 콘솔 JavaScript SDK 도메인에 `https://localhost:8443`도 등록해야 한다.
 
-웹 배포는 Netlify가 [`netlify.toml`](./netlify.toml)대로 한다. main에 머지되면 `npm run build:web`으로 `dist/`를 만들어 올린다. 배포 웹은 같은 주소의 `/api/v1`을 부르고, Netlify가 이를 백엔드로 넘긴다(프록시). 그래서 브라우저가 백엔드를 직접 부르지 않아 CORS 설정이 필요 없다. 백엔드에 HTTPS 도메인이 생기면 `netlify.toml`의 프록시 주소만 바꾼다. `EXPO_PUBLIC_*` 값은 빌드할 때 번들에 들어가므로, 카카오 키나 약관 URL은 Netlify 사이트 설정의 환경 변수에 넣고 다시 배포한다.
+### 로그인 로컬 시험(웹, 실제 백엔드)
+
+운영(Vercel)처럼 같은 주소·https에서 돌려야 로그인 쿠키와 소셜 리디렉션이 동작한다. `npm run web:https`가 `/api/`를 로컬 백엔드(`PUGURIN_API_TARGET`, 기본 `http://127.0.0.1:8000`)로 넘긴다.
+
+1. 백엔드 `backend/.env`에 `PUGURIN_JWT_SECRET`, 제공자 키, `PUGURIN_AUTH_REDIRECT_URIS=https://localhost:8443/auth/callback`을 넣고 백엔드를 띄운다(백엔드 README의 `docker compose up --build`).
+2. 소셜 콘솔에 리디렉션 주소 `https://localhost:8443/auth/callback`을 등록한다.
+3. 웹 `.env.local`에 `EXPO_PUBLIC_AUTH_MODE=api`, `EXPO_PUBLIC_API_URL=/api/v1`, 제공자 클라이언트 ID(`.env.example`)를 넣는다.
+4. `npx expo start --web --port 8082`와 `PUGURIN_WEB_PORT=8082 npm run web:https`를 띄우고 `https://localhost:8443`을 연다. 이 설정에서는 `http://localhost:8082`로 직접 열면 API를 부르지 못한다.
+
+웹 배포는 Vercel이 [`vercel.json`](./vercel.json)대로 한다(2026-11 Netlify 무료 크레딧 소진으로 옮김). main에 머지되면 `npm run build:web`으로 `dist/`를 만들어 올리고, PR마다 미리보기가 뜬다. 배포 웹은 같은 주소의 `/api/v1`을 부르고, Vercel이 이를 백엔드로 넘긴다(프록시). 그래서 브라우저가 백엔드를 직접 부르지 않아 CORS 설정이 필요 없고, 로그인 쿠키도 같은 주소에서 오간다. 백엔드 주소가 바뀌면 `vercel.json`의 `/api` 대상만 바꾼다(반드시 https).
+
+`EXPO_PUBLIC_*` 값은 빌드할 때 번들에 들어가므로 Vercel 프로젝트 설정의 환경 변수에 넣고 다시 배포한다.
+
+| 변수 | Production | Preview |
+|---|---|---|
+| `EXPO_PUBLIC_DATA_MODE` | `api` | `api` |
+| `EXPO_PUBLIC_API_URL` | `/api/v1` | `/api/v1` |
+| `EXPO_PUBLIC_KAKAO_JS_KEY` | 카카오 지도 키 | 같음 |
+| `EXPO_PUBLIC_AUTH_MODE` | `api`(실제 로그인) | `sample`(가짜 로그인, 미리보기 주소는 콜백 등록이 안 돼 있다) |
+| `EXPO_PUBLIC_GOOGLE_CLIENT_ID`·`EXPO_PUBLIC_KAKAO_REST_KEY`·`EXPO_PUBLIC_NAVER_CLIENT_ID` | 소셜 공개 ID | 없어도 된다 |
+
+주소가 바뀌면 소셜 콘솔 3곳(구글·카카오·네이버)의 리디렉션 주소, 백엔드 `PUGURIN_AUTH_REDIRECT_URIS`, 카카오 지도 JavaScript SDK 도메인에 새 주소를 넣는다.
 
 ### 카카오맵 키
 
 1. [카카오 개발자 콘솔](https://developers.kakao.com)에서 앱을 만들고 **JavaScript 키**를 `.env`의 `EXPO_PUBLIC_KAKAO_JS_KEY`에 넣는다.
-2. JavaScript SDK 도메인에 지도를 띄울 주소를 등록한다. 로컬 웹은 `http://localhost:8081`(https 개발 중계를 쓰면 `https://localhost:8443`도), 배포 웹은 Netlify 주소.
+2. JavaScript SDK 도메인에 지도를 띄울 주소를 등록한다. 로컬 웹은 `http://localhost:8081`(https 개발 중계를 쓰면 `https://localhost:8443`도), 배포 웹은 Vercel 주소.
 3. 제품 설정 → 카카오맵 사용 설정을 켠다. 꺼져 있으면 키와 도메인이 맞아도 지도가 뜨지 않는다.
 4. 앱은 WebView 문서 주소(`EXPO_PUBLIC_KAKAO_APP_URL`)로 도메인 확인을 받는다. 2번에 등록한 **https** 주소를 넣는다(http 주소면 iOS가 지도 타일을 막는다).
 

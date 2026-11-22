@@ -118,7 +118,6 @@ export function MapHome({
   auction = false,
   onAuction,
   onAuctionList,
-  onInterest,
   focusAuction,
   schools = false,
   onSchools,
@@ -155,8 +154,6 @@ export function MapHome({
   auction?: boolean;
   onAuction?: (on: boolean) => void;
   // 경매 목록 화면을 연다. 단지 묶음 마커를 누르면 그 단지로 거른다
-  // 관심 단지 등록(로그인 안내)
-  onInterest?: (name: string) => void;
   onAuctionList?: (args: {
     bbox: BBox;
     complexId?: string;
@@ -1134,7 +1131,6 @@ export function MapHome({
             setSelected({ kind: "auction", id });
             setStage("peek");
           }}
-          onInterest={onInterest}
           onAuctionList={(complexId, name) =>
             onAuctionList?.({ bbox: camera.bbox, complexId, name })
           }
