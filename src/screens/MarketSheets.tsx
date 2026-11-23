@@ -37,6 +37,13 @@ import {
   s,
 } from "../components/ui";
 import { auctionSub, dday, ddayKey, formatWon } from "../state/auction";
+import {
+  AVERAGE_MONTHS,
+  areaAverage,
+  averageLabel,
+  monthsAgo,
+  recentComplexTransactions,
+} from "../state/areaAverage";
 import { areaOf } from "./AuctionContent";
 import { StarButton } from "../components/StarButton";
 import { LoadingTip } from "../components/LoadingTip";
@@ -385,6 +392,19 @@ export function ComplexContent({
     retry,
     analysisRetry,
   ]);
+  // 고른 평형의 최근 1년 평균가용 거래. 지도 필터의 거래 유형을 따른다. 실패하면 줄을 숨긴다
+  const [recent, setRecent] = useState<Transaction[] | null>(null);
+  const [since] = useState(() => monthsAgo(AVERAGE_MONTHS));
+  useEffect(() => {
+    setRecent(null);
+    const abort = new AbortController();
+    recentComplexTransactions(repo, filters, id, since, abort.signal)
+      .then((list) => {
+        if (!abort.signal.aborted) setRecent(list);
+      })
+      .catch(() => {});
+    return () => abort.abort();
+  }, [id, repo, filters, since]);
   // 대출 계산기 기본 매매가용 매매 거래. 지도 필터(전세·월세, 해제 포함 등)와 상관없이
   // 이 단지의 최근 매매를 따로 불러온다. 실패하면 사용자가 매매가를 직접 넣는다
   const [sales, setSales] = useState<Transaction[]>([]);
@@ -455,9 +475,11 @@ export function ComplexContent({
     );
   // 머리의 "최근 거래"는 해제되지 않은 거래만 쓴다. 해제 거래는 목록에서만 해제 표시와 함께 보여준다
   const tx = items.find((t) => !t.is_cancelled);
-  const a =
-    complex.area_types.find((a) => a.exclusive_area_m2 === area) ??
-    complex.area_types[0];
+  // 면적 칩은 전용면적이 작은 평형부터 놓는다. 서버 순서가 바뀌어도 칩 순서가 흔들리지 않게 한다
+  const areaTypes = [...complex.area_types].sort(
+    (x, y) => x.exclusive_area_m2 - y.exclusive_area_m2,
+  );
+  const a = areaTypes.find((a) => a.exclusive_area_m2 === area) ?? areaTypes[0];
   const areaStats = stats?.area_types?.find(
     (v) => v.exclusive_area_m2 === a?.exclusive_area_m2,
   );
@@ -560,7 +582,7 @@ export function ComplexContent({
             </T>
           )}
           <View style={[s.row, { marginVertical: 10, flexWrap: "wrap" }]}>
-            {complex.area_types.map((ar) => (
+            {areaTypes.map((ar) => (
               <Chip
                 key={ar.exclusive_area_m2}
                 selected={a?.exclusive_area_m2 === ar.exclusive_area_m2}
@@ -592,6 +614,16 @@ export function ComplexContent({
                 )} 기준`
               : "평형 정보 없음"}
           </T>
+          {a && recent && (
+            <T size={15} bold style={{ marginTop: 6 }}>
+              {(() => {
+                const avg = areaAverage(recent, a.exclusive_area_m2, since);
+                return avg
+                  ? `최근 1년 ${averageLabel(filters.deal_type, avg)}`
+                  : "최근 1년 이 평형 거래 없음";
+              })()}
+            </T>
+          )}
           <T size={13} color={C.light}>
             거래 이력은 모든 면적을 표시해요
           </T>
