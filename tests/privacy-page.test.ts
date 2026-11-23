@@ -30,9 +30,21 @@ describe("개인정보처리방침 페이지", () => {
     expect(html).toMatch(/위치[^<]*서버에 (보내지|저장하지) 않/);
   });
 
-  it("알림(주간 관심 지역 리포트)과 보유 기간 90일을 명시한다", () => {
-    expect(html).toContain("알림");
+  it("알림(주간 관심 단지 리포트)·받기 설정과 보유 기간 90일을 명시하고, 관심 지역은 없다", () => {
+    expect(html).toContain("주간 관심 단지 리포트");
+    expect(html).toContain("주간 리포트 받기 설정");
     expect(html).toContain("90일");
+    expect(html).not.toContain("관심 지역");
+  });
+
+  it("2절의 프로필 이름과 5절의 소셜 로그인 설명이 서로 맞는다", () => {
+    expect(html).not.toContain("회원 식별번호만 받습니다");
+    expect(html).toMatch(/회원 식별번호와[^<]*프로필 이름/);
+  });
+
+  it("Vercel 요청 로그에 남을 수 있는 길찾기 좌표와 카카오 지도 직접 요청을 적는다", () => {
+    expect(html).toMatch(/이전 항목<\/th>\s*<td>[^<]*대중교통 길찾기/);
+    expect(html).toMatch(/카카오[^<]*지도[^<]*직접/);
   });
 
   it("앱과 같은 출처에서 열리는 독립 페이지다(스크립트 없음)", () => {

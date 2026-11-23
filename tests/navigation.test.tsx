@@ -37,6 +37,10 @@ it("약관 원문이 없으면 임의 약관을 실제 약관처럼 제시하지
   render(<TermsScreen kind="서비스 이용약관" onBack={() => {}} />);
   expect(screen.getByText("약관 원문이 아직 등록되지 않았어요")).toBeTruthy();
 });
+it("개인정보 처리방침은 환경 변수가 없어도 공개 페이지(/privacy.html)를 연다", () => {
+  render(<TermsScreen kind="개인정보 처리방침" onBack={() => {}} />);
+  expect(screen.getByText("약관 원문을 확인해 주세요")).toBeTruthy();
+});
 it("더보기 데이터 출처에 법원경매 출처를 적는다", () => {
   render(
     <MoreScreen

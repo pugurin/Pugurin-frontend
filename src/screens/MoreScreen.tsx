@@ -229,6 +229,9 @@ export function MoreScreen({
     </View>
   );
 }
+// 웹과 같이 배포되는 공개 개인정보처리방침(public/privacy.html). 환경 변수로 바꿀 수 있다.
+// vercel.json에 cleanUrls가 없어 확장자까지 붙여야 앱 화면으로 떨어지지 않는다
+const DEFAULT_PRIVACY_URL = "https://pugurin.vercel.app/privacy.html";
 export function TermsScreen({
   kind,
   onBack,
@@ -241,7 +244,7 @@ export function TermsScreen({
       ? process.env.EXPO_PUBLIC_TERMS_URL
       : kind === "위치기반서비스 이용약관"
         ? process.env.EXPO_PUBLIC_LOCATION_TERMS_URL
-        : process.env.EXPO_PUBLIC_PRIVACY_URL;
+        : process.env.EXPO_PUBLIC_PRIVACY_URL || DEFAULT_PRIVACY_URL;
   const [error, setError] = useState("");
   return (
     <View style={s.screen}>
