@@ -130,7 +130,7 @@ describe("단지 시트의 경매 카드", () => {
     expect(card.textContent).toContain("입찰 D-12");
     expect(card.textContent!.match(/D-12/g)).toHaveLength(1);
     expect(
-      screen.getByText("최저가 3억 6,000만 · 25.7평 · 유찰 2회"),
+      screen.getByText("최저가 3억 6,000만 · 34평형(전용 25.7평) · 유찰 2회"),
     ).toBeTruthy();
   });
 
