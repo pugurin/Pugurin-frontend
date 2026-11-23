@@ -41,6 +41,7 @@ import { areaOf } from "./AuctionContent";
 import { StarButton } from "../components/StarButton";
 import { LoadingTip } from "../components/LoadingTip";
 import { Chart } from "../components/Chart";
+import { TrendCard } from "../components/TrendCard";
 import { TransactionRow } from "../components/TransactionRow";
 import type { SheetStage } from "../components/Sheet";
 import { HAS_KAKAO } from "../map/kakaoRuntime";
@@ -596,9 +597,7 @@ export function ComplexContent({
           </T>
           <Section
             title={
-              filters.deal_type === "monthly"
-                ? `월세 추이 · 최근 ${TREND_MONTHS / 12}년`
-                : `평당가 추이 · 최근 ${TREND_MONTHS / 12}년`
+              filters.deal_type === "monthly" ? "월세 추이" : "평당가 추이"
             }
             right={<Help onPress={() => onHelp("평당가")} />}
           >
@@ -624,7 +623,7 @@ export function ComplexContent({
               </View>
             )}
             {stats ? (
-              <Chart
+              <TrendCard
                 trend={selectedStats?.trend ?? []}
                 comparison={comparison?.trend}
                 metric={metric}

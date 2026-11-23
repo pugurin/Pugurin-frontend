@@ -8,6 +8,11 @@ vi.mock("../src/components/Chart", () => ({
     <div>{JSON.stringify({ trend, comparison, metric })}</div>
   ),
 }));
+vi.mock("../src/components/TrendCard", () => ({
+  TrendCard: ({ trend, comparison, metric }: any) => (
+    <div>{JSON.stringify({ trend, comparison, metric })}</div>
+  ),
+}));
 afterEach(cleanup);
 const trend = (v: number) => [
   { month: "2026-09", count: 3, median_price_per_pyeong: v },
