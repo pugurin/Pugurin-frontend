@@ -16,6 +16,7 @@ import { C } from "../theme/tokens";
 import {
   DEAL,
   PROPERTY,
+  areaLabel,
   formatArea,
   formatPrice,
   markerLabel,
@@ -44,6 +45,7 @@ import type { SheetStage } from "../components/Sheet";
 import { HAS_KAKAO } from "../map/kakaoRuntime";
 import { RoadviewModal } from "../roadview/RoadviewModal";
 import { NearbySchoolsSection } from "./NearbySchools";
+import { CommuteSection } from "./Commute";
 import { LoanCalculator } from "../components/LoanCalculator";
 import { latestSale } from "../state/loan";
 
@@ -561,15 +563,28 @@ export function ComplexContent({
                   setPage(1);
                 }}
               >
-                {ar.supply_area_pyeong
-                  ? `${ar.supply_area_pyeong}평`
-                  : `전용 ${ar.exclusive_area_pyeong}평`}
+                {areaLabel(
+                  {
+                    supplyPyeong: ar.supply_area_pyeong,
+                    exclusivePyeong: ar.exclusive_area_pyeong,
+                    exclusiveM2: ar.exclusive_area_m2,
+                  },
+                  unit,
+                )}
               </Chip>
             ))}
           </View>
           <T size={13} color={C.light}>
-            {a?.supply_area_pyeong ? "공급면적 기준" : "전용면적 기준"} · 전용{" "}
-            {a?.exclusive_area_pyeong ?? "—"}평
+            {a
+              ? `${areaLabel(
+                  {
+                    supplyPyeong: a.supply_area_pyeong,
+                    exclusivePyeong: a.exclusive_area_pyeong,
+                    exclusiveM2: a.exclusive_area_m2,
+                  },
+                  unit,
+                )} 기준`
+              : "평형 정보 없음"}
           </T>
           <T size={13} color={C.light}>
             거래 이력은 모든 면적을 표시해요
@@ -681,6 +696,15 @@ export function ComplexContent({
                     )
                   )}
                 </Section>
+                <CommuteSection
+                  repo={repo}
+                  home={{
+                    name: complex.name,
+                    address: complex.address,
+                    lat: complex.lat,
+                    lng: complex.lng,
+                  }}
+                />
                 <NearbySchoolsSection complexId={complex.id} repo={repo} />
               </View>
               <View style={{ flex: twoColumns ? 1 : undefined, minWidth: 0 }}>

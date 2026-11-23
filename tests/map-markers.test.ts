@@ -1,6 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { auctionItems, markerItems, markerLines, schoolItems } from "../src/map/markers";
-import type { Auction, ComplexMarker, RegionMarker, School } from "../src/api/types";
+import {
+  auctionItems,
+  markerItems,
+  markerLines,
+  schoolItems,
+} from "../src/map/markers";
+import type {
+  Auction,
+  ComplexMarker,
+  RegionMarker,
+  School,
+} from "../src/api/types";
 
 const region: RegionMarker = {
   kind: "region",
@@ -37,29 +47,55 @@ describe("마커 글자", () => {
     });
   });
   it("월세 구·동 마커는 보증금·월세 중위값", () => {
-    const m = { ...region, summary: { median_deposit: 50000000, median_monthly_rent: 800000 } };
+    const m = {
+      ...region,
+      summary: { median_deposit: 50000000, median_monthly_rent: 800000 },
+    };
     expect(markerLines(m, "평").amount).toBe("보증금 5,000 · 월 80");
   });
   it("단지 매매는 금액 / 공급 평형 · 계약월", () => {
-    expect(markerLines(complex({}), "평")).toMatchObject({ amount: "14.5억", sub: "34평 · '26.08" });
+    expect(markerLines(complex({}), "평")).toMatchObject({
+      amount: "14.5억",
+      sub: "34평형(전용 25.7평) · '26.08",
+    });
   });
   it("공급 평형이 없으면 전용임을 밝힌다", () => {
-    expect(markerLines(complex({ supply_area_pyeong: null }), "평").sub).toBe("전용 25.7평 · '26.08");
+    expect(markerLines(complex({ supply_area_pyeong: null }), "평").sub).toBe(
+      "전용 25.7평 · '26.08",
+    );
   });
   it("전세·월세 단지 표기", () => {
-    expect(markerLines(complex({ deal_type: "jeonse", price: null, deposit: 500000000 }), "평").amount).toBe("전세 5억");
     expect(
-      markerLines(complex({ deal_type: "monthly", price: null, deposit: 50000000, monthly_rent: 800000 }), "평").amount,
+      markerLines(
+        complex({ deal_type: "jeonse", price: null, deposit: 500000000 }),
+        "평",
+      ).amount,
+    ).toBe("전세 5억");
+    expect(
+      markerLines(
+        complex({
+          deal_type: "monthly",
+          price: null,
+          deposit: 50000000,
+          monthly_rent: 800000,
+        }),
+        "평",
+      ).amount,
     ).toBe("5,000/80");
   });
   it("㎡ 단위로 바꿔 표시한다", () => {
-    expect(markerLines(complex({}), "㎡").sub).toBe("112.4㎡ · '26.08");
+    expect(markerLines(complex({}), "㎡").sub).toBe(
+      "112㎡형(전용 85㎡) · '26.08",
+    );
   });
 });
 
 describe("단지 마커 대표 평형(typical)", () => {
   type Typical = NonNullable<ComplexMarker["typical"]>;
-  const withTypical = (t: Partial<Typical>, latest: Partial<ComplexMarker["latest"]> = {}): ComplexMarker => ({
+  const withTypical = (
+    t: Partial<Typical>,
+    latest: Partial<ComplexMarker["latest"]> = {},
+  ): ComplexMarker => ({
     ...complex(latest),
     typical: {
       exclusive_area_m2: 84.97,
@@ -74,39 +110,78 @@ describe("단지 마커 대표 평형(typical)", () => {
   });
 
   it("매매는 공급 평형과 평균가", () => {
-    expect(markerLines(withTypical({}), "평")).toEqual({ title: "", amount: "14.1억", sub: "34평형" });
+    expect(markerLines(withTypical({}), "평")).toEqual({
+      title: "",
+      amount: "14.1억",
+      sub: "34평형(전용 25.7평)",
+    });
   });
   it("공급 평형이 없으면 전용 평", () => {
-    expect(markerLines(withTypical({ supply_area_pyeong: null }), "평").sub).toBe("전용 25.7평");
+    expect(
+      markerLines(withTypical({ supply_area_pyeong: null }), "평").sub,
+    ).toBe("전용 25.7평");
   });
   it("㎡ 단위", () => {
-    expect(markerLines(withTypical({}), "㎡").sub).toBe("112㎡형");
-    expect(markerLines(withTypical({ supply_area_pyeong: null }), "㎡").sub).toBe("전용 85.0㎡");
+    expect(markerLines(withTypical({}), "㎡").sub).toBe("112㎡형(전용 85㎡)");
+    expect(
+      markerLines(withTypical({ supply_area_pyeong: null }), "㎡").sub,
+    ).toBe("전용 85㎡");
   });
   it("전세는 평균 보증금", () => {
-    const m = withTypical({ avg_price: null, avg_deposit: 320000000 }, { deal_type: "jeonse", price: null, deposit: 500000000 });
-    expect(markerLines(m, "평")).toMatchObject({ amount: "전세 3.2억", sub: "34평형" });
+    const m = withTypical(
+      { avg_price: null, avg_deposit: 320000000 },
+      { deal_type: "jeonse", price: null, deposit: 500000000 },
+    );
+    expect(markerLines(m, "평")).toMatchObject({
+      amount: "전세 3.2억",
+      sub: "34평형(전용 25.7평)",
+    });
   });
   it("월세는 평균 보증금/월세", () => {
     const m = withTypical(
       { avg_price: null, avg_deposit: 30000000, avg_monthly_rent: 650000 },
-      { deal_type: "monthly", price: null, deposit: 50000000, monthly_rent: 800000 },
+      {
+        deal_type: "monthly",
+        price: null,
+        deposit: 50000000,
+        monthly_rent: 800000,
+      },
     );
-    expect(markerLines(m, "평")).toMatchObject({ amount: "3,000/65", sub: "34평형" });
+    expect(markerLines(m, "평")).toMatchObject({
+      amount: "3,000/65",
+      sub: "34평형(전용 25.7평)",
+    });
   });
   it("typical이 없거나 null이면 최근 거래로 표시한다", () => {
-    expect(markerLines({ ...complex({}), typical: null }, "평")).toMatchObject({ amount: "14.5억", sub: "34평 · '26.08" });
+    expect(markerLines({ ...complex({}), typical: null }, "평")).toMatchObject({
+      amount: "14.5억",
+      sub: "34평형(전용 25.7평) · '26.08",
+    });
   });
   it("거래유형에 맞는 평균값이 없으면 최근 거래로 표시한다", () => {
-    expect(markerLines(withTypical({ avg_price: null }), "평").amount).toBe("14.5억");
+    expect(markerLines(withTypical({ avg_price: null }), "평").amount).toBe(
+      "14.5억",
+    );
   });
 });
 
 describe("런타임에 넘기는 마커", () => {
   it("선택된 마커는 먹색과 가장 높은 우선순위를 가진다", () => {
     const [r, c] = markerItems([region, complex({})], "apartment", "평", "c1");
-    expect(c).toMatchObject({ id: "c1", color: "#111110", rank: 0, lat: 35.15, lng: 129.14, amount: "14.5억" });
-    expect(r).toMatchObject({ color: "#3E64A0", region: true, rank: 1, title: "우동" });
+    expect(c).toMatchObject({
+      id: "c1",
+      color: "#111110",
+      rank: 0,
+      lat: 35.15,
+      lng: 129.14,
+      amount: "14.5억",
+    });
+    expect(r).toMatchObject({
+      color: "#3E64A0",
+      region: true,
+      rank: 1,
+      title: "우동",
+    });
   });
   it("거래가 많은 단지가 먼저 자리를 잡는다", () => {
     const [many, few] = markerItems(
@@ -150,13 +225,22 @@ const a1: Auction = {
   status: null,
   is_closed: false,
 };
-const a2: Auction = { ...a1, id: "a2", complex_id: null, lat: 35.2, lng: 129.2 };
+const a2: Auction = {
+  ...a1,
+  id: "a2",
+  complex_id: null,
+  lat: 35.2,
+  lng: 129.2,
+};
 const complexMarker = (id: string) => ({ ...complex({}), complex_id: id });
 
 describe("경매 마커", () => {
   it("경매는 흰 바탕 변형으로, 좌표 없는 물건은 빼고 만든다", () => {
     const items = auctionItems(
-      [{ ...a1, complex_id: null }, { ...a2, lat: null, lng: null }],
+      [
+        { ...a1, complex_id: null },
+        { ...a2, lat: null, lng: null },
+      ],
       [],
       null,
       today,
@@ -175,7 +259,11 @@ describe("경매 마커", () => {
   });
   it("단지 마커가 있으면 그 옆에 붙인다", () => {
     const [item] = auctionItems([a1], [complexMarker("c1")], null, today);
-    expect(item).toMatchObject({ id: "auction:a1", attach: "c1", amount: "⚖ 3.6억" });
+    expect(item).toMatchObject({
+      id: "auction:a1",
+      attach: "c1",
+      amount: "⚖ 3.6억",
+    });
   });
   it("단지 마커가 없고 그 단지 경매가 1건이면 자기 좌표에 둔다", () => {
     const items = auctionItems([a1, a2], [complexMarker("c9")], null, today);
@@ -185,7 +273,11 @@ describe("경매 마커", () => {
   });
   it("경매 탭(단지 마커 없음)에서도 같은 단지 여러 건은 첫 물건 좌표에 하나로 합친다", () => {
     const items = auctionItems(
-      [a1, a2, { ...a1, id: "a3", lat: 35.16, lng: 129.15, min_price: 300000000 }],
+      [
+        a1,
+        a2,
+        { ...a1, id: "a3", lat: 35.16, lng: 129.15, min_price: 300000000 },
+      ],
       [],
       null,
       today,
@@ -219,7 +311,12 @@ describe("경매 마커", () => {
     });
   });
   it("묶음을 선택하면 먹색과 가장 높은 우선순위를 가진다", () => {
-    const [g] = auctionItems([a1, { ...a1, id: "a3" }], [complexMarker("c1")], "auction-group:c1", today);
+    const [g] = auctionItems(
+      [a1, { ...a1, id: "a3" }],
+      [complexMarker("c1")],
+      "auction-group:c1",
+      today,
+    );
     expect(g).toMatchObject({ color: "#111110", rank: 0 });
   });
   it("선택된 경매는 먹색과 가장 높은 우선순위를 가진다", () => {
@@ -249,7 +346,13 @@ const hs: School = {
   opened_on: null,
   distance_m: null,
 };
-const es: School = { ...hs, id: "e1", name: "우동초등학교", kind: "초등학교", level: "elementary" };
+const es: School = {
+  ...hs,
+  id: "e1",
+  name: "우동초등학교",
+  kind: "초등학교",
+  level: "elementary",
+};
 
 describe("학교 마커", () => {
   it("학교는 줄인 이름과 레벨 색으로, 좌표 없는 학교는 빼고 만든다", () => {

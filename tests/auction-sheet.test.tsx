@@ -109,7 +109,8 @@ describe("경매 시트", () => {
     expect(screen.getByText("법원경매")).toBeTruthy();
     expect(screen.getByText("입찰 D-12")).toBeTruthy();
     expect(screen.getByText("해운대구 우동 1")).toBeTruthy();
-    expect(screen.getByText("아파트 · 25.7평")).toBeTruthy();
+    // 공급 평형을 모르면 전용만
+    expect(screen.getByText("아파트 · 전용 25.7평")).toBeTruthy();
     expect(
       screen.getByText("감정가 5억 2,000만의 69% · 유찰 2회"),
     ).toBeTruthy();
@@ -268,7 +269,7 @@ describe("경매 시트", () => {
     expect(screen.getByText("최근 실거래")).toBeTruthy();
   });
 
-  it("같은 평형 평균가가 있으면 평균과 공급 평형으로 견준다", async () => {
+  it("같은 평형 평균가가 있으면 평균으로 견주고, 면적은 '공급 평형(전용)'으로 쓴다", async () => {
     show(
       repoOf({
         ...base,
@@ -282,7 +283,8 @@ describe("경매 시트", () => {
     expect(
       await screen.findByText("같은 평형 평균 실거래(4.5억)보다 20% 낮아요"),
     ).toBeTruthy();
-    expect(screen.getByText("같은 평형 평균 (34평형)")).toBeTruthy();
+    expect(screen.getByText("같은 평형 평균")).toBeTruthy();
+    expect(screen.getByText("아파트 · 34평형(전용 25.7평)")).toBeTruthy();
     expect(screen.getByText("4억 5,000만")).toBeTruthy();
     expect(screen.queryByText("최근 실거래")).toBeNull();
   });
@@ -362,7 +364,7 @@ describe("경매 시트", () => {
       />,
     );
     expect(await screen.findByText("해운대아이파크 84㎡")).toBeTruthy();
-    expect(screen.getByText("같은 평형 평균 (34평형)")).toBeTruthy();
+    expect(screen.getByText("같은 평형 평균")).toBeTruthy();
     expect(
       screen.getByText("같은 평형 평균 실거래(13.5억)보다 25% 낮아요"),
     ).toBeTruthy();
