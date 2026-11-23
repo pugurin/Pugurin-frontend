@@ -13,7 +13,7 @@ import {
   ratioLine,
   tradeBase,
 } from "../state/auction";
-import { pyeongType } from "../state/market";
+import { areaLabel } from "../state/market";
 import { C } from "../theme/tokens";
 import { StarButton } from "../components/StarButton";
 
@@ -43,12 +43,24 @@ function formatDateTime(v: string | null): string {
   return p ? `${dotted(p.date)}${p.time ? ` ${p.time}` : ""}` : "—";
 }
 
-// 건물면적이 있으면 건물, 없으면 토지. 단위는 평/㎡ 토글을 따른다
+// 건물면적이 있으면 건물, 없으면 토지. 단위는 평/㎡ 토글을 따른다.
+// 아파트·오피스텔·빌라의 건물면적은 전용면적이라 "31평형(전용 25.7평)"처럼 쓴다.
+// 공급 평형은 같은 평형 실거래와 이은 단지 평형에서 온다(없으면 "전용 25.7평")
+const EXCLUSIVE_GROUPS = ["apartment", "officetel", "villa"];
 export function areaOf(a: Auction, unit: "평" | "㎡"): string | null {
-  const [m2, py] =
-    a.building_area_m2 != null || a.building_area_pyeong != null
-      ? [a.building_area_m2, a.building_area_pyeong]
-      : [a.land_area_m2, a.land_area_pyeong];
+  const building = a.building_area_m2 != null || a.building_area_pyeong != null;
+  if (building && EXCLUSIVE_GROUPS.includes(a.property_group ?? ""))
+    return areaLabel(
+      {
+        supplyPyeong: a.recent_trade_supply_area_pyeong,
+        exclusivePyeong: a.building_area_pyeong,
+        exclusiveM2: a.building_area_m2,
+      },
+      unit,
+    );
+  const [m2, py] = building
+    ? [a.building_area_m2, a.building_area_pyeong]
+    : [a.land_area_m2, a.land_area_pyeong];
   const v = unit === "평" ? py : m2;
   return v == null ? null : `${v}${unit}`;
 }
@@ -101,11 +113,7 @@ function PriceBars({ a }: { a: AuctionDetail }) {
   const rows = [
     { label: "감정가", value: a.appraisal_price, color: C.disabled },
     {
-      label: !trade?.avg
-        ? "최근 실거래"
-        : a.recent_trade_supply_area_pyeong != null
-          ? `같은 평형 평균 (${pyeongType(a.recent_trade_supply_area_pyeong)})`
-          : "같은 평형 평균",
+      label: !trade?.avg ? "최근 실거래" : "같은 평형 평균",
       value: trade?.price ?? null,
       color: C.apartment,
     },

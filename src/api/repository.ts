@@ -55,6 +55,12 @@ import {
   sampleTransactions,
 } from "./fixtures";
 import { queryForFilters, TREND_MONTHS } from "../state/market";
+import {
+  sampleTransit,
+  transitQuery,
+  type LatLng,
+  type TransitResult,
+} from "./transit";
 import { LOCAL_SCHOOL_ZONES, LOCAL_ZONE_META } from "./schoolZonesLocal";
 export type Mode = "api" | "sample";
 // 학교 이름 검색에 쓰는 부산 범위(min_lng, min_lat, max_lng, max_lat)
@@ -579,6 +585,27 @@ export class Repository {
         meta: AUCTION_META,
       });
     return this.client.get<AuctionInterest[]>("/interests/auctions", signal);
+  }
+  // 집 → 직장 대중교통 경로. 백엔드가 ODsay를 대신 호출한다(키는 서버에만 둔다)
+  transitRoute(
+    from: LatLng,
+    to: LatLng,
+    signal?: AbortSignal,
+  ): Promise<Envelope<TransitResult>> {
+    if (this.mode === "sample") return Promise.resolve(sampleTransit(from, to));
+    return this.client
+      .get<TransitResult>(`/transit/routes?${transitQuery(from, to)}`, signal)
+      .catch((e) => {
+        // 백엔드에 아직 길찾기가 없으면(404) "준비 중", 공급처 장애(503)는 다시 시도할 수 있게 알린다
+        const reason =
+          e instanceof ApiError && e.code === "RESOURCE_NOT_FOUND"
+            ? "not_ready"
+            : e instanceof ApiError && e.code === "SOURCE_UNAVAILABLE"
+              ? "source_unavailable"
+              : null;
+        if (!reason) throw e;
+        return { data: { routes: [], unavailable_reason: reason } };
+      });
   }
   // 검색 결과·필지 마커처럼 PNU를 이미 알 때. 응답 형태는 parcelLookup과 같다
   parcel(pnu: string, signal?: AbortSignal) {

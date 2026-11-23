@@ -42,6 +42,8 @@ import {
   GraduationCap,
   Hospital,
   Construction,
+  Briefcase,
+  ArrowUpDown,
   type LucideIcon,
 } from "lucide-react-native";
 import { C, FONT } from "../theme/tokens";
@@ -78,6 +80,8 @@ export const ICONS = {
   school: GraduationCap,
   hospital: Hospital,
   redev: Construction,
+  work: Briefcase,
+  swap: ArrowUpDown,
 };
 export type IconName = keyof typeof ICONS;
 export function Icon({
@@ -93,7 +97,15 @@ export function Icon({
   fill?: string;
 }) {
   const I: LucideIcon = ICONS[name];
-  return <I size={size * 0.875} color={color} strokeWidth={1.8} fill={fill} />;
+  // fill={undefined}를 그대로 넘기면 lucide 기본값(none)이 지워져 SVG 기본값(검정)으로 칠해진다
+  return (
+    <I
+      size={size * 0.875}
+      color={color}
+      strokeWidth={1.8}
+      fill={fill ?? "none"}
+    />
+  );
 }
 export function T({
   children,
@@ -189,7 +201,9 @@ export function IconBtn({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={active === undefined ? undefined : { selected: active }}
+      accessibilityState={
+        active === undefined ? undefined : { selected: active }
+      }
       hitSlop={5}
       onPress={onPress}
       style={({ pressed }) => [

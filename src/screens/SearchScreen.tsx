@@ -12,10 +12,18 @@ export function SearchScreen({
   onRecent,
   onSelect,
   onBack,
+  title = "검색",
+  placeholder = "단지·동네·학교 검색",
+  types,
 }: {
+  title?: string;
+  placeholder?: string;
+  // 보여 줄 결과 유형. 없으면 전부
+  types?: SearchResult["type"][];
   repo: Repository;
-  recent: Recent[];
-  onRecent: (r: Recent[]) => void;
+  // 없으면 최근 검색어 칸을 숨긴다(직장 찾기처럼 메인 검색 기록과 섞지 않을 때)
+  recent?: Recent[];
+  onRecent?: (r: Recent[]) => void;
   onSelect: (r: SearchResult) => void;
   onBack: () => void;
 }) {
@@ -43,7 +51,11 @@ export function SearchScreen({
           .search(q.trim(), controller.signal)
           .then((r) => {
             if (!controller.signal.aborted) {
-              setResults(groupResults(r.data));
+              setResults(
+                groupResults(
+                  types ? r.data.filter((x) => types.includes(x.type)) : r.data,
+                ),
+              );
               setError(null);
             }
           })
@@ -92,7 +104,7 @@ export function SearchScreen({
   );
   return (
     <View style={s.screen}>
-      <Header title="검색" onBack={onBack} />
+      <Header title={title} onBack={onBack} />
       <View
         style={[
           s.row,
@@ -111,7 +123,7 @@ export function SearchScreen({
           autoFocus
           value={q}
           onChangeText={setQ}
-          placeholder="단지·동네·학교 검색"
+          placeholder={placeholder}
           style={[s.input, { flex: 1, borderWidth: 0, paddingLeft: 0 }]}
         />
         {q !== "" && (
@@ -130,36 +142,40 @@ export function SearchScreen({
             <T size={14} color={C.light}>
               2글자 이상 입력하면 검색해요
             </T>
-            <View style={[s.between, { marginTop: 24 }]}>
-              <T bold>최근 검색어</T>
-              <Pressable
-                onPress={() => onRecent([])}
-                accessibilityRole="button"
-                style={{ padding: 10 }}
-              >
-                <T size={14} color={C.muted}>
-                  전체 삭제
+            {recent && onRecent && (
+              <>
+                <View style={[s.between, { marginTop: 24 }]}>
+                  <T bold>최근 검색어</T>
+                  <Pressable
+                    onPress={() => onRecent([])}
+                    accessibilityRole="button"
+                    style={{ padding: 10 }}
+                  >
+                    <T size={14} color={C.muted}>
+                      전체 삭제
+                    </T>
+                  </Pressable>
+                </View>
+                {recent.length === 0 && (
+                  <T size={15} color={C.light} style={{ paddingVertical: 24 }}>
+                    최근 검색어가 없어요
+                  </T>
+                )}
+                {recent.map((r, i) => (
+                  <View key={r.label} style={s.row}>
+                    <View style={{ flex: 1 }}>{row(r.result, i)}</View>
+                    <IconBtn
+                      name="close"
+                      label={`${r.label} 삭제`}
+                      onPress={() => onRecent(recent.filter((_, j) => j !== i))}
+                    />
+                  </View>
+                ))}
+                <T size={13} color={C.light} style={{ marginTop: 20 }}>
+                  최근 검색어는 이 기기에만 저장돼요
                 </T>
-              </Pressable>
-            </View>
-            {recent.length === 0 && (
-              <T size={15} color={C.light} style={{ paddingVertical: 24 }}>
-                최근 검색어가 없어요
-              </T>
+              </>
             )}
-            {recent.map((r, i) => (
-              <View key={r.label} style={s.row}>
-                <View style={{ flex: 1 }}>{row(r.result, i)}</View>
-                <IconBtn
-                  name="close"
-                  label={`${r.label} 삭제`}
-                  onPress={() => onRecent(recent.filter((_, j) => j !== i))}
-                />
-              </View>
-            ))}
-            <T size={13} color={C.light} style={{ marginTop: 20 }}>
-              최근 검색어는 이 기기에만 저장돼요
-            </T>
           </>
         ) : loading || error ? (
           <StateCard
