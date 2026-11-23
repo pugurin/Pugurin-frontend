@@ -26,7 +26,8 @@ export function InterestsScreen({
   onAuction,
 }: {
   repo: Repository;
-  initialTab: InterestKind;
+  // 관심 지역 탭은 아직 없다
+  initialTab: Exclude<InterestKind, "region">;
   unit: "평" | "㎡";
   onBack: () => void;
   onComplex: (id: string) => void;

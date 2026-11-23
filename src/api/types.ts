@@ -413,7 +413,12 @@ export type AuctionQuery = {
   excludeShare?: boolean;
 };
 // 관심 등록(기기별, X-Device-Id). 목록은 최근에 등록한 것부터 온다
-export type InterestIds = { complexes: string[]; auctions: string[] };
+export type InterestIds = {
+  complexes: string[];
+  auctions: string[];
+  // 관심 지역 법정동 코드(10자리). 옛 서버는 주지 않을 수 있다
+  regions?: string[];
+};
 export type ComplexInterest = {
   complex: Complex;
   // 해제 거래를 뺀 가장 최근 매매. 매매가 없으면 null
@@ -421,4 +426,58 @@ export type ComplexInterest = {
   added_at: string;
 };
 export type AuctionInterest = { auction: Auction; added_at: string };
-export type InterestKind = "complex" | "auction";
+export type InterestKind = "complex" | "auction" | "region";
+// 관심 지역 한 곳(GET /interests/regions). 좌표가 없는 지역은 lat·lng가 null이다
+export type RegionInterest = {
+  code: string;
+  name: string;
+  sigungu_name: string;
+  lat: number | null;
+  lng: number | null;
+  added_at: string;
+};
+// 알림(GET /notifications). 지금은 주간 관심 지역 리포트 하나뿐이다
+export type AppNotification = {
+  id: string;
+  kind: "region_report";
+  // 리포트가 다루는 주의 월요일(YYYY-MM-DD)
+  period_start: string;
+  title: string;
+  summary: string;
+  read_at: string | null;
+  created_at: string;
+};
+export type NotificationMeta = Meta & { unread_count?: number };
+// 리포트 속 동네 하나. 소식이 없는 동네(empty)는 수치가 null이다
+export type RegionReportBlock = {
+  code: string;
+  name: string;
+  sigungu_name: string;
+  lat: number | null;
+  lng: number | null;
+  empty: boolean;
+  // 화면에 그대로 보여 줄 한 줄 요약들
+  lines: string[];
+  sales: {
+    count: number;
+    // 평당 중위가(원). 거래가 없으면 null
+    median_per_pyeong: number | null;
+    // 지난주 대비 변화(%). 양쪽 3건 미만이면 null
+    change_pct: number | null;
+  };
+  top_sale: {
+    complex_name: string | null;
+    area_label: string | null;
+    price: number;
+    contract_date: string;
+  } | null;
+  auctions: { count: number; min_price: number | null };
+  redevelopments: { area_name: string; stage: RedevelopmentStage }[];
+};
+export type RegionReportPayload = {
+  period: { start: string; end: string };
+  regions: RegionReportBlock[];
+  sources: string[];
+  lag_notice: string;
+};
+export type RegionReport = AppNotification & { payload: RegionReportPayload };

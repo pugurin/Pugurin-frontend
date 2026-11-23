@@ -11,7 +11,7 @@ import type { InterestKind } from "../api/types";
 
 // 관심 등록(별 버튼) 상태. 로그인한 사람만 쓴다(계정에 저장). 로그인하지 않았으면 별을 눌러도
 // 서버에 보내지 않고 로그인 안내(needLogin)만 띄운다.
-// 로그인하면 GET /interests로 단지·경매 id를 받아 두고,
+// 로그인하면 GET /interests로 단지·경매·지역 id를 받아 두고,
 // 별을 누르면 화면을 먼저 바꾼 뒤 서버에 보낸다.
 // 별마다 요청은 한 번에 하나만 보내고, 끝나면 그사이 마지막으로 누른 상태만 이어서 보낸다.
 // 실패하면 서버가 마지막으로 확인해 준 값으로 되돌리고 서버 메시지를 토스트로 띄운다
@@ -26,7 +26,7 @@ const EMPTY: Interests = {
   has: () => false,
   toggle: () => {},
   learn: () => {},
-  count: { complex: 0, auction: 0 },
+  count: { complex: 0, auction: 0, region: 0 },
 };
 export const InterestsContext = createContext<Interests>(EMPTY);
 
@@ -42,7 +42,11 @@ type Entry = {
   // 요청이 나가 있는지
   busy: boolean;
 };
-const emptySets = (): Sets => ({ complex: new Set(), auction: new Set() });
+const emptySets = (): Sets => ({
+  complex: new Set(),
+  auction: new Set(),
+  region: new Set(),
+});
 
 export function useInterests(
   repo: Repository,
@@ -89,6 +93,8 @@ export function useInterests(
         const next: Sets = {
           complex: new Set(data.complexes),
           auction: new Set(data.auctions),
+          // 옛 서버 응답에는 regions가 없다
+          region: new Set(data.regions ?? []),
         };
         // 받는 사이에 누른 별은 누른 대로 둔다
         for (const e of entries.current.values()) {
@@ -184,6 +190,7 @@ export function useInterests(
       count: {
         complex: shown.current.complex.size,
         auction: shown.current.auction.size,
+        region: shown.current.region.size,
       },
     };
     // 상태는 ref에 있고 version이 바뀔 때만 새 값을 낸다

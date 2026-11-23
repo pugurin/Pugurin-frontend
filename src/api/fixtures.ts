@@ -16,6 +16,8 @@ import type {
   SchoolZone,
   Redevelopment,
   TypicalArea,
+  RegionReport,
+  RegionReportBlock,
 } from "./types";
 import { TERMS } from "./terms";
 export { TERMS };
@@ -855,5 +857,118 @@ export const REDEVELOPMENTS: Redevelopment[] = [
     location: "중동 500번지 일원",
     lat: 35.1621,
     lng: 129.1575,
+  },
+];
+
+// 샘플 모드의 관심 지역 후보(부산 법정동). 앱 안에서 10개 한도를 시험할 수 있게 열두 곳을 둔다
+export const SAMPLE_REGIONS = [
+  ["2635010500", "우동", "해운대구", 35.1631, 129.1635],
+  ["2635010600", "중동", "해운대구", 35.1655, 129.1745],
+  ["2635010100", "좌동", "해운대구", 35.1707, 129.1766],
+  ["2650010100", "남천동", "수영구", 35.1429, 129.1136],
+  ["2650010200", "광안동", "수영구", 35.1534, 129.1184],
+  ["2644010100", "대연동", "남구", 35.1356, 129.0859],
+  ["2644010200", "용호동", "남구", 35.1182, 129.1038],
+  ["2626010100", "범천동", "부산진구", 35.1459, 129.0571],
+  ["2626010200", "전포동", "부산진구", 35.1561, 129.0642],
+  ["2617010100", "동래동", "동래구", 35.2056, 129.0784],
+  ["2629010100", "구서동", "금정구", 35.2617, 129.0927],
+  ["2611010100", "광복동", "중구", 35.0985, 129.0314],
+].map(([code, name, sigungu_name, lat, lng]) => ({
+  code: code as string,
+  name: name as string,
+  sigungu_name: sigungu_name as string,
+  lat: lat as number,
+  lng: lng as number,
+}));
+const sampleBlock = (
+  code: string,
+  extra: Partial<RegionReportBlock>,
+): RegionReportBlock => {
+  const r = SAMPLE_REGIONS.find((x) => x.code === code)!;
+  return {
+    ...r,
+    empty: false,
+    lines: [],
+    sales: { count: 0, median_per_pyeong: null, change_pct: null },
+    top_sale: null,
+    auctions: { count: 0, min_price: null },
+    redevelopments: [],
+    ...extra,
+  };
+};
+// 샘플 모드의 주간 리포트. 소식 있는 동네·지난주 비교 없는 동네·소식 없는 동네를 모두 담는다
+export const SAMPLE_REPORTS: RegionReport[] = [
+  {
+    id: "sample-report-2026-11-16",
+    kind: "region_report",
+    period_start: "2026-11-16",
+    title: "11월 3주차 관심 지역 리포트",
+    summary: "우동 새 거래 5건 · 평당 중위 2,150만 외 2곳",
+    read_at: null,
+    created_at: "2026-11-16T08:00:00+09:00",
+    payload: {
+      period: { start: "2026-11-16", end: "2026-11-23" },
+      regions: [
+        sampleBlock("2635010500", {
+          lines: [
+            "새 거래 5건 · 평당 중위 2,150만 · 지난주보다 +1.2%",
+            "가장 비싼 거래 우동 샘플아파트 34평형 9.8억",
+            "경매 2건 · 최저가 4,100만부터",
+          ],
+          sales: { count: 5, median_per_pyeong: 21_500_000, change_pct: 1.2 },
+          top_sale: {
+            complex_name: "우동 샘플아파트",
+            area_label: "34평형",
+            price: 980_000_000,
+            contract_date: "2026-11-12",
+          },
+          auctions: { count: 2, min_price: 41_000_000 },
+        }),
+        sampleBlock("2644010100", {
+          lines: ["새 거래 3건 · 평당 중위 1,820만", "정비사업 1곳 · 조합설립인가"],
+          sales: { count: 3, median_per_pyeong: 18_200_000, change_pct: null },
+          top_sale: {
+            complex_name: null,
+            area_label: null,
+            price: 640_000_000,
+            contract_date: "2026-11-10",
+          },
+          redevelopments: [
+            { area_name: "대연 샘플구역", stage: "association" },
+          ],
+        }),
+        sampleBlock("2650010100", {
+          empty: true,
+          lines: ["이번 주 새 소식이 없어요"],
+        }),
+      ],
+      sources: [
+        "국토교통부 실거래가 공개시스템",
+        "대법원 법원경매정보·온비드",
+        "부산광역시 정비사업 정보",
+      ],
+      lag_notice: "최근 30일 거래는 아직 신고되지 않았을 수 있어요",
+    },
+  },
+  {
+    id: "sample-report-2026-11-09",
+    kind: "region_report",
+    period_start: "2026-11-09",
+    title: "11월 2주차 관심 지역 리포트",
+    summary: "대연동 새 거래 2건",
+    read_at: "2026-11-09T09:30:00+09:00",
+    created_at: "2026-11-09T08:00:00+09:00",
+    payload: {
+      period: { start: "2026-11-09", end: "2026-11-16" },
+      regions: [
+        sampleBlock("2644010100", {
+          lines: ["새 거래 2건 · 평당 중위 1,790만"],
+          sales: { count: 2, median_per_pyeong: 17_900_000, change_pct: null },
+        }),
+      ],
+      sources: ["국토교통부 실거래가 공개시스템"],
+      lag_notice: "최근 30일 거래는 아직 신고되지 않았을 수 있어요",
+    },
   },
 ];

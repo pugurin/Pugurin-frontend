@@ -50,16 +50,23 @@ export class ApiClient {
     }
     return fresh ? go(fresh) : response;
   }
-  // 쓰기 요청(관심 등록 PUT·해제 DELETE). 204는 본문이 없어 null을 준다
+  // 쓰기 요청(관심 등록 PUT·해제 DELETE, 알림 읽음 POST). 204는 본문이 없어 null을 준다
+  // body를 주면 JSON으로 보낸다
   async send<T>(
-    method: "PUT" | "DELETE",
+    method: "PUT" | "DELETE" | "POST",
     path: string,
+    body?: unknown,
   ): Promise<Envelope<T> | null> {
     let response: Response;
     try {
       response = await this.fetchAuthed(path, {
         method,
-        headers: { "X-Device-Id": this.deviceId, Accept: "application/json" },
+        headers: {
+          "X-Device-Id": this.deviceId,
+          Accept: "application/json",
+          ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });
     } catch {
       throw new ApiError(
@@ -67,25 +74,25 @@ export class ApiClient {
       );
     }
     if (response.status === 204) return null;
-    let body: any;
+    let result: any;
     try {
-      body = await response.json();
+      result = await response.json();
     } catch {
       throw new ApiError("서버 응답을 읽을 수 없어요", "INVALID_RESPONSE");
     }
     if (!response.ok) {
       const code =
-        body?.error?.code ??
+        result?.error?.code ??
         (response.status === 404 ? "RESOURCE_NOT_FOUND" : "SERVER_ERROR");
       throw new ApiError(
         code === "DATA_NOT_READY"
           ? DATA_NOT_READY_MESSAGE
-          : (body?.error?.message ?? "요청을 처리할 수 없어요"),
+          : (result?.error?.message ?? "요청을 처리할 수 없어요"),
         code,
         Number(response.headers.get("Retry-After")) || undefined,
       );
     }
-    return body;
+    return result;
   }
   async get<T>(path: string, signal?: AbortSignal): Promise<Envelope<T>> {
     const cached = this.cache.get(path);

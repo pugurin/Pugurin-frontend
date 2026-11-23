@@ -5,7 +5,7 @@ import { InterestsContext } from "../state/interests";
 import { C } from "../theme/tokens";
 import { Icon } from "./ui";
 
-// 단지·경매 시트 제목 옆, 관심 목록 줄 끝의 관심 등록 ★. 담겨 있으면 채운 별과 강조색
+// 단지·경매·지역 시트 제목 옆, 관심 목록 줄 끝의 관심 등록 ★. 담겨 있으면 채운 별과 강조색
 // name을 주면 라벨에 넣어 목록에서 어느 단지·물건의 별인지 읽히게 한다
 export function StarButton({
   kind,
@@ -18,7 +18,7 @@ export function StarButton({
 }) {
   const v = useContext(InterestsContext);
   const on = v.has(kind, id);
-  const what = kind === "complex" ? "단지" : "경매";
+  const what = { complex: "단지", auction: "경매", region: "지역" }[kind];
   return (
     <Pressable
       accessibilityRole="button"

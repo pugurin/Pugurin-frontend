@@ -13,7 +13,11 @@ import { Repository } from "../src/api/repository";
 import { AUCTIONS, AUCTION_META, COMPLEXES } from "../src/api/fixtures";
 import { StarButton } from "../src/components/StarButton";
 import { InterestsScreen } from "../src/screens/InterestsScreen";
-import { InterestsProvider, useInterests } from "../src/state/interests";
+import {
+  InterestsContext,
+  InterestsProvider,
+  useInterests,
+} from "../src/state/interests";
 
 afterEach(() => {
   cleanup();
@@ -391,5 +395,51 @@ describe("별 연타", () => {
       await screen.findByRole("button", { name: "두번째 관심 단지 해제" }),
     ).toBeTruthy();
     expect(gets).toBe(2);
+  });
+});
+
+describe("관심 지역 별", () => {
+  it("GET /interests의 regions로 켜지고 count.region을 센다", async () => {
+    let seen = -1;
+    function Probe() {
+      const v = React.useContext(InterestsContext);
+      seen = v.count.region;
+      return <StarButton kind="region" id="2644010100" name="대연동" />;
+    }
+    const { calls, repo } = fakeServer((c) =>
+      c.method === "GET"
+        ? json({
+            data: { complexes: [], auctions: [], regions: ["2644010100", "2644010200"] },
+          })
+        : new Response(null, { status: 204 }),
+    );
+    render(
+      <Harness repo={repo} notify={() => {}}>
+        <Probe />
+      </Harness>,
+    );
+    const star = await screen.findByRole("button", {
+      name: "대연동 관심 지역 해제",
+    });
+    expect(seen).toBe(2);
+    fireEvent.click(star);
+    await waitFor(() => expect(calls.at(-1)?.method).toBe("DELETE"));
+    expect(calls.at(-1)?.url).toBe(
+      "http://x/api/v1/interests/regions/2644010100",
+    );
+    expect(seen).toBe(1);
+  });
+
+  it("옛 서버처럼 regions가 없어도 빈 목록으로 본다", async () => {
+    const { repo } = fakeServer(() =>
+      json({ data: { complexes: [], auctions: [] } }),
+    );
+    render(
+      <Harness repo={repo} notify={() => {}}>
+        <StarButton kind="region" id="2644010100" />
+      </Harness>,
+    );
+    await act(async () => {});
+    expect(screen.getByRole("button", { name: "관심 지역 등록" })).toBeTruthy();
   });
 });

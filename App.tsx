@@ -101,7 +101,7 @@ type Route =
     }
   | { kind: "terms"; name: TermKind }
   | { kind: "date" }
-  | { kind: "interests"; tab: InterestKind }
+  | { kind: "interests"; tab: Exclude<InterestKind, "region"> }
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
   // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
   | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };

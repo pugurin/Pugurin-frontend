@@ -11,6 +11,10 @@ import type {
   Auction,
   AuctionDetail,
   AuctionInterest,
+  AppNotification,
+  NotificationMeta,
+  RegionInterest,
+  RegionReport,
   ComplexInterest,
   InterestIds,
   InterestKind,
@@ -44,6 +48,8 @@ import {
   SAMPLE_META,
   SCHOOLS,
   SCHOOL_META,
+  SAMPLE_REGIONS,
+  SAMPLE_REPORTS,
   SAMPLE_STATS,
   TERMS,
   TRANSACTIONS,
@@ -62,11 +68,24 @@ const SCHOOL_SEARCH_LIMIT = 10;
 export const SCHOOL_SEARCH_WAIT_MS = 800;
 // 서버가 종류별로 받아 주는 관심 개수 상한. 넘으면 409 CONFLICT
 export const INTEREST_LIMIT = 200;
+// 관심 지역은 종류별 200개와 따로 10개까지다
+export const INTEREST_REGION_LIMIT = 10;
+// 알림 목록 한 번에 받는 개수
+export const NOTIFICATION_PAGE_SIZE = 20;
 // 샘플 모드의 관심 목록. 앱을 켜는 동안 한 벌이고(계정을 가리지 않는다), 다시 켜면 비어 있다
 const sampleInterests: Record<InterestKind, Map<string, string>> = {
   complex: new Map(),
   auction: new Map(),
+  region: new Map(),
 };
+// 샘플 모드에서 읽음 처리한 알림 id(앱을 켜는 동안만 유지). 처음엔 두 번째 리포트만 읽은 상태다
+const sampleRead = new Map<string, string>(
+  SAMPLE_REPORTS.filter((n) => n.read_at).map((n) => [n.id, n.read_at!]),
+);
+const sampleNotification = (n: RegionReport): RegionReport => ({
+  ...n,
+  read_at: sampleRead.get(n.id) ?? null,
+});
 const newestFirst = (m: Map<string, string>) =>
   [...m].sort((a, b) => b[1].localeCompare(a[1]));
 export class Repository {
@@ -485,6 +504,7 @@ export class Repository {
         data: {
           complexes: newestFirst(sampleInterests.complex).map(([id]) => id),
           auctions: newestFirst(sampleInterests.auction).map(([id]) => id),
+          regions: newestFirst(sampleInterests.region).map(([id]) => id),
         },
       });
     return this.client.get<InterestIds>("/interests", signal);
@@ -496,17 +516,28 @@ export class Repository {
       const known =
         kind === "complex"
           ? COMPLEXES.some((c) => c.id === id)
-          : AUCTIONS.some((a) => a.id === id);
+          : kind === "region"
+            ? SAMPLE_REGIONS.some((r) => r.code === id)
+            : AUCTIONS.some((a) => a.id === id);
       if (!on) {
         store.delete(id);
         return;
       }
       if (!known)
         throw new ApiError(
-          kind === "complex" ? "단지를 찾을 수 없어요" : "경매 물건을 찾을 수 없어요",
+          kind === "complex"
+            ? "단지를 찾을 수 없어요"
+            : kind === "region"
+              ? "지역을 찾을 수 없어요"
+              : "경매 물건을 찾을 수 없어요",
           "RESOURCE_NOT_FOUND",
         );
-      if (!store.has(id) && store.size >= INTEREST_LIMIT)
+      if (kind === "region" && !store.has(id) && store.size >= INTEREST_REGION_LIMIT)
+        throw new ApiError(
+          `관심 지역은 ${INTEREST_REGION_LIMIT}개까지 등록할 수 있어요`,
+          "CONFLICT",
+        );
+      if (kind !== "region" && !store.has(id) && store.size >= INTEREST_LIMIT)
         throw new ApiError(
           `관심 ${kind === "complex" ? "단지" : "경매"}는 ${INTEREST_LIMIT}개까지 담을 수 있어요`,
           "CONFLICT",
@@ -514,7 +545,8 @@ export class Repository {
       if (!store.has(id)) store.set(id, new Date().toISOString());
       return;
     }
-    const path = `/interests/${kind === "complex" ? "complexes" : "auctions"}/${encodeURIComponent(id)}`;
+    const group = { complex: "complexes", auction: "auctions", region: "regions" }[kind];
+    const path = `/interests/${group}/${encodeURIComponent(id)}`;
     await this.client.send(on ? "PUT" : "DELETE", path);
   }
   // 관심 단지 목록 화면. complex는 단지 상세와 같은 모양이다
@@ -552,6 +584,77 @@ export class Repository {
         meta: AUCTION_META,
       });
     return this.client.get<AuctionInterest[]>("/interests/auctions", signal);
+  }
+  // 관심 지역 목록. 최근에 등록한 것부터 온다
+  regionInterests(signal?: AbortSignal): Promise<Envelope<RegionInterest[]>> {
+    if (this.mode === "sample")
+      return Promise.resolve({
+        data: newestFirst(sampleInterests.region).flatMap(([code, added_at]) => {
+          const r = SAMPLE_REGIONS.find((x) => x.code === code);
+          return r ? [{ ...r, added_at }] : [];
+        }),
+        meta: SAMPLE_META,
+      });
+    return this.client.get<RegionInterest[]>("/interests/regions", signal);
+  }
+  // 알림 목록(최근 것부터). meta.unread_count가 안 읽은 알림 수다
+  notifications(
+    page: number,
+    signal?: AbortSignal,
+  ): Promise<Envelope<AppNotification[]>> {
+    if (this.mode === "sample") {
+      const all = SAMPLE_REPORTS.map(sampleNotification);
+      const start = (page - 1) * NOTIFICATION_PAGE_SIZE;
+      const meta: NotificationMeta = {
+        ...SAMPLE_META,
+        page,
+        page_size: NOTIFICATION_PAGE_SIZE,
+        total: all.length,
+        total_pages: Math.max(1, Math.ceil(all.length / NOTIFICATION_PAGE_SIZE)),
+        unread_count: all.filter((n) => !n.read_at).length,
+      };
+      return Promise.resolve({
+        // 목록에는 payload를 싣지 않는다
+        data: all
+          .slice(start, start + NOTIFICATION_PAGE_SIZE)
+          .map(({ payload: _payload, ...n }) => n),
+        meta,
+      });
+    }
+    const q = new URLSearchParams({
+      page: String(page),
+      page_size: String(NOTIFICATION_PAGE_SIZE),
+    });
+    return this.client.get<AppNotification[]>(`/notifications?${q}`, signal);
+  }
+  // 알림 한 건(리포트 payload 포함)
+  notification(id: string, signal?: AbortSignal): Promise<Envelope<RegionReport>> {
+    if (this.mode === "sample") {
+      const found = SAMPLE_REPORTS.find((n) => n.id === id);
+      return found
+        ? Promise.resolve({ data: sampleNotification(found), meta: SAMPLE_META })
+        : Promise.reject(
+            new ApiError("알림을 찾을 수 없어요", "RESOURCE_NOT_FOUND"),
+          );
+    }
+    return this.client.get<RegionReport>(
+      `/notifications/${encodeURIComponent(id)}`,
+      signal,
+    );
+  }
+  // 알림 읽음 처리. ids로 고른 것만, "all"이면 전부
+  async markNotificationsRead(target: string[] | "all") {
+    if (this.mode === "sample") {
+      const now = new Date().toISOString();
+      const ids = target === "all" ? SAMPLE_REPORTS.map((n) => n.id) : target;
+      for (const id of ids) if (!sampleRead.has(id)) sampleRead.set(id, now);
+      return;
+    }
+    await this.client.send(
+      "POST",
+      "/notifications/read",
+      target === "all" ? { all: true } : { ids: target },
+    );
   }
   // 검색 결과·필지 마커처럼 PNU를 이미 알 때. 응답 형태는 parcelLookup과 같다
   parcel(pnu: string, signal?: AbortSignal) {
