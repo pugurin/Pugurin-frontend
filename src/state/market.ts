@@ -4,6 +4,7 @@ import type {
   Filters,
   Latest,
   Marker,
+  Metrics,
   Property,
 } from "../api/types";
 export const PROPERTY: Record<Property, string> = {
@@ -66,6 +67,23 @@ export function formatPrice(v: number | null | undefined) {
 export const formatMan = (v: number | null | undefined) =>
   v == null ? "—" : Math.round(v / 1e4).toLocaleString("ko-KR");
 const M2_PER_PYEONG = 3.3058;
+// 단지 한 평형의 대표 거래가. 백엔드 평당가는 전용면적 기준 중위값이라
+// 한 평형 안에서는 중위 평당가 × 전용평수가 곧 거래가 중위값이다. 월세는 중위값을 그대로 쓴다
+export function complexPriceSummary(
+  m: Metrics | null | undefined,
+  deal: Deal,
+  exclusiveM2: number | null | undefined,
+): string | null {
+  if (!m) return null;
+  if (deal === "monthly")
+    return m.median_deposit == null || m.median_monthly_rent == null
+      ? null
+      : `${formatPrice(m.median_deposit)} / ${formatPrice(m.median_monthly_rent)}`;
+  const perPyeong =
+    deal === "sale" ? m.median_price_per_pyeong : m.median_deposit_per_pyeong;
+  if (perPyeong == null || !exclusiveM2) return null;
+  return formatPrice((perPyeong * exclusiveM2) / M2_PER_PYEONG);
+}
 const one = (v: number) => +v.toFixed(1);
 // 면적 표기의 기준. 공급 평형을 알면 "31평형(전용 25.7평)", 모르면 "전용 25.7평".
 // ㎡ 단위면 "102㎡형(전용 84.9㎡)". 전용을 모르면 "31평형"만, 둘 다 모르면 null
