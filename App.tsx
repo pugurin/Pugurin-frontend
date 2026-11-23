@@ -50,6 +50,11 @@ import {
 import { TransactionsScreen } from "./src/screens/TransactionsScreen";
 import { AuctionsScreen } from "./src/screens/AuctionsScreen";
 import { InterestsScreen } from "./src/screens/InterestsScreen";
+import {
+  NotificationsScreen,
+  ReportScreen,
+} from "./src/screens/NotificationsScreen";
+import { useUnreadCountState } from "./src/state/notifications";
 import { InterestsProvider, useInterests } from "./src/state/interests";
 import type { InterestKind } from "./src/api/types";
 import { Brand } from "./src/components/Brand";
@@ -102,6 +107,8 @@ type Route =
   | { kind: "terms"; name: TermKind }
   | { kind: "date" }
   | { kind: "interests"; tab: InterestKind }
+  | { kind: "notifications" }
+  | { kind: "notification"; id: string }
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
   // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
   | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };
@@ -242,6 +249,10 @@ export default function App() {
     (m) => notify(m),
     id && session ? session.user.id : null,
     () => setLoginAsk(true),
+  );
+  const unread = useUnreadCountState(
+    repo,
+    id && session ? session.user.id : null,
   );
   useEffect(() => {
     deviceId()
@@ -638,6 +649,32 @@ export default function App() {
         onRegion={showRegion}
       />
     );
+  if (route?.kind === "notifications")
+    overlay = (
+      <NotificationsScreen
+        repo={repo}
+        loggedIn={session !== null}
+        onBack={() => {
+          setRoute(null);
+          unread.refresh();
+        }}
+        onOpen={(nid) => setRoute({ kind: "notification", id: nid })}
+        onLogin={() => {
+          if (auth) setRoute({ kind: "login" });
+          else notify("지금은 로그인을 쓸 수 없어요");
+        }}
+      />
+    );
+  if (route?.kind === "notification")
+    overlay = (
+      <ReportScreen
+        repo={repo}
+        id={route.id}
+        onBack={() => setRoute({ kind: "notifications" })}
+        onRegion={showRegion}
+        onRead={unread.refresh}
+      />
+    );
   if (route?.kind === "auctions")
     overlay = (
       <AuctionsScreen
@@ -765,6 +802,8 @@ export default function App() {
                       : setLoginAsk(true)
                   }
                   interestCount={interests.count}
+                  onNotifications={() => setRoute({ kind: "notifications" })}
+                  unreadCount={unread.count}
                   mode={mode}
                   date={
                     dataMeta?.data_as_of ??

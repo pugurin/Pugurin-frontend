@@ -23,7 +23,12 @@ export function MoreScreen({
   onAccount,
   onInterests,
   interestCount,
+  onNotifications,
+  unreadCount = 0,
 }: {
+  // 알림함(주간 리포트). 안 읽은 개수가 있으면 배지를 단다
+  onNotifications?: () => void;
+  unreadCount?: number;
   // 로그인한 사용자. 없으면 로그인 카드를 보여 준다
   user?: User | null;
   // 없으면 로그인을 아직 열지 않은 빌드라 "준비 중" 카드를 보여 준다
@@ -123,6 +128,47 @@ export function MoreScreen({
               <Icon name="right" size={18} color={C.light} />
             </View>
           </Pressable>
+        )}
+        {onNotifications && (
+          <Section title="알림함">
+            <View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={onNotifications}
+                style={[
+                  s.between,
+                  {
+                    paddingVertical: 17,
+                    borderBottomWidth: 1,
+                    borderColor: C.rule,
+                  },
+                ]}
+              >
+                <T>알림</T>
+                <View style={s.row}>
+                  {unreadCount > 0 && (
+                    <View
+                      accessibilityLabel={`안 읽은 알림 ${unreadCount}개`}
+                      style={{
+                        minWidth: 22,
+                        height: 22,
+                        borderRadius: 11,
+                        paddingHorizontal: 6,
+                        backgroundColor: C.primary,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <T size={13} bold color={C.surface}>
+                        {unreadCount > 99 ? "99+" : String(unreadCount)}
+                      </T>
+                    </View>
+                  )}
+                  <Icon name="right" size={18} color={C.light} />
+                </View>
+              </Pressable>
+            </View>
+          </Section>
         )}
         {onInterests && (
           <Section title="관심">
