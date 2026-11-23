@@ -2,11 +2,11 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Platform } from "react-native";
-import { SampleAuth, nicknameError, toStored, type AuthApi, type Session } from "../src/api/auth";
+import { SampleAuth, nicknameError, randomNickname, toStored, type AuthApi, type Session } from "../src/api/auth";
 import { ApiError } from "../src/api/client";
 import { restoreSession } from "../src/api/restoreSession";
 import { loadRefreshToken, saveRefreshToken } from "../src/state/secureToken";
-import { AccountScreen, LoginScreen, SignupScreen } from "../src/screens/AuthScreens";
+import { AccountScreen, LoginScreen, LoginSheet, SignupDoneScreen, SignupScreen } from "../src/screens/AuthScreens";
 import { MoreScreen } from "../src/screens/MoreScreen";
 
 const storage = vi.hoisted(() => {
@@ -189,45 +189,99 @@ describe("세션 복원", () => {
 });
 
 describe("로그인·가입 화면", () => {
-  it("네이버·카카오·구글 순서로 버튼을 두고, 처음이면 가입으로 넘긴다", async () => {
+  it("카카오·네이버·구글 순서로 버튼을 두고, 처음이면 가입으로 넘긴다", async () => {
     const onSignup = vi.fn();
     const onSession = vi.fn();
     render(<LoginScreen auth={new SampleAuth(0)} onBack={() => {}} onSession={onSession} onSignup={onSignup} />);
-    const buttons = screen.getAllByRole("button", { name: /로 시작하기$/ }).map((b) => b.getAttribute("aria-label"));
-    expect(buttons).toEqual(["네이버로 시작하기", "카카오로 시작하기", "구글로 시작하기"]);
+    const buttons = screen.getAllByRole("button", { name: /로 (시작|계속)하기$/ }).map((b) => b.getAttribute("aria-label"));
+    expect(buttons).toEqual(["카카오로 시작하기", "네이버로 시작하기", "Google로 계속하기"]);
     // 버튼마다 그 서비스 로고를 그린다
     expect(screen.getAllByRole("img", { name: /^(네이버|카카오|구글) 로고$/ }).map((i) => i.getAttribute("aria-label"))).toEqual([
-      "네이버 로고",
       "카카오 로고",
+      "네이버 로고",
       "구글 로고",
     ]);
-    fireEvent.click(screen.getByRole("button", { name: "구글로 시작하기" }));
+    fireEvent.click(screen.getByRole("button", { name: "Google로 계속하기" }));
     await flush();
     expect(onSignup).toHaveBeenCalledWith(expect.objectContaining({ kind: "signup", provider: "google" }));
     expect(onSession).not.toHaveBeenCalled();
   });
 
-  it("가입 버튼은 필수 동의를 모두 켜고 닉네임이 맞아야 눌린다", async () => {
+  it("로그인에 실패하면 위에 안내하고, 사용자가 취소했으면 안내 없이 그대로 둔다", async () => {
+    const auth = new SampleAuth(0);
+    auth.signIn = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError("로그인을 취소했어요", "CANCELLED"))
+      .mockRejectedValueOnce(new ApiError("x", "SOCIAL_ERROR"));
+    render(<LoginScreen auth={auth} onBack={() => {}} onSession={() => {}} onSignup={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "카카오로 시작하기" }));
+    await flush();
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "카카오로 시작하기" }));
+    await flush();
+    expect(screen.getByRole("alert").textContent).toContain("카카오 로그인을 마치지 못했어요");
+    expect(screen.getByRole("alert").textContent).toContain("다른 계정으로 시작할 수 있어요");
+  });
+
+  it("로그인 진행 중에 화면을 닫으면 늦게 온 결과로 로그인하지 않는다", async () => {
+    const auth = new SampleAuth(0);
+    let finish!: (r: any) => void;
+    auth.signIn = vi.fn(() => new Promise<any>((r) => (finish = r)));
+    const onSession = vi.fn();
+    const onSignup = vi.fn();
+    const view = render(<LoginScreen auth={auth} onBack={() => {}} onSession={onSession} onSignup={onSignup} />);
+    fireEvent.click(screen.getByRole("button", { name: "카카오로 시작하기" }));
+    view.unmount();
+    finish({ kind: "session", session: {} });
+    await flush();
+    expect(onSession).not.toHaveBeenCalled();
+    expect(onSignup).not.toHaveBeenCalled();
+  });
+
+  it("웹 리다이렉트 실패 안내는 다시 시도하면 지운다", async () => {
+    const auth = new SampleAuth(0);
+    auth.signIn = vi.fn(() => new Promise<any>(() => {}));
+    render(
+      <LoginScreen auth={auth} onBack={() => {}} onSession={() => {}} onSignup={() => {}} initialError="로그인을 마치지 못했어요" />,
+    );
+    expect(screen.getByRole("alert").textContent).toContain("로그인을 마치지 못했어요");
+    fireEvent.click(screen.getByRole("button", { name: "카카오로 시작하기" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("가입 토큰이 만료돼 401이면 로그인부터 다시 하게 한다", async () => {
+    const auth = new SampleAuth(0);
+    const signup = await auth.signIn("kakao");
+    if (signup.kind !== "signup") throw new Error();
+    auth.signUp = vi.fn().mockRejectedValue(new ApiError("만료", "UNAUTHORIZED"));
+    const onExpired = vi.fn();
+    render(<SignupScreen auth={auth} signup={signup} onBack={() => {}} onSession={() => {}} onExpired={onExpired} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "모두 동의" }));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 시작하기" }));
+    await flush();
+    expect(onExpired).toHaveBeenCalled();
+  });
+
+  it("약관 동의: 필수 3개를 켜야 시작할 수 있고, 닉네임은 자동으로 만든다", async () => {
     const auth = new SampleAuth(0);
     const signup = await auth.signIn("naver");
     if (signup.kind !== "signup") throw new Error();
     const onSession = vi.fn();
     render(<SignupScreen auth={auth} signup={signup} onBack={() => {}} onSession={onSession} />);
-    const submit = () => screen.getByRole("button", { name: "가입하고 시작하기" });
+    const submit = () => screen.getByRole("button", { name: "동의하고 시작하기" });
+    expect(submit().getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(screen.getByRole("checkbox", { name: "[필수] 이용약관" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "[필수] 개인정보 수집 · 이용" }));
     expect(submit().getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(screen.getByRole("checkbox", { name: "[필수] 만 14세 이상이에요" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "[필수] 서비스 이용약관 동의" }));
-    expect(submit().getAttribute("aria-disabled")).toBe("true");
-    fireEvent.click(screen.getByRole("checkbox", { name: "[필수] 개인정보 수집·이용 동의" }));
+    // 선택 항목은 꺼 둬도 된다
     expect(submit().getAttribute("aria-disabled")).not.toBe("true");
-    // 선택 항목은 꺼 둬도 된다. 닉네임이 어긋나면 다시 막힌다
-    fireEvent.change(screen.getByLabelText("닉네임"), { target: { value: "부산 사람" } });
-    expect(submit().getAttribute("aria-disabled")).toBe("true");
-    expect(screen.getByText("한글·영문·숫자만 쓸 수 있어요(띄어쓰기·기호 없이)")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("닉네임"), { target: { value: "부산사람" } });
+    expect(screen.queryByLabelText("닉네임")).toBeNull();
     fireEvent.click(submit());
     await flush();
-    expect(onSession).toHaveBeenCalledWith(expect.objectContaining({ user: expect.objectContaining({ nickname: "부산사람", provider: "naver", marketing_push: false }) }));
+    const user = onSession.mock.calls[0][0].user;
+    expect(nicknameError(user.nickname)).toBeNull();
+    expect(user).toMatchObject({ provider: "naver", marketing_push: false });
   });
 
   it("모두 동의하면 선택 항목까지 켜지고, 다시 누르면 모두 꺼진다", async () => {
@@ -236,10 +290,49 @@ describe("로그인·가입 화면", () => {
     if (signup.kind !== "signup") throw new Error();
     render(<SignupScreen auth={auth} signup={signup} onBack={() => {}} onSession={() => {}} />);
     const boxes = () => screen.getAllByRole("checkbox").map((c) => c.getAttribute("aria-checked"));
-    fireEvent.click(screen.getByRole("checkbox", { name: "모두 동의해요" }));
-    expect(boxes()).toEqual(Array(5).fill("true"));
-    fireEvent.click(screen.getByRole("checkbox", { name: "모두 동의해요" }));
-    expect(boxes()).toEqual(Array(5).fill("false"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "모두 동의" }));
+    expect(boxes()).toEqual(Array(6).fill("true"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "모두 동의" }));
+    expect(boxes()).toEqual(Array(6).fill("false"));
+  });
+
+  it("가입 완료 화면은 자동으로 만든 닉네임을 보여 주고 돌아가기로 닫는다", () => {
+    const onDone = vi.fn();
+    render(
+      <SignupDoneScreen
+        user={{ id: "u", nickname: "부산갈매기2841", provider: "kakao", role: "buyer", marketing_push: false, created_at: "2026-11-17T00:00:00Z" }}
+        onDone={onDone}
+      />,
+    );
+    expect(screen.getByText("가입했어요")).toBeTruthy();
+    expect(screen.getByText("부산갈매기2841")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "돌아가기" }));
+    expect(onDone).toHaveBeenCalled();
+  });
+
+  it("로그인 안내 시트는 소셜 버튼과 나중에 할게요를 보여 준다", async () => {
+    const onClose = vi.fn();
+    const onSignup = vi.fn();
+    render(
+      <LoginSheet
+        auth={new SampleAuth(0)}
+        title="관심 단지는 로그인하면 저장돼요"
+        message="해운대아이파크를 관심 단지에 넣으려면 로그인이 필요해요."
+        onClose={onClose}
+        onSession={() => {}}
+        onSignup={onSignup}
+      />,
+    );
+    expect(screen.getByText("관심 단지는 로그인하면 저장돼요")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "나중에 할게요" }));
+    expect(onClose).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "카카오로 시작하기" }));
+    await flush();
+    expect(onSignup).toHaveBeenCalledWith(expect.objectContaining({ provider: "kakao" }));
+  });
+
+  it("자동 닉네임은 늘 닉네임 규칙에 맞는다", () => {
+    for (const r of [0, 0.5, 0.999]) expect(nicknameError(randomNickname(() => r))).toBeNull();
   });
 
   it("회원 탈퇴는 안내를 확인해야 누를 수 있다", async () => {
@@ -308,7 +401,7 @@ describe("더보기 계정 카드", () => {
     const { rerender } = render(<MoreScreen {...base} user={null} onLogin={onLogin} />);
     fireEvent.click(screen.getByRole("button", { name: "로그인 · 회원가입" }));
     expect(onLogin).toHaveBeenCalled();
-    expect(screen.getByText("네이버·카카오·구글 계정으로 바로 시작해요")).toBeTruthy();
+    expect(screen.getByText("카카오·네이버·구글 계정으로 바로 시작해요")).toBeTruthy();
     const onAccount = vi.fn();
     rerender(
       <MoreScreen

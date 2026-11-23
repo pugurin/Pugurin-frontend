@@ -4,6 +4,7 @@ import type {
   Filters,
   Latest,
   Marker,
+  Metrics,
   Property,
 } from "../api/types";
 export const PROPERTY: Record<Property, string> = {
@@ -65,26 +66,71 @@ export function formatPrice(v: number | null | undefined) {
 }
 export const formatMan = (v: number | null | undefined) =>
   v == null ? "—" : Math.round(v / 1e4).toLocaleString("ko-KR");
+const M2_PER_PYEONG = 3.3058;
+// 단지 한 평형의 대표 거래가. 백엔드 평당가는 전용면적 기준 중위값이라
+// 한 평형 안에서는 중위 평당가 × 전용평수가 곧 거래가 중위값이다. 월세는 중위값을 그대로 쓴다
+export function complexPriceSummary(
+  m: Metrics | null | undefined,
+  deal: Deal,
+  exclusiveM2: number | null | undefined,
+): string | null {
+  if (!m) return null;
+  if (deal === "monthly")
+    return m.median_deposit == null || m.median_monthly_rent == null
+      ? null
+      : `${formatPrice(m.median_deposit)} / ${formatPrice(m.median_monthly_rent)}`;
+  const perPyeong =
+    deal === "sale" ? m.median_price_per_pyeong : m.median_deposit_per_pyeong;
+  if (perPyeong == null || !exclusiveM2) return null;
+  return formatPrice((perPyeong * exclusiveM2) / M2_PER_PYEONG);
+}
+const one = (v: number) => +v.toFixed(1);
+// 면적 표기의 기준. 공급 평형을 알면 "31평형(전용 25.7평)", 모르면 "전용 25.7평".
+// ㎡ 단위면 "102㎡형(전용 84.9㎡)". 전용을 모르면 "31평형"만, 둘 다 모르면 null
+export function areaLabel(
+  a: {
+    supplyPyeong?: number | null;
+    exclusivePyeong?: number | null;
+    exclusiveM2?: number | null;
+  },
+  unit: "평" | "㎡" = "평",
+): string | null {
+  const { supplyPyeong: supply, exclusivePyeong: py, exclusiveM2: m2 } = a;
+  const type =
+    supply == null
+      ? null
+      : unit === "평"
+        ? pyeongType(supply)
+        : `${Math.round(supply * M2_PER_PYEONG)}㎡형`;
+  const exclusive =
+    unit === "평"
+      ? (py ?? (m2 == null ? null : one(m2 / M2_PER_PYEONG)))
+      : (m2 ?? (py == null ? null : py * M2_PER_PYEONG));
+  const ex = exclusive == null ? null : `전용 ${one(exclusive)}${unit}`;
+  if (type && ex) return `${type}(${ex})`;
+  return type ?? ex;
+}
+// 거래 한 건의 면적. 토지는 토지 면적, 나머지는 areaLabel
 export function formatArea(
   a: Pick<
     Latest,
     "exclusive_area_pyeong" | "supply_area_pyeong" | "land_area_pyeong"
-  >,
+  > & { exclusive_area_m2?: number | null },
   unit: "평" | "㎡" = "평",
 ) {
   if (a.land_area_pyeong != null)
-    return `${unit === "평" ? a.land_area_pyeong : (a.land_area_pyeong * 3.3058).toFixed(1)}${unit}`;
-  const supply = a.supply_area_pyeong;
-  const exclusive = a.exclusive_area_pyeong;
-  if (supply != null)
-    return `${unit === "평" ? supply : +(supply * 3.3058).toFixed(1)}${unit}`;
-  return exclusive == null
-    ? "면적 정보 없음"
-    : `전용 ${unit === "평" ? exclusive : +(exclusive * 3.3058).toFixed(1)}${unit}`;
+    return `${unit === "평" ? a.land_area_pyeong : (a.land_area_pyeong * M2_PER_PYEONG).toFixed(1)}${unit}`;
+  return (
+    areaLabel(
+      {
+        supplyPyeong: a.supply_area_pyeong,
+        exclusivePyeong: a.exclusive_area_pyeong,
+        exclusiveM2: a.exclusive_area_m2,
+      },
+      unit,
+    ) ?? "면적 정보 없음"
+  );
 }
-// 평 값 하나를 지금 단위로 적는다. ㎡ 원값이 있으면 환산하지 않고 그 값을 쓴다
-export const areaIn = (pyeong: number, unit: "평" | "㎡", m2?: number) =>
-  unit === "평" ? `${pyeong}평` : `${+(m2 ?? pyeong * 3.3058).toFixed(1)}㎡`;
 // 공급 평형 표기. 34.0 → "34평형"
 export const pyeongType = (supply: number) => `${Math.round(supply)}평형`;
 export const priceLabel = (l: Latest) =>

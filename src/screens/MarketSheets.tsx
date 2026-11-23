@@ -16,7 +16,8 @@ import { C } from "../theme/tokens";
 import {
   DEAL,
   PROPERTY,
-  areaIn,
+  areaLabel,
+  complexPriceSummary,
   formatArea,
   formatPrice,
   markerLabel,
@@ -45,6 +46,7 @@ import type { SheetStage } from "../components/Sheet";
 import { HAS_KAKAO } from "../map/kakaoRuntime";
 import { RoadviewModal } from "../roadview/RoadviewModal";
 import { NearbySchoolsSection } from "./NearbySchools";
+import { CommuteSection } from "./Commute";
 import { LoanCalculator } from "../components/LoanCalculator";
 import { latestSale } from "../state/loan";
 
@@ -452,7 +454,7 @@ export function ComplexContent({
     );
   // 머리의 "최근 거래"는 해제되지 않은 거래만 쓴다. 해제 거래는 목록에서만 해제 표시와 함께 보여준다
   const tx = items.find((t) => !t.is_cancelled);
-  // 면적 칩은 전용면적 순으로 놓는다
+  // 면적 칩은 전용면적이 작은 평형부터 놓는다. 서버 순서가 바뀌어도 칩 순서가 흔들리지 않게 한다
   const areaTypes = [...complex.area_types].sort(
     (x, y) => x.exclusive_area_m2 - y.exclusive_area_m2,
   );
@@ -461,6 +463,10 @@ export function ComplexContent({
     (v) => v.exclusive_area_m2 === a?.exclusive_area_m2,
   );
   const selectedStats = stats?.area_types?.length ? areaStats : stats;
+  // 평형별 통계가 있을 때만 그 평형 전용면적으로 거래가를 환산할 수 있다
+  const priceSummary = areaStats
+    ? complexPriceSummary(areaStats, filters.deal_type, a?.exclusive_area_m2)
+    : null;
   const metric =
     filters.deal_type === "sale"
       ? "median_price_per_pyeong"
@@ -555,7 +561,6 @@ export function ComplexContent({
             </T>
           )}
           <View style={[s.row, { marginVertical: 10, flexWrap: "wrap" }]}>
-            {/* 칩은 모두 전용면적으로 적는다. 공급면적은 평형마다 있거나 없어서 섞으면 비교가 안 된다 */}
             {areaTypes.map((ar) => (
               <Chip
                 key={ar.exclusive_area_m2}
@@ -565,19 +570,29 @@ export function ComplexContent({
                   setPage(1);
                 }}
               >
-                {`전용 ${areaIn(ar.exclusive_area_pyeong, unit, ar.exclusive_area_m2)}`}
+                {areaLabel(
+                  {
+                    supplyPyeong: ar.supply_area_pyeong,
+                    exclusivePyeong: ar.exclusive_area_pyeong,
+                    exclusiveM2: ar.exclusive_area_m2,
+                  },
+                  unit,
+                )}
               </Chip>
             ))}
           </View>
-          {a && (
-            <T size={13} color={C.light}>
-              {a.supply_area_pyeong
-                ? `공급 ${areaIn(a.supply_area_pyeong, unit)}`
-                : "공급면적 정보 없음"}{" "}
-              · 전용{" "}
-              {areaIn(a.exclusive_area_pyeong, unit, a.exclusive_area_m2)}
-            </T>
-          )}
+          <T size={13} color={C.light}>
+            {a
+              ? `${areaLabel(
+                  {
+                    supplyPyeong: a.supply_area_pyeong,
+                    exclusivePyeong: a.exclusive_area_pyeong,
+                    exclusiveM2: a.exclusive_area_m2,
+                  },
+                  unit,
+                )} 기준`
+              : "평형 정보 없음"}
+          </T>
           <T size={13} color={C.light}>
             거래 이력은 모든 면적을 표시해요
           </T>
@@ -589,6 +604,27 @@ export function ComplexContent({
             }
             right={<Help onPress={() => onHelp("평당가")} />}
           >
+            {priceSummary && (
+              <View style={{ gap: 2 }}>
+                <View style={s.row}>
+                  <T size={14} color={C.muted}>
+                    {filters.deal_type === "monthly"
+                      ? "보증금 · 월세 중위값"
+                      : filters.deal_type === "jeonse"
+                        ? "보증금 중위값"
+                        : "거래가 중위값"}
+                  </T>
+                  <Help onPress={() => onHelp("중위값")} />
+                </View>
+                <T bold size={24}>
+                  {priceSummary}
+                </T>
+                <T size={12} color={C.light}>
+                  선택한 평형 · 최근 {TREND_MONTHS / 12}년 · 거래{" "}
+                  {(selectedStats?.transaction_count ?? 0).toLocaleString()}건
+                </T>
+              </View>
+            )}
             {stats ? (
               <Chart
                 trend={selectedStats?.trend ?? []}
@@ -688,6 +724,15 @@ export function ComplexContent({
                     )
                   )}
                 </Section>
+                <CommuteSection
+                  repo={repo}
+                  home={{
+                    name: complex.name,
+                    address: complex.address,
+                    lat: complex.lat,
+                    lng: complex.lng,
+                  }}
+                />
                 <NearbySchoolsSection complexId={complex.id} repo={repo} />
               </View>
               <View style={{ flex: twoColumns ? 1 : undefined, minWidth: 0 }}>

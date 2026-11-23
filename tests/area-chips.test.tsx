@@ -7,9 +7,9 @@ vi.mock("../src/components/Chart", () => ({
   Chart: () => <div>차트</div>,
 }));
 afterEach(cleanup);
-// 면적 칩은 모두 전용면적으로 적는다. 공급면적이 있는 평형과 없는 평형이 섞이면
-// "29평"(공급)과 "전용 37.9평"을 한 줄에서 비교하게 돼 헷갈렸다.
-// 공급면적은 선택한 칩 아래 문구에서만 보여준다.
+// 면적 칩은 거래 줄과 같은 areaLabel 규칙으로 적는다: "20평형(전용 15.8평)",
+// 공급 평형을 모르면 "전용 37.9평". 모든 칩에 전용면적이 붙어 서로 비교할 수 있다.
+// 칩은 서버 순서와 상관없이 전용면적이 작은 평형부터 놓는다.
 const repo: any = {
   mode: "api",
   complex: async () => ({
@@ -53,32 +53,42 @@ const renderSheet = (unit: "평" | "㎡") =>
       unit={unit}
     />,
   );
+// 칩 문구만 고른다. 칩 아래 문구는 " 기준"으로 끝나서 걸리지 않는다
 const chipTexts = () =>
-  screen.getAllByText(/^전용 [\d.]+(평|㎡)$/).map((el) => el.textContent);
+  screen
+    .getAllByText(/^(\d+(평|㎡)형\()?전용 [\d.]+(평|㎡)\)?$/)
+    .map((el) => el.textContent);
 
 describe("단지 시트 면적 칩", () => {
-  it("모든 칩을 전용면적으로, 작은 평형부터 적는다", async () => {
+  it("칩을 areaLabel 규칙으로, 전용면적이 작은 평형부터 적는다", async () => {
     renderSheet("평");
     await screen.findByText("현대");
-    expect(chipTexts()).toEqual(["전용 15.8평", "전용 24평", "전용 37.9평"]);
-    expect(screen.queryByText("20평")).toBeNull();
+    expect(chipTexts()).toEqual([
+      "20평형(전용 15.8평)",
+      "29평형(전용 24평)",
+      "전용 37.9평",
+    ]);
   });
   it("㎡로 바꾸면 칩도 ㎡로 적는다", async () => {
     renderSheet("㎡");
     await screen.findByText("현대");
-    expect(chipTexts()).toEqual(["전용 52.2㎡", "전용 79.3㎡", "전용 125.3㎡"]);
+    expect(chipTexts()).toEqual([
+      "66㎡형(전용 52.2㎡)",
+      "96㎡형(전용 79.3㎡)",
+      "전용 125.3㎡",
+    ]);
   });
-  it("선택한 평형의 공급면적과 전용면적을 칩 아래에 적는다", async () => {
+  it("칩 아래 문구는 선택한 평형을 같은 규칙으로 적는다", async () => {
     renderSheet("평");
     await screen.findByText("현대");
-    expect(screen.getByText("공급 20평 · 전용 15.8평")).toBeTruthy();
+    // 처음에는 정렬된 첫 칩(가장 작은 평형)이 골라진다
+    expect(screen.getByText("20평형(전용 15.8평) 기준")).toBeTruthy();
     fireEvent.click(screen.getByText("전용 37.9평"));
-    // 공급면적이 없는 평형은 전용면적만 적는다
-    expect(screen.getByText("공급면적 정보 없음 · 전용 37.9평")).toBeTruthy();
+    expect(screen.getByText("전용 37.9평 기준")).toBeTruthy();
   });
   it("㎡일 때 칩 아래 문구도 ㎡로 적는다", async () => {
     renderSheet("㎡");
     await screen.findByText("현대");
-    expect(screen.getByText("공급 66.1㎡ · 전용 52.2㎡")).toBeTruthy();
+    expect(screen.getByText("66㎡형(전용 52.2㎡) 기준")).toBeTruthy();
   });
 });

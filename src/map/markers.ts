@@ -10,7 +10,7 @@ import type {
   TypicalArea,
 } from "../api/types";
 import { auctionAmount, auctionSub } from "../state/auction";
-import { formatPrice, markerId, pyeongType } from "../state/market";
+import { areaLabel, formatArea, formatPrice, markerId } from "../state/market";
 import {
   REDEVELOPMENT_COLOR,
   REDEVELOPMENT_DONE_COLOR,
@@ -72,20 +72,10 @@ export function markerLines(m: Marker, unit: MapProps["unit"]) {
       : l.deal_type === "jeonse"
         ? "전세 " + price(l.deposit)
         : man(l.deposit) + "/" + man(l.monthly_rent);
-  const area =
-    l.land_area_pyeong ?? l.supply_area_pyeong ?? l.exclusive_area_pyeong;
-  const prefix =
-    l.supply_area_pyeong == null && l.land_area_pyeong == null ? "전용 " : "";
-  const value =
-    area == null
-      ? "—"
-      : unit === "㎡"
-        ? (area * 3.3058).toFixed(1)
-        : String(area);
   return {
     title: "",
     amount,
-    sub: `${prefix}${value}${unit} · '${l.contract_date.slice(2, 7).replace("-", ".")}`,
+    sub: `${formatArea(l, unit)} · '${l.contract_date.slice(2, 7).replace("-", ".")}`,
   };
 }
 
@@ -106,17 +96,18 @@ function typicalLines(m: ComplexMarker, unit: MapProps["unit"]) {
   return { title: "", amount, sub: typicalArea(t, unit) };
 }
 
-// 공급 평형이 있으면 "34평형"(㎡면 "112㎡형"), 없으면 최근 거래 표기처럼 "전용 25.7평"(㎡면 "전용 85.0㎡").
-// "전용"을 붙여 공급 평형(25평형)과 헷갈리지 않게 한다
+// 대표 평형 표기: "34평형(전용 25.7평)", 공급 평형을 모르면 "전용 25.7평" (state/market의 areaLabel)
 function typicalArea(t: TypicalArea, unit: MapProps["unit"]) {
-  if (t.supply_area_pyeong != null) {
-    return unit === "㎡"
-      ? Math.round(t.supply_area_pyeong * 3.3058) + "㎡형"
-      : pyeongType(t.supply_area_pyeong);
-  }
-  return unit === "㎡"
-    ? `전용 ${t.exclusive_area_m2.toFixed(1)}㎡`
-    : `전용 ${t.exclusive_area_pyeong}평`;
+  return (
+    areaLabel(
+      {
+        supplyPyeong: t.supply_area_pyeong,
+        exclusivePyeong: t.exclusive_area_pyeong,
+        exclusiveM2: t.exclusive_area_m2,
+      },
+      unit,
+    ) ?? ""
+  );
 }
 
 export type MarkerItem = {
