@@ -16,6 +16,7 @@ import { C } from "../theme/tokens";
 import {
   DEAL,
   PROPERTY,
+  areaIn,
   formatArea,
   formatPrice,
   markerLabel,
@@ -451,9 +452,11 @@ export function ComplexContent({
     );
   // 머리의 "최근 거래"는 해제되지 않은 거래만 쓴다. 해제 거래는 목록에서만 해제 표시와 함께 보여준다
   const tx = items.find((t) => !t.is_cancelled);
-  const a =
-    complex.area_types.find((a) => a.exclusive_area_m2 === area) ??
-    complex.area_types[0];
+  // 면적 칩은 전용면적 순으로 놓는다
+  const areaTypes = [...complex.area_types].sort(
+    (x, y) => x.exclusive_area_m2 - y.exclusive_area_m2,
+  );
+  const a = areaTypes.find((a) => a.exclusive_area_m2 === area) ?? areaTypes[0];
   const areaStats = stats?.area_types?.find(
     (v) => v.exclusive_area_m2 === a?.exclusive_area_m2,
   );
@@ -552,7 +555,8 @@ export function ComplexContent({
             </T>
           )}
           <View style={[s.row, { marginVertical: 10, flexWrap: "wrap" }]}>
-            {complex.area_types.map((ar) => (
+            {/* 칩은 모두 전용면적으로 적는다. 공급면적은 평형마다 있거나 없어서 섞으면 비교가 안 된다 */}
+            {areaTypes.map((ar) => (
               <Chip
                 key={ar.exclusive_area_m2}
                 selected={a?.exclusive_area_m2 === ar.exclusive_area_m2}
@@ -561,16 +565,19 @@ export function ComplexContent({
                   setPage(1);
                 }}
               >
-                {ar.supply_area_pyeong
-                  ? `${ar.supply_area_pyeong}평`
-                  : `전용 ${ar.exclusive_area_pyeong}평`}
+                {`전용 ${areaIn(ar.exclusive_area_pyeong, unit, ar.exclusive_area_m2)}`}
               </Chip>
             ))}
           </View>
-          <T size={13} color={C.light}>
-            {a?.supply_area_pyeong ? "공급면적 기준" : "전용면적 기준"} · 전용{" "}
-            {a?.exclusive_area_pyeong ?? "—"}평
-          </T>
+          {a && (
+            <T size={13} color={C.light}>
+              {a.supply_area_pyeong
+                ? `공급 ${areaIn(a.supply_area_pyeong, unit)}`
+                : "공급면적 정보 없음"}{" "}
+              · 전용{" "}
+              {areaIn(a.exclusive_area_pyeong, unit, a.exclusive_area_m2)}
+            </T>
+          )}
           <T size={13} color={C.light}>
             거래 이력은 모든 면적을 표시해요
           </T>

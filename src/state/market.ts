@@ -82,6 +82,9 @@ export function formatArea(
     ? "면적 정보 없음"
     : `전용 ${unit === "평" ? exclusive : +(exclusive * 3.3058).toFixed(1)}${unit}`;
 }
+// 평 값 하나를 지금 단위로 적는다. ㎡ 원값이 있으면 환산하지 않고 그 값을 쓴다
+export const areaIn = (pyeong: number, unit: "평" | "㎡", m2?: number) =>
+  unit === "평" ? `${pyeong}평` : `${+(m2 ?? pyeong * 3.3058).toFixed(1)}㎡`;
 // 공급 평형 표기. 34.0 → "34평형"
 export const pyeongType = (supply: number) => `${Math.round(supply)}평형`;
 export const priceLabel = (l: Latest) =>
