@@ -443,3 +443,69 @@ describe("관심 지역 별", () => {
     expect(screen.getByRole("button", { name: "관심 지역 등록" })).toBeTruthy();
   });
 });
+
+describe("관심 지역 탭", () => {
+  const region = (lat: number | null, lng: number | null) => ({
+    code: "2644010100",
+    name: "대연동",
+    sigungu_name: "남구",
+    lat,
+    lng,
+    added_at: "2026-11-16T00:00:00Z",
+  });
+  const setup = (lat: number | null, lng: number | null) => {
+    const onRegion = vi.fn();
+    const { repo } = fakeServer((c) =>
+      c.url.endsWith("/interests")
+        ? json({
+            data: { complexes: [], auctions: [], regions: ["2644010100"] },
+          })
+        : c.url.endsWith("/interests/regions")
+          ? json({ data: [region(lat, lng)], meta: {} })
+          : new Response(null, { status: 204 }),
+    );
+    render(
+      <Harness repo={repo} notify={() => {}}>
+        <InterestsScreen
+          repo={repo}
+          initialTab="region"
+          unit="평"
+          onBack={() => {}}
+          onComplex={() => {}}
+          onAuction={() => {}}
+          onRegion={onRegion}
+        />
+      </Harness>,
+    );
+    return onRegion;
+  };
+
+  it("지역 탭에 담은 동네가 뜨고, 줄을 누르면 좌표로 onRegion을 부른다", async () => {
+    const onRegion = setup(35.1356, 129.0859);
+    expect(await screen.findByText("대연동")).toBeTruthy();
+    expect(screen.getByText(/남구/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /관심 지역 1/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "대연동 지도에서 보기" }));
+    expect(onRegion).toHaveBeenCalledWith({ lat: 35.1356, lng: 129.0859 });
+  });
+
+  it("좌표가 없으면 줄을 눌러도 이동하지 않는다", async () => {
+    const onRegion = setup(null, null);
+    await screen.findByText("대연동");
+    expect(screen.queryByRole("button", { name: "대연동 지도에서 보기" })).toBeNull();
+    expect(onRegion).not.toHaveBeenCalled();
+  });
+
+  it("로그인하지 않았으면 지역 별을 눌러 로그인 안내를 띄운다", () => {
+    const needLogin = vi.fn();
+    const { repo } = fakeServer();
+    render(
+      <Harness repo={repo} notify={() => {}} account={null} needLogin={needLogin}>
+        <StarButton kind="region" id="2644010100" name="대연동" />
+      </Harness>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "대연동 관심 지역 등록" }));
+    expect(needLogin).toHaveBeenCalledTimes(1);
+  });
+});
+

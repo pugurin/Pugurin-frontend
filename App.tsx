@@ -101,7 +101,7 @@ type Route =
     }
   | { kind: "terms"; name: TermKind }
   | { kind: "date" }
-  | { kind: "interests"; tab: Exclude<InterestKind, "region"> }
+  | { kind: "interests"; tab: InterestKind }
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
   // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
   | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };
@@ -617,6 +617,15 @@ export default function App() {
     setTab("map");
     setRoute(null);
   };
+  // 관심 지역 줄을 누르면 그 동네 좌표로 지도를 옮긴다
+  const showRegion = (p: { lat: number; lng: number }) => {
+    setFocus({
+      result: { type: "region", lat: p.lat, lng: p.lng },
+      nonce: Date.now(),
+    });
+    setTab("map");
+    setRoute(null);
+  };
   if (route?.kind === "interests")
     overlay = (
       <InterestsScreen
@@ -626,6 +635,7 @@ export default function App() {
         onBack={() => setRoute(null)}
         onComplex={openComplex}
         onAuction={showAuction}
+        onRegion={showRegion}
       />
     );
   if (route?.kind === "auctions")

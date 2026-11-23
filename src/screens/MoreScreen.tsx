@@ -30,8 +30,8 @@ export function MoreScreen({
   onLogin?: () => void;
   onAccount?: () => void;
   // 관심 단지·관심 경매 목록. 로그인 없이 이 기기에 저장된다
-  onInterests?: (kind: "complex" | "auction") => void;
-  interestCount?: { complex: number; auction: number };
+  onInterests?: (kind: "complex" | "auction" | "region") => void;
+  interestCount?: { complex: number; auction: number; region: number };
   date?: string;
   mode: Mode;
   onMode: (m: Mode) => void;
@@ -140,6 +140,11 @@ export function MoreScreen({
                 interestCount?.auction
                   ? `${interestCount.auction}개`
                   : undefined,
+              )}
+              {row(
+                "관심 지역",
+                () => onInterests("region"),
+                interestCount?.region ? `${interestCount.region}개` : undefined,
               )}
             </View>
             <T size={14} color={C.muted}>
