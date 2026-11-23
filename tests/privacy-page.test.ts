@@ -30,6 +30,11 @@ describe("개인정보처리방침 페이지", () => {
     expect(html).toMatch(/위치[^<]*서버에 (보내지|저장하지) 않/);
   });
 
+  it("알림(주간 관심 지역 리포트)과 보유 기간 90일을 명시한다", () => {
+    expect(html).toContain("알림");
+    expect(html).toContain("90일");
+  });
+
   it("앱과 같은 출처에서 열리는 독립 페이지다(스크립트 없음)", () => {
     expect(html).toMatch(/^<!doctype html>/i);
     expect(html).toContain('<meta charset="utf-8"');
