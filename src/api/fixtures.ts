@@ -140,6 +140,7 @@ export function sampleTransactions(
     sort?: Sort;
     cancelled?: boolean;
     page?: number;
+    pageSize?: number;
     area?: number;
   } = {},
 ): Envelope<Transaction[]> {
@@ -166,14 +167,15 @@ export function sampleTransactions(
         : b.contract_date.localeCompare(a.contract_date),
   );
   const page = options.page ?? 1;
+  const size = options.pageSize ?? 20;
   return {
-    data: items.slice((page - 1) * 20, page * 20),
+    data: items.slice((page - 1) * size, page * size),
     meta: {
       ...SAMPLE_META,
       page,
-      page_size: 20,
+      page_size: size,
       total: items.length,
-      total_pages: Math.ceil(items.length / 20),
+      total_pages: Math.ceil(items.length / size),
     },
   };
 }
