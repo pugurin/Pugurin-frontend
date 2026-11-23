@@ -83,6 +83,12 @@ import {
   LoginScreen,
   SignupScreen,
 } from "./src/screens/AuthScreens";
+import { CommuteScreen } from "./src/screens/Commute";
+import {
+  CommuteProvider,
+  placeFromSearch,
+  type Place,
+} from "./src/state/commute";
 type Route =
   | { kind: "login" }
   // 처음 로그인한 사람의 가입 마무리
@@ -103,7 +109,11 @@ type Route =
   | { kind: "interests"; tab: InterestKind }
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
   // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
-  | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string };
+  | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string }
+  // 직장 고르기. home이 있으면 고른 뒤 그 집의 길찾기로 간다
+  | { kind: "workplace"; home?: Place }
+  // 집 → 직장 대중교통 길찾기
+  | { kind: "commute"; home: Place };
 // 백엔드 API 주소. 웹 운영은 Vercel 프록시(/api/v1)
 const API_BASE = apiBase(
   process.env.EXPO_PUBLIC_API_URL ||
@@ -158,6 +168,11 @@ export default function App() {
   // 지도 재개발 레이어. 처음엔 꺼짐이고 켠 상태를 저장한다
   const [redevelopments, setRedevelopments] = useState(false);
   const [recent, setRecent] = useState<Recent[]>([]);
+  // 출퇴근 길찾기의 직장. 이 기기에만 저장한다
+  const [workplace, setWorkplace] = useState<Place | null>(null);
+  // 대중교통 길찾기. 백엔드(/transit/routes)가 준비될 때까지 실제 API 모드에서는 EXPO_PUBLIC_TRANSIT=on일 때만 켠다
+  const transitEnabled =
+    mode === "sample" || process.env.EXPO_PUBLIC_TRANSIT === "on";
   // 로그인 세션. 기기에 저장해 다음에 열어도 로그인이 유지된다(F-AUTH-02).
   // 어떤 인증 서버를 쓸지는 makeAuth가 정한다
   const [session, setSession] = useState<Session | null>(null);
@@ -268,6 +283,7 @@ export default function App() {
     loadStored<"평" | "㎡">("unit", "평").then(setUnit);
     loadStored<"normal" | "satellite">("base", "normal").then(setBase);
     loadStored<boolean>("cad", false).then(setCad);
+    loadStored<Place | null>("workplace", null).then(setWorkplace);
     loadStored<boolean>("schools", false).then(setSchools);
     loadStored<boolean>("hospitals", false).then(setHospitals);
     loadStored<boolean>("redevelopments", false).then(setRedevelopments);
@@ -573,6 +589,38 @@ export default function App() {
         }
       />
     );
+  if (route?.kind === "workplace")
+    overlay = (
+      <SearchScreen
+        title="직장 찾기"
+        placeholder="회사 주소·지하철역 검색"
+        // 동네(구·동)는 중심점이라 시간이 틀리게 나온다. 주소·역·단지·학교만 고른다
+        types={["address", "station", "complex", "school"]}
+        repo={repo}
+        onSelect={(r) => {
+          const place = placeFromSearch(r);
+          setWorkplace(place);
+          void store("workplace", place);
+          notify(`직장을 정했어요 · ${place.name}`);
+          setRoute(route.home ? { kind: "commute", home: route.home } : null);
+        }}
+        onBack={() =>
+          setRoute(
+            route.home && workplace
+              ? { kind: "commute", home: route.home }
+              : null,
+          )
+        }
+      />
+    );
+  if (route?.kind === "commute")
+    overlay = (
+      <CommuteScreen
+        repo={repo}
+        home={route.home}
+        onBack={() => setRoute(null)}
+      />
+    );
   if (route?.kind === "transactions")
     overlay = (
       <TransactionsScreen
@@ -628,258 +676,281 @@ export default function App() {
           onTerm: (term) => setRoute({ kind: "term", term, map: true }),
         }}
       >
-        <SafeAreaView
-          style={{ flex: 1, backgroundColor: width > 600 ? "#EAEAE5" : C.bg }}
+        <CommuteProvider
+          value={
+            transitEnabled
+              ? {
+                  workplace,
+                  pickWorkplace: (home) =>
+                    setRoute({ kind: "workplace", home }),
+                  clearWorkplace: () => {
+                    setWorkplace(null);
+                    void store("workplace", null);
+                    setRoute(null);
+                    notify("직장을 지웠어요");
+                  },
+                  openRoute: (home) => setRoute({ kind: "commute", home }),
+                }
+              : null
+          }
         >
-          <StatusBar barStyle="dark-content" />
-          <View
-            style={{
-              flex: 1,
-              width: "100%",
-              maxWidth: wide ? undefined : 420,
-              alignSelf: "center",
-              backgroundColor: C.bg,
-              position: "relative",
-              ...(Platform.OS === "web"
-                ? { boxShadow: "0 0 40px rgba(17,17,16,.08)" }
-                : {}),
-            }}
+          <SafeAreaView
+            style={{ flex: 1, backgroundColor: width > 600 ? "#EAEAE5" : C.bg }}
           >
-            <View style={{ flex: 1, position: "relative" }}>
-              <View
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  opacity: tab === "map" ? 1 : 0,
-                  pointerEvents: tab === "map" ? "auto" : "none",
-                }}
-              >
-                <MapHome
-                  key={mode}
-                  repo={repo}
-                  filters={filters}
-                  onFilters={setFilters}
-                  onSearch={() => setRoute({ kind: "search" })}
-                  onGlossary={() => setTab("glossary")}
-                  interactionBlocked={!!popup || !!route || tab !== "map"}
-                  onFilter={() => setRoute({ kind: "filter" })}
-                  onList={(args) => setRoute({ kind: "transactions", ...args })}
-                  onDate={() => setRoute({ kind: "date" })}
-                  unit={unit}
-                  onUnit={(u) => {
-                    setUnit(u);
-                    void store("unit", u);
-                  }}
-                  base={base}
-                  onBase={(b) => {
-                    setBase(b);
-                    void store("base", b);
-                  }}
-                  cadastral={cad}
-                  onCadastral={(c) => {
-                    setCad(c);
-                    void store("cad", c);
-                  }}
-                  schools={schools}
-                  onSchools={(on) => {
-                    setSchools(on);
-                    void store("schools", on);
-                  }}
-                  hospitals={hospitals}
-                  onHospitals={(on) => {
-                    setHospitals(on);
-                    void store("hospitals", on);
-                  }}
-                  redevelopments={redevelopments}
-                  onRedevelopments={(on) => {
-                    setRedevelopments(on);
-                    void store("redevelopments", on);
-                  }}
-                  focus={focus}
-                  focusAuction={auctionFocus}
-                  onHelp={onHelp}
-                  notify={notify}
-                  onMeta={setDataMeta}
-                  onParcel={setLastParcel}
-                  onToday={() => setRoute({ kind: "matching" })}
-                  auction={auction}
-                  onAuction={setAuction}
-                  onAuctionList={(args) =>
-                    setRoute({ kind: "auctions", ...args })
-                  }
-                />
-              </View>
-              {tab === "glossary" && (
-                <GlossaryScreen
-                  terms={terms}
-                  loading={termsLoading}
-                  error={termsError}
-                  onRetry={() => setTermsRetry((x) => x + 1)}
-                  onTerm={(term) =>
-                    setRoute({ kind: "term", term, map: false })
-                  }
-                  today={todayEnabled ? learning : undefined}
-                  onToday={() => setRoute({ kind: "matching" })}
-                />
-              )}
-              {tab === "more" && (
-                <MoreScreen
-                  user={session?.user ?? null}
-                  onLogin={auth ? () => setRoute({ kind: "login" }) : undefined}
-                  onAccount={() => setRoute({ kind: "account" })}
-                  onInterests={(kind) =>
-                    setRoute({ kind: "interests", tab: kind })
-                  }
-                  interestCount={interests.count}
-                  mode={mode}
-                  date={
-                    dataMeta?.data_as_of ??
-                    (mode === "sample" ? "2026-10-05" : undefined)
-                  }
-                  onMode={(m) => {
-                    setFocus(undefined);
-                    setAuctionFocus(null);
-                    setDataMeta(undefined);
-                    setMode(m);
-                    notify(
-                      m === "sample"
-                        ? "샘플 데이터로 화면을 보여드려요"
-                        : "백엔드 API에 연결합니다",
-                    );
-                  }}
-                  onDate={() => setRoute({ kind: "date" })}
-                  onTerms={(name) => setRoute({ kind: "terms", name })}
-                  notify={notify}
-                  tipsEnabled={tipsEnabled}
-                  onTipsEnabled={(on) => {
-                    setTipsEnabled(on);
-                    void store("tips_enabled", on);
-                  }}
-                  todayEnabled={todayEnabled}
-                  onTodayEnabled={(on) => {
-                    setTodayEnabled(on);
-                    void store("today_enabled", on);
-                  }}
-                />
-              )}
-            </View>
+            <StatusBar barStyle="dark-content" />
             <View
               style={{
-                height: 54,
-                flexDirection: "row",
-                borderTopWidth: 1,
-                borderColor: C.rule,
-                backgroundColor: C.surface,
-                zIndex: 40,
+                flex: 1,
+                width: "100%",
+                maxWidth: wide ? undefined : 420,
+                alignSelf: "center",
+                backgroundColor: C.bg,
+                position: "relative",
+                ...(Platform.OS === "web"
+                  ? { boxShadow: "0 0 40px rgba(17,17,16,.08)" }
+                  : {}),
               }}
             >
-              {(
-                [
-                  ["map", "지도", "map"],
-                  ["glossary", "용어사전", "book"],
-                  ["more", "더보기", "more"],
-                ] as const
-              ).map(([k, label, icon]) => (
-                <Pressable
-                  key={k}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: tab === k }}
-                  onPress={() => {
-                    setTab(k);
-                    setRoute(null);
-                  }}
+              <View style={{ flex: 1, position: "relative" }}>
+                <View
                   style={{
-                    flex: 1,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 3,
+                    position: "absolute",
+                    inset: 0,
+                    opacity: tab === "map" ? 1 : 0,
+                    pointerEvents: tab === "map" ? "auto" : "none",
                   }}
                 >
-                  <Icon name={icon} color={tab === k ? C.ink : C.light} />
-                  <T
-                    size={14}
-                    bold={tab === k}
-                    color={tab === k ? C.ink : C.light}
-                  >
-                    {label}
-                  </T>
-                </Pressable>
-              ))}
-            </View>
-            {overlay && (
-              <View
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  backgroundColor: wide ? "rgba(17,17,16,.24)" : C.bg,
-                  zIndex: 50,
-                  alignItems: wide ? "center" : undefined,
-                  justifyContent: wide ? "center" : undefined,
-                }}
-              >
-                {wide && (
-                  <Pressable
-                    accessibilityLabel="화면 닫기"
-                    onPress={() => setRoute(null)}
-                    style={{ position: "absolute", inset: 0 }}
+                  <MapHome
+                    key={mode}
+                    repo={repo}
+                    filters={filters}
+                    onFilters={setFilters}
+                    onSearch={() => setRoute({ kind: "search" })}
+                    onGlossary={() => setTab("glossary")}
+                    interactionBlocked={!!popup || !!route || tab !== "map"}
+                    onFilter={() => setRoute({ kind: "filter" })}
+                    onList={(args) =>
+                      setRoute({ kind: "transactions", ...args })
+                    }
+                    onDate={() => setRoute({ kind: "date" })}
+                    unit={unit}
+                    onUnit={(u) => {
+                      setUnit(u);
+                      void store("unit", u);
+                    }}
+                    base={base}
+                    onBase={(b) => {
+                      setBase(b);
+                      void store("base", b);
+                    }}
+                    cadastral={cad}
+                    onCadastral={(c) => {
+                      setCad(c);
+                      void store("cad", c);
+                    }}
+                    schools={schools}
+                    onSchools={(on) => {
+                      setSchools(on);
+                      void store("schools", on);
+                    }}
+                    hospitals={hospitals}
+                    onHospitals={(on) => {
+                      setHospitals(on);
+                      void store("hospitals", on);
+                    }}
+                    redevelopments={redevelopments}
+                    onRedevelopments={(on) => {
+                      setRedevelopments(on);
+                      void store("redevelopments", on);
+                    }}
+                    focus={focus}
+                    focusAuction={auctionFocus}
+                    onHelp={onHelp}
+                    notify={notify}
+                    onMeta={setDataMeta}
+                    onParcel={setLastParcel}
+                    onToday={() => setRoute({ kind: "matching" })}
+                    auction={auction}
+                    onAuction={setAuction}
+                    onAuctionList={(args) =>
+                      setRoute({ kind: "auctions", ...args })
+                    }
+                  />
+                </View>
+                {tab === "glossary" && (
+                  <GlossaryScreen
+                    terms={terms}
+                    loading={termsLoading}
+                    error={termsError}
+                    onRetry={() => setTermsRetry((x) => x + 1)}
+                    onTerm={(term) =>
+                      setRoute({ kind: "term", term, map: false })
+                    }
+                    today={todayEnabled ? learning : undefined}
+                    onToday={() => setRoute({ kind: "matching" })}
                   />
                 )}
-                <View
-                  style={
-                    wide
-                      ? {
-                          width:
-                            route?.kind === "search" && desktop ? 520 : 560,
-                          maxWidth: "95%",
-                          height:
-                            route?.kind === "search" && desktop
-                              ? undefined
-                              : "92%",
-                          maxHeight: "92%",
-                          backgroundColor: C.bg,
-                          borderRadius: 14,
-                          overflow: "hidden",
-                          ...(route?.kind === "search" && desktop
-                            ? { position: "absolute", left: 190, top: 72 }
-                            : {}),
-                        }
-                      : { flex: 1 }
-                  }
-                >
-                  {overlay}
-                </View>
+                {tab === "more" && (
+                  <MoreScreen
+                    user={session?.user ?? null}
+                    onLogin={
+                      auth ? () => setRoute({ kind: "login" }) : undefined
+                    }
+                    onAccount={() => setRoute({ kind: "account" })}
+                    onInterests={(kind) =>
+                      setRoute({ kind: "interests", tab: kind })
+                    }
+                    interestCount={interests.count}
+                    mode={mode}
+                    date={
+                      dataMeta?.data_as_of ??
+                      (mode === "sample" ? "2026-10-05" : undefined)
+                    }
+                    onMode={(m) => {
+                      setFocus(undefined);
+                      setAuctionFocus(null);
+                      setDataMeta(undefined);
+                      setMode(m);
+                      notify(
+                        m === "sample"
+                          ? "샘플 데이터로 화면을 보여드려요"
+                          : "백엔드 API에 연결합니다",
+                      );
+                    }}
+                    onDate={() => setRoute({ kind: "date" })}
+                    onTerms={(name) => setRoute({ kind: "terms", name })}
+                    notify={notify}
+                    tipsEnabled={tipsEnabled}
+                    onTipsEnabled={(on) => {
+                      setTipsEnabled(on);
+                      void store("tips_enabled", on);
+                    }}
+                    todayEnabled={todayEnabled}
+                    onTodayEnabled={(on) => {
+                      setTodayEnabled(on);
+                      void store("today_enabled", on);
+                    }}
+                  />
+                )}
               </View>
-            )}
-            {toast !== "" && (
               <View
-                pointerEvents="none"
                 style={{
-                  position: "absolute",
-                  left: 18,
-                  right: 18,
-                  bottom: route ? 24 : 82,
-                  padding: 14,
-                  borderRadius: 12,
-                  backgroundColor: C.primary,
-                  zIndex: 100,
+                  height: 54,
+                  flexDirection: "row",
+                  borderTopWidth: 1,
+                  borderColor: C.rule,
+                  backgroundColor: C.surface,
+                  zIndex: 40,
                 }}
               >
-                <T color={C.bg} style={{ textAlign: "center" }}>
-                  {toast}
-                </T>
+                {(
+                  [
+                    ["map", "지도", "map"],
+                    ["glossary", "용어사전", "book"],
+                    ["more", "더보기", "more"],
+                  ] as const
+                ).map(([k, label, icon]) => (
+                  <Pressable
+                    key={k}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: tab === k }}
+                    onPress={() => {
+                      setTab(k);
+                      setRoute(null);
+                    }}
+                    style={{
+                      flex: 1,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 3,
+                    }}
+                  >
+                    <Icon name={icon} color={tab === k ? C.ink : C.light} />
+                    <T
+                      size={14}
+                      bold={tab === k}
+                      color={tab === k ? C.ink : C.light}
+                    >
+                      {label}
+                    </T>
+                  </Pressable>
+                ))}
               </View>
-            )}
-            <TermPopup
-              term={popup}
-              anchor={popupAnchor}
-              onClose={() => setPopup(null)}
-              onDetail={(term) => {
-                setPopup(null);
-                setRoute({ kind: "term", term, map: tab === "map" });
-              }}
-            />
-          </View>
-        </SafeAreaView>
+              {overlay && (
+                <View
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    backgroundColor: wide ? "rgba(17,17,16,.24)" : C.bg,
+                    zIndex: 50,
+                    alignItems: wide ? "center" : undefined,
+                    justifyContent: wide ? "center" : undefined,
+                  }}
+                >
+                  {wide && (
+                    <Pressable
+                      accessibilityLabel="화면 닫기"
+                      onPress={() => setRoute(null)}
+                      style={{ position: "absolute", inset: 0 }}
+                    />
+                  )}
+                  <View
+                    style={
+                      wide
+                        ? {
+                            width:
+                              route?.kind === "search" && desktop ? 520 : 560,
+                            maxWidth: "95%",
+                            height:
+                              route?.kind === "search" && desktop
+                                ? undefined
+                                : "92%",
+                            maxHeight: "92%",
+                            backgroundColor: C.bg,
+                            borderRadius: 14,
+                            overflow: "hidden",
+                            ...(route?.kind === "search" && desktop
+                              ? { position: "absolute", left: 190, top: 72 }
+                              : {}),
+                          }
+                        : { flex: 1 }
+                    }
+                  >
+                    {overlay}
+                  </View>
+                </View>
+              )}
+              {toast !== "" && (
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute",
+                    left: 18,
+                    right: 18,
+                    bottom: route ? 24 : 82,
+                    padding: 14,
+                    borderRadius: 12,
+                    backgroundColor: C.primary,
+                    zIndex: 100,
+                  }}
+                >
+                  <T color={C.bg} style={{ textAlign: "center" }}>
+                    {toast}
+                  </T>
+                </View>
+              )}
+              <TermPopup
+                term={popup}
+                anchor={popupAnchor}
+                onClose={() => setPopup(null)}
+                onDetail={(term) => {
+                  setPopup(null);
+                  setRoute({ kind: "term", term, map: tab === "map" });
+                }}
+              />
+            </View>
+          </SafeAreaView>
+        </CommuteProvider>
       </LearningProvider>
     </InterestsProvider>
   );
