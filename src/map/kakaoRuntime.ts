@@ -287,17 +287,28 @@ window.pugurinKakaoMap = function (el, config, send) {
 
   // 정비구역 경계. 재개발 색 테두리·옅은 채움에 45° 빗금(미리 잘라 둔 사선)을 얹어 학구도(빗금 없음)와 구분한다.
   // 면·빗금 어디를 눌러도 그 구역 id로 알린다(지도 클릭으로는 넘기지 않는다).
-  // 빗금 도형이 많아 경계가 바뀔 때만 다시 만들고, 고르기는 applyZoneSelection이 옵션만 바꾼다
+  // 빗금 도형이 많아 경계가 바뀔 때만 다시 만들고, 고르기는 applyZoneSelection이 옵션만 바꾼다.
+  // 지도를 옮길 때마다 목록이 새로 오므로 key(경계ID·줌·빗금 수)가 같은 경계는 그대로 두고 바뀐 것만 더하고 뺀다
   function renderZones() {
-    zones.forEach(function (z) { z.faces.concat(z.lines).forEach(function (s) { s.setMap(null); }); });
-    zones = [];
-    if (!map) return;
-    (state.redevZones || []).forEach(function (z) {
-      var pick = function () {
+    var next = map ? (state.redevZones || []) : [];
+    var wanted = {};
+    next.forEach(function (z) { if (z.key) wanted[z.key] = true; });
+    var drawn = {};
+    zones = zones.filter(function (z) {
+      if (z.key && wanted[z.key] && !drawn[z.key]) { drawn[z.key] = true; return true; }
+      z.faces.concat(z.lines).forEach(function (s) { s.setMap(null); });
+      return false;
+    });
+    next.forEach(function (z) {
+      if (z.key && drawn[z.key]) return;
+      // 누른 좌표도 같이 보낸다(시트의 "이 위치의 땅 보기"가 그 자리 필지를 연다)
+      var pick = function (e) {
         markerClick = Date.now();
-        send({ type: 'marker', id: z.id });
+        var m = { type: 'marker', id: z.id };
+        if (e && e.latLng) { m.lat = e.latLng.getLat(); m.lng = e.latLng.getLng(); }
+        send(m);
       };
-      var entry = { id: z.id, faces: [], lines: [] };
+      var entry = { id: z.id, key: z.key, faces: [], lines: [] };
       // 경계는 늦게 받아 나중에 setMap되므로 zIndex를 -1로 내려 학구도·고른 필지 아래에 깐다
       z.polygons.forEach(function (poly) {
         // 정비예정구역(아직 지정 전)은 점선 테두리로 구분한다
@@ -318,7 +329,7 @@ window.pugurinKakaoMap = function (el, config, send) {
 
   function applyZoneSelection() {
     zones.forEach(function (z) {
-      var on = z.id === state.redevZoneSelected;
+      var on = (state.redevZoneSelected || []).indexOf(z.id) >= 0;
       if (z.on === on) return;
       z.on = on;
       z.faces.forEach(function (f) { f.setOptions({ strokeWeight: on ? 3.5 : 2, fillOpacity: on ? 0.16 : 0.07 }); });

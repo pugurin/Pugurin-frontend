@@ -25,7 +25,8 @@ export type MapCommand =
   | { type: "zoom"; delta: number };
 export type MapEvent =
   | { type: "camera"; lat: number; lng: number; zoom: number; bbox: BBox }
-  | { type: "marker"; id: string }
+  // 정비구역 경계는 누른 좌표(lat·lng)도 같이 온다
+  | { type: "marker"; id: string; lat?: number; lng?: number }
   | { type: "ready" }
   | { type: "mapClick"; lat: number; lng: number }
   | { type: "error"; message: string };
@@ -45,8 +46,8 @@ export type MapProps = {
   schoolZone?: Geometry | null;
   // 정비구역 경계(재개발 색 + 빗금). 누르면 { type: "marker", id: "redevzone:…" }
   redevelopmentZones?: RedevelopmentZoneShape[];
-  // 고른 정비구역 id(redevzone:…). 굵고 진하게 칠한다. 도형을 다시 만들지 않고 옵션만 바꾼다
-  redevelopmentZoneSelected?: string | null;
+  // 고른 정비구역 id들(redevzone:…). 한 구역의 여러 조각을 함께 굵고 진하게 칠한다. 도형을 다시 만들지 않고 옵션만 바꾼다
+  redevelopmentZoneSelected?: string[] | null;
   // 지도에 그릴 병원 원. 없으면 그리지 않는다
   hospitalAreas?: HospitalArea[];
   // 위치 권한을 받아 확인한 내 위치. 없으면 표시하지 않는다

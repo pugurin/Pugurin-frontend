@@ -449,6 +449,23 @@ export class Repository {
       .get<Redevelopment[]>(`/redevelopments?${p}`, signal)
       .then((r) => ({ ...r, data: r.data.map(cleanRedevelopment) }));
   }
+  // 구역 1건. 경계와 이어졌지만 지도 목록에 없는 구역(대표점이 화면 밖·준공 등)을 열 때 쓴다
+  redevelopment(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<Envelope<Redevelopment>> {
+    if (this.mode === "sample") {
+      const found = REDEVELOPMENTS.find((x) => x.id === id);
+      return found
+        ? Promise.resolve({ data: found, meta: REDEVELOPMENT_META })
+        : Promise.reject(
+            new ApiError("구역을 찾을 수 없어요", "RESOURCE_NOT_FOUND"),
+          );
+    }
+    return this.client
+      .get<Redevelopment>(`/redevelopments/${encodeURIComponent(id)}`, signal)
+      .then((r) => ({ ...r, data: cleanRedevelopment(r.data) }));
+  }
   // 화면 영역 안의 정비구역 경계. zoom을 주면 서버가 화면 1px보다 작은 굴곡을 줄여 보낸다
   redevelopmentZones(
     bbox: BBox,

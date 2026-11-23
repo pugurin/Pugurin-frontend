@@ -11,6 +11,7 @@ import {
   REDEVELOPMENT_ZONE_LAYER_LABEL,
   REDEVELOPMENT_ZONE_SOURCE,
   isDone,
+  stageLabel,
   stageShort,
   stepIndex,
 } from "../state/redevelopment";
@@ -67,10 +68,13 @@ export function RedevelopmentContent({
   r,
   meta,
   unit,
+  onLand,
 }: {
   r: Redevelopment;
   meta?: Meta;
   unit: "평" | "㎡";
+  // 경계를 눌러 열었으면 누른 곳 필지를 토지 시트로 연다
+  onLand?: () => void;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const done = isDone(r);
@@ -165,6 +169,7 @@ export function RedevelopmentContent({
             </InfoRow>
           ))}
       </View>
+      {onLand && <LandButton onPress={onLand} />}
       {r.source_url && (
         <View style={{ paddingVertical: 12 }}>
           <Btn
@@ -186,13 +191,28 @@ export function RedevelopmentContent({
   );
 }
 
-// 우리 정비사업 구역과 이어지지 않은 정비구역 경계의 짧은 시트. 경계 파일에 있는 것(이름·고시)만 보여 준다
+// 경계를 눌러 연 시트에서 누른 곳 필지를 여는 버튼(경계 안을 누르면 필지 대신 이 시트가 열린다)
+function LandButton({ onPress }: { onPress: () => void }) {
+  return (
+    <View style={{ paddingTop: 12 }}>
+      <Btn secondary onPress={onPress}>
+        이 위치의 땅 보기
+      </Btn>
+    </View>
+  );
+}
+
+// 정비구역 경계의 짧은 시트. 경계 파일에 있는 것(이름·고시, 이어졌으면 구역 이름·단계)만 보여 준다.
+// 이어진 구역은 구역 1건을 불러오는 동안, 또는 못 불러왔을 때 이 시트를 쓴다
 export function RedevelopmentZoneContent({
   zone,
   meta,
+  onLand,
 }: {
   zone: RedevelopmentZone;
   meta?: Meta;
+  // 경계를 눌러 열었으면 누른 곳 필지를 토지 시트로 연다
+  onLand?: () => void;
 }) {
   const asOf = meta?.data_as_of?.slice(0, 10).replaceAll("-", ".");
   const designated = zone.designated_on?.replaceAll("-", ".");
@@ -219,11 +239,19 @@ export function RedevelopmentZoneContent({
           고시일 {designated}
         </T>
       )}
-      <View style={[s.card, { marginTop: 12 }]}>
-        <T size={14} color={C.ink2}>
-          부산시 정비사업 정보에서 이 구역의 사업 단계를 찾지 못했어요
+      {zone.redevelopment_id ? (
+        // 이어진 구역인데 구역 1건을 못 불러왔으면 경계에 실린 단계만 보여 준다
+        <T size={15} bold style={{ marginTop: 16 }}>
+          {`지금 단계: ${stageLabel(zone.stage)}`}
         </T>
-      </View>
+      ) : (
+        <View style={[s.card, { marginTop: 12 }]}>
+          <T size={14} color={C.ink2}>
+            부산시 정비사업 정보에서 이 구역의 사업 단계를 찾지 못했어요
+          </T>
+        </View>
+      )}
+      {onLand && <LandButton onPress={onLand} />}
       <T size={13} color={C.muted} style={{ marginTop: 12 }}>
         {`출처: ${REDEVELOPMENT_ZONE_SOURCE}${asOf ? ` · 기준일 ${asOf}` : ""}`}
       </T>

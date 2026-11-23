@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { webRuntime } from "../src/map/kakaoRuntime";
-import { fullState, markerState, shapeState } from "../src/map/bridge";
+import { fullState, markerState, redevZoneState, shapeState } from "../src/map/bridge";
 import type { MapProps } from "../src/map/types";
 import type { Auction, ComplexMarker, Redevelopment, School } from "../src/api/types";
 import { REDEVELOPMENTS, REDEVELOPMENT_ZONES } from "../src/api/fixtures";
@@ -539,7 +539,7 @@ describe("정비구역 경계", () => {
   });
 
   it("고른 경계는 굵고 진하게 칠한다", () => {
-    start("test-key", props({ redevelopmentZones: shapes(), redevelopmentZoneSelected: "redevzone:SAMPLE_ZONE_1" }));
+    start("test-key", props({ redevelopmentZones: shapes(), redevelopmentZoneSelected: ["redevzone:SAMPLE_ZONE_1"] }));
     expect(faces()[0].options).toMatchObject({ strokeWeight: 3.5, fillOpacity: 0.16 });
   });
 
@@ -547,7 +547,7 @@ describe("정비구역 경계", () => {
     const { receive } = start("test-key", props({ redevelopmentZones: shapes() }));
     const before = fake.shapes.length;
     const face = faces()[0];
-    receive({ type: "state", redevZoneSelected: "redevzone:SAMPLE_ZONE_1" });
+    receive({ type: "state", redevZoneSelected: ["redevzone:SAMPLE_ZONE_1"] });
     expect(fake.shapes.length).toBe(before);
     expect(faces()[0]).toBe(face);
     expect(face.options).toMatchObject({ strokeWeight: 3.5, fillOpacity: 0.16 });
@@ -579,10 +579,60 @@ describe("정비구역 경계", () => {
     expect(events.some((e) => e.type === "mapClick")).toBe(false);
   });
 
+  // 시트의 "이 위치의 땅 보기"가 누른 곳 필지를 열 수 있게 누른 좌표를 같이 보낸다
+  it("면을 누른 좌표가 있으면 marker에 같이 실어 보낸다", () => {
+    const { events } = start("test-key", props({ redevelopmentZones: shapes() }));
+    fake.trigger(faces()[0], "click", { latLng: new fake.kakao.maps.LatLng(35.1668, 129.1502) });
+    expect(events.filter((e) => e.type === "marker")).toEqual([
+      { type: "marker", id: "redevzone:SAMPLE_ZONE_1", lat: 35.1668, lng: 129.1502 },
+    ]);
+  });
+
   it("정비예정구역은 점선 테두리로 그린다", () => {
     const planned = shapes().map((x) => ({ ...x, dashed: true }));
     start("test-key", props({ redevelopmentZones: planned }));
     expect(faces()[0].options.strokeStyle).toBe("shortdash");
+  });
+
+  it("고른 id가 여럿이면(한 구역의 여러 조각) 모두 굵게 칠한다", () => {
+    const both = redevelopmentZoneShapes(REDEVELOPMENT_ZONES, 15);
+    start("test-key", props({ redevelopmentZones: both, redevelopmentZoneSelected: ["redevzone:SAMPLE_ZONE_1", "redevzone:SAMPLE_ZONE_2"] }));
+    expect(faces()).toHaveLength(2);
+    faces().forEach((f) => expect(f.options).toMatchObject({ strokeWeight: 3.5, fillOpacity: 0.16 }));
+  });
+
+  // 같은 줌에서 지도를 옮기면 목록을 다시 받아 새 배열이 오지만, 그대로인 경계는 다시 만들지 않는다
+  it("같은 경계를 새 배열로 다시 받으면 도형을 다시 만들지 않는다", () => {
+    const { receive } = start("test-key", props({ redevelopmentZones: shapes() }));
+    const before = fake.shapes.length;
+    const face = faces()[0];
+    receive(redevZoneState(props({ redevelopmentZones: shapes() })));
+    expect(fake.shapes.length).toBe(before);
+    expect(faces()).toEqual([face]);
+  });
+
+  it("바뀐 경계만 더하고 빼며, 남은 경계와 고르기는 그대로 둔다", () => {
+    const [one, two] = redevelopmentZoneShapes(REDEVELOPMENT_ZONES, 15);
+    const { receive } = start("test-key", props({ redevelopmentZones: [one], redevelopmentZoneSelected: [one.id] }));
+    const face = faces()[0];
+    receive(redevZoneState(props({ redevelopmentZones: [one, two] })));
+    expect(faces()).toHaveLength(2);
+    expect(faces()[0]).toBe(face);
+    expect(face.options.strokeWeight).toBe(3.5);
+    receive(redevZoneState(props({ redevelopmentZones: [two] })));
+    expect(face.map).toBeNull();
+    expect(faces()).toHaveLength(1);
+    expect(hatch().length).toBe(two.hatch.length);
+  });
+
+  it("줌이 바뀌어 빗금 간격이 달라지면 다시 그린다", () => {
+    const { receive } = start("test-key", props({ redevelopmentZones: shapes() }));
+    const face = faces()[0];
+    const zoomed = redevelopmentZoneShapes(REDEVELOPMENT_ZONES.slice(0, 1), 16);
+    receive(redevZoneState(props({ redevelopmentZones: zoomed })));
+    expect(face.map).toBeNull();
+    expect(faces()).toHaveLength(1);
+    expect(hatch().length).toBe(zoomed[0].hatch.length);
   });
 
   it("빈 배열을 받으면 지운다", () => {

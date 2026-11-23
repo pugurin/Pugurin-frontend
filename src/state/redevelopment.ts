@@ -78,6 +78,12 @@ export function stageShort(r: Redevelopment): string {
   return step?.short ?? OTHER_STAGE[r.stage] ?? r.step_raw ?? "단계 미상";
 }
 
+// 시트에 쓰는 단계 이름(긴 이름). 정비구역 경계처럼 단계만 있을 때 쓴다
+export function stageLabel(stage: RedevelopmentStage | null): string {
+  const step = REDEVELOPMENT_STEPS.find((x) => x.stage === stage);
+  return step?.label ?? (stage && OTHER_STAGE[stage]) ?? "단계 미상";
+}
+
 // 진행 표시에서 지금 단계의 위치(0부터). 진행 표시 밖이면 -1
 export function stepIndex(r: Redevelopment): number {
   if (r.stage === "transferred" || r.stage === "dissolved")
@@ -156,6 +162,8 @@ export type LngLat = [number, number];
 export type RedevelopmentZoneShape = {
   // 마커 id와 같은 꼴(redevzone:경계ID). 누르면 이 id로 이벤트가 온다
   id: string;
+  // 지도 런타임이 이미 그린 경계인지 보는 값(경계ID·줌·빗금 수). 같으면 다시 만들지 않는다
+  key: string;
   // GeoJSON MultiPolygon 좌표: 다각형마다 [바깥 고리, 구멍…]
   polygons: LngLat[][][];
   // 구역 안으로 잘라 낸 45° 사선
@@ -236,7 +244,8 @@ export function redevelopmentZoneShapes(
   zones: RedevelopmentZone[],
   zoom: number,
 ): RedevelopmentZoneShape[] {
-  const spacing = HATCH_SPACING_PX * metersPerPx(Math.round(zoom));
+  const level = Math.round(zoom);
+  const spacing = HATCH_SPACING_PX * metersPerPx(level);
   const shapes = zones.map((z) => {
     const polygons = z.geometry.coordinates as LngLat[][][];
     return {
@@ -256,8 +265,25 @@ export function redevelopmentZoneShapes(
       left -= s.hatch.length;
     }
   }
-  return shapes.map(({ area: _area, ...s }) => ({
-    ...s,
-    hatch: keep.has(s.id) ? s.hatch : [],
-  }));
+  // 서버는 줌마다 경계를 줄여 보내고 빗금도 줌마다 다시 그으니, 같은 줌·같은 빗금 수면 같은 도형이다
+  return shapes.map(({ area: _area, ...s }) => {
+    const hatch = keep.has(s.id) ? s.hatch : [];
+    return { ...s, key: `${s.id}@${level}:${hatch.length}`, hatch };
+  });
+}
+
+// 굵게 칠할 경계 id(redevzone:…). 같은 구역과 이어진 조각 모두, 이어지지 않은 경계는 누른 그 경계만
+export function redevelopmentZoneSelection(
+  zones: RedevelopmentZone[],
+  redevelopmentId: string | null,
+  zoneId: string | null,
+): string[] | null {
+  const ids = zones
+    .filter(
+      (z) =>
+        (redevelopmentId != null && z.redevelopment_id === redevelopmentId) ||
+        z.zone_id === zoneId,
+    )
+    .map((z) => `redevzone:${z.zone_id}`);
+  return ids.length ? ids : null;
 }

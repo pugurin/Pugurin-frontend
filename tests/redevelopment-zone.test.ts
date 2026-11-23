@@ -106,6 +106,17 @@ describe("지도에 넘길 정비구역 도형", () => {
   });
 });
 
+describe("정비구역 도형 key", () => {
+  // 지도 런타임은 key가 같은 경계를 다시 만들지 않는다. 같은 줌에서 지도를 옮겨 다시 받아도 그대로다
+  it("같은 경계·같은 줌이면 같고, 줌이나 빗금이 바뀌면 달라진다", () => {
+    const [a] = redevelopmentZoneShapes([zone({})], 15);
+    const [b] = redevelopmentZoneShapes([zone({})], 15.2);
+    const [c] = redevelopmentZoneShapes([zone({})], 16);
+    expect(a.key).toBe(b.key);
+    expect(a.key).not.toBe(c.key);
+  });
+});
+
 describe("화면 전체 빗금 상한", () => {
   it("빗금이 상한을 넘으면 작은 구역부터 빗금을 빼고 면만 남긴다", () => {
     // 500m 구역 하나(빗금 약 70개)와 100m 구역 여러 개(각 약 14개)
@@ -132,6 +143,9 @@ describe("화면 전체 빗금 상한", () => {
     const bare = shapes.filter((s) => s.hatch.length === 0);
     expect(bare.length).toBeGreaterThan(0);
     expect(bare.every((s) => s.polygons.length === 1)).toBe(true);
+    // 빗금이 빠진 경계는 key도 달라 지도에서 다시 그린다
+    const lone = smalls.find((z) => `redevzone:${z.zone_id}` === bare[0].id)!;
+    expect(redevelopmentZoneShapes([lone], 15)[0].key).not.toBe(bare[0].key);
     // 넘지 않으면 하나도 빼지 않는다
     expect(
       redevelopmentZoneShapes(smalls.slice(0, 3), 15).every(
