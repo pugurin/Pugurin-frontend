@@ -22,5 +22,8 @@ export const C = {
   greenRule: "#b7dbb3",
   brownWash: "#FBE8E6",
   brownInk: "#831A14",
+  // 시세 등락: 오르면 빨강, 내리면 파랑 (국내 증권·환율 관례)
+  rise: "#E0362C",
+  fall: "#2F6BDB",
 };
 export const FONT = "Pretendard";
