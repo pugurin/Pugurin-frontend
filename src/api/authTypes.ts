@@ -2,16 +2,17 @@
 // 저장소(AsyncStorage·expo-crypto)를 불러오지 않아 화면과 테스트가 가볍게 가져다 쓸 수 있다
 export type Provider = "naver" | "kakao" | "google";
 // 로그인 화면 버튼 순서
-export const PROVIDERS: Provider[] = ["naver", "kakao", "google"];
+export const PROVIDERS: Provider[] = ["kakao", "naver", "google"];
 // 소셜 로그인 버튼 색은 각 서비스 로그인 버튼 안내를 따른다
 export const PROVIDER: Record<
   Provider,
-  { name: string; bg: string; ink: string; border?: string }
+  { name: string; label: string; bg: string; ink: string; border?: string }
 > = {
-  naver: { name: "네이버", bg: "#03C75A", ink: "#FFFFFF" },
+  naver: { name: "네이버", label: "네이버로 시작하기", bg: "#03C75A", ink: "#FFFFFF" },
   // 카카오 가이드: 글자는 검정 85%
-  kakao: { name: "카카오", bg: "#FEE500", ink: "rgba(0,0,0,0.85)" },
-  google: { name: "구글", bg: "#FFFFFF", ink: "#1F1F1F", border: "#747775" },
+  kakao: { name: "카카오", label: "카카오로 시작하기", bg: "#FEE500", ink: "rgba(0,0,0,0.85)" },
+  // 구글 가이드: 버튼 문구는 "Google로 계속하기"
+  google: { name: "구글", label: "Google로 계속하기", bg: "#FFFFFF", ink: "#1F1F1F", border: "#747775" },
 };
 // 소셜 계정 이름 나열(안내 문구용)
 export const PROVIDER_NAMES = PROVIDERS.map((p) => PROVIDER[p].name).join("·");
@@ -42,6 +43,8 @@ export type Agreements = {
   privacy: boolean;
   age14: boolean;
   marketing: boolean;
+  // 위치기반 서비스 이용약관(선택). 서버는 아직 저장하지 않는다
+  location?: boolean;
 };
 export const REQUIRED_AGREEMENTS = ["terms", "privacy", "age14"] as const;
 // 소셜 로그인 결과. 가입한 사람이면 바로 세션, 처음이면 가입을 마칠 토큰과 소셜 프로필 닉네임
@@ -76,4 +79,21 @@ export function nicknameError(v: string): string | null {
   if (!/^[가-힣a-zA-Z0-9]+$/.test(name))
     return "한글·영문·숫자만 쓸 수 있어요(띄어쓰기·기호 없이)";
   return null;
+}
+
+// 가입할 때 자동으로 만드는 닉네임(시안 A4). 소셜 프로필 이름은 실명일 수 있어 쓰지 않는다.
+// 닉네임 규칙(띄어쓰기 없이 12자 이하)에 맞게 "부산 단어 + 숫자 4자리"로 만든다. 더보기 › 내 정보에서 바꾼다
+const NICKNAME_WORDS = [
+  "부산갈매기",
+  "해운대파도",
+  "광안리별빛",
+  "동백섬산책",
+  "영도다리",
+  "금정산바람",
+  "감천마을",
+  "자갈치시장",
+];
+export function randomNickname(rand: () => number = Math.random) {
+  const word = NICKNAME_WORDS[Math.floor(rand() * NICKNAME_WORDS.length)];
+  return `${word}${String(1000 + Math.floor(rand() * 9000))}`;
 }
