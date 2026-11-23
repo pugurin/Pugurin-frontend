@@ -5,6 +5,8 @@ import {
   handleRuntimeMessage,
   layerState,
   markerState,
+  redevZoneSelectedState,
+  redevZoneState,
   shapeState,
 } from "./bridge";
 import type { MapProps } from "./types";
@@ -46,6 +48,14 @@ export default function MapCanvas(p: MapProps) {
   useEffect(() => {
     receive.current?.(shapeState(p));
   }, [p.selectionPoint, p.parcelGeometry, p.userLocation, p.hospitalAreas, p.schoolZone]);
+
+  useEffect(() => {
+    receive.current?.(redevZoneState(p));
+  }, [p.redevelopmentZones]);
+
+  useEffect(() => {
+    receive.current?.(redevZoneSelectedState(p));
+  }, [p.redevelopmentZoneSelected]);
 
   useEffect(() => {
     if (p.command) receive.current?.(p.command);

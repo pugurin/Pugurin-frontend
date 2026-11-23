@@ -23,6 +23,7 @@ import type {
   Filters,
   Hospital,
   Redevelopment,
+  RedevelopmentZone,
   Marker,
   Meta,
   Parcel,
@@ -76,11 +77,17 @@ import { sheetStops } from "../components/sheetMotion";
 import type { Geometry } from "geojson";
 import { HospitalAreaContent } from "./HospitalAreaContent";
 import { AdSlot } from "../components/AdSlot";
-import { RedevelopmentContent } from "./RedevelopmentContent";
+import {
+  RedevelopmentContent,
+  RedevelopmentZoneContent,
+} from "./RedevelopmentContent";
 import {
   REDEVELOPMENT_MAP_STAGES,
   REDEVELOPMENT_MIN_ZOOM,
+  redevelopmentZoneSelection,
+  redevelopmentZoneShapes,
 } from "../state/redevelopment";
+type LatLng = { lat: number; lng: number };
 // 병원 원이 없을 때 넘기는 빈 배열. 늘 같은 참조라 지도가 다시 그리지 않는다
 const NO_AREAS: HospitalArea[] = [];
 // 통학구역 안 단지를 부를 때 쓰는 줌. 지역 묶음이 아니라 단지 마커가 오는 줌이다
@@ -218,6 +225,9 @@ export function MapHome({
   >(undefined);
   // 화면 안 재개발 구역과 그 응답 meta. meta는 재개발 시트에만 쓴다
   const [redevList, setRedevList] = useState<Redevelopment[]>([]);
+  // 정비구역 경계(면·빗금). 경계 API가 없거나 준비 전이면 비워 두고 마커만 보인다
+  const [redevZones, setRedevZones] = useState<RedevelopmentZone[]>([]);
+  const [redevZoneMeta, setRedevZoneMeta] = useState<Meta>();
   const [redevMeta, setRedevMeta] = useState<Meta>();
   // 재개발 API가 404·503이면 마커 없이 준비 중 안내만 띄운다
   const [redevNotReady, setRedevNotReady] = useState(false);
@@ -242,7 +252,9 @@ export function MapHome({
     | { kind: "auction"; id: string }
     | { kind: "school"; school: School; meta?: Meta }
     | { kind: "hospitals"; area: HospitalArea; meta?: Meta }
-    | { kind: "redev"; redev: Redevelopment; meta?: Meta }
+    // at: 경계를 눌러 열었을 때 누른 곳. 시트의 "이 위치의 땅 보기"가 그 자리 필지를 연다
+    | { kind: "redev"; redev: Redevelopment; meta?: Meta; at?: LatLng }
+    | { kind: "redevZone"; zone: RedevelopmentZone; meta?: Meta; at?: LatLng }
     | { kind: "region"; marker: RegionMarker }
     | {
         kind: "land";
@@ -312,7 +324,15 @@ export function MapHome({
     setSelected(null);
     setPanelDismissed(true);
   };
-  useEffect(() => () => landRequest.current?.abort(), []);
+  // 경계를 눌러 지도 목록에 없는 구역 1건을 부르는 요청
+  const redevRequest = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      landRequest.current?.abort();
+      redevRequest.current?.abort();
+    },
+    [],
+  );
   useEffect(() => {
     if (markers.length > 0) setEmptyDismissed(false);
   }, [markers.length]);
@@ -572,11 +592,24 @@ export function MapHome({
   useEffect(() => {
     if (!redevelopments || outside || camera.zoom < REDEVELOPMENT_MIN_ZOOM) {
       setRedevList((p) => (p.length ? [] : p));
+      setRedevZones((p) => (p.length ? [] : p));
       setRedevNotReady(false);
       return;
     }
     const controller = new AbortController();
     const timer = setTimeout(() => {
+      // 경계는 따로 받는다. 실패해도(준비 전·옛 서버) 마커는 그대로 둔다
+      repo
+        .redevelopmentZones?.(queryBBox!, camera.zoom, controller.signal)
+        .then((r) => {
+          if (controller.signal.aborted) return;
+          setRedevZones(r.data);
+          setRedevZoneMeta(r.meta);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted)
+            setRedevZones((p) => (p.length ? [] : p));
+        });
       repo
         .redevelopments(queryBBox!, REDEVELOPMENT_MAP_STAGES, controller.signal)
         .then((r) => {
@@ -601,7 +634,11 @@ export function MapHome({
   }, [repo, camera, redevelopments, outside, retry]);
   // 재개발 시트가 열린 채 재개발 레이어를 끄면 시트도 닫는다
   useEffect(() => {
-    if (!redevelopments && selected?.kind === "redev") close();
+    if (
+      !redevelopments &&
+      (selected?.kind === "redev" || selected?.kind === "redevZone")
+    )
+      close();
   }, [redevelopments]);
   // 병원 요청. 학교와 같은 조건(켜짐·부산 안·줌 14 이상)에서 bbox로 부른다.
   // tier는 Repository가 붙이고, 탭·필터와 상관없이 같은 요청이다
@@ -641,6 +678,29 @@ export function MapHome({
     if (!hospitals && selected?.kind === "hospitals") close();
   }, [hospitals]);
   // 화면 거리로 묶은 병원 원. 병원이 없으면 같은 빈 배열을 둬 지도가 다시 그리지 않게 한다
+  // 정비구역 도형. 빗금 간격은 줌마다 다시 잡는다. 고른 경계, 또는 고른 구역과 이어진 경계를 굵게 칠한다
+  // 한 구역이 여러 조각 경계면 어느 조각을 눌러도 같은 구역의 조각을 모두 칠한다
+  const selectedRedevId =
+    selected?.kind === "redev"
+      ? selected.redev.id
+      : selected?.kind === "redevZone"
+        ? selected.zone.redevelopment_id
+        : null;
+  const selectedZoneId =
+    selected?.kind === "redevZone"
+      ? selected.zone.zone_id
+      : selected?.kind === "redev"
+        ? (selected.redev.zone_id ?? null)
+        : null;
+  const selectedZone = useMemo(
+    () =>
+      redevelopmentZoneSelection(redevZones, selectedRedevId, selectedZoneId),
+    [redevZones, selectedRedevId, selectedZoneId],
+  );
+  const redevShapes = useMemo(
+    () => redevelopmentZoneShapes(redevZones, camera.zoom),
+    [redevZones, Math.round(camera.zoom)],
+  );
   const areas = useMemo(
     () =>
       hospitalList.length ? hospitalAreas(hospitalList, camera.zoom) : NO_AREAS,
@@ -793,6 +853,9 @@ export function MapHome({
           });
       });
   };
+  // 경계 안을 누르면 경계 시트가 열리니, 시트에서 그 자리 필지를 따로 열 수 있게 한다
+  const landAt = (at?: LatLng) =>
+    at ? () => landLookup(at.lat, at.lng) : undefined;
   const markerPress = (m: Marker) => {
     pendingLand.current = null;
     landRequest.current?.abort();
@@ -857,6 +920,45 @@ export function MapHome({
           landRequest.current?.abort();
           setSelected({ kind: "school", school, meta: schoolMeta });
           setStage("peek");
+        }
+      } else if (e.id.startsWith("redevzone:")) {
+        // 경계를 누르면: 우리 구역과 이어졌고 지도에 그 구역이 있으면 그 시트, 아니면 경계 정보 시트
+        const zone = redevZones.find((z) => `redevzone:${z.zone_id}` === e.id);
+        if (zone) {
+          pendingLand.current = null;
+          landRequest.current?.abort();
+          redevRequest.current?.abort();
+          const at =
+            e.lat != null && e.lng != null
+              ? { lat: e.lat, lng: e.lng }
+              : undefined;
+          const redev = zone.redevelopment_id
+            ? redevList.find((x) => x.id === zone.redevelopment_id)
+            : undefined;
+          setSelected(
+            redev
+              ? { kind: "redev", redev, meta: redevMeta, at }
+              : { kind: "redevZone", zone, meta: redevZoneMeta, at },
+          );
+          setStage("peek");
+          // 이어졌는데 지도 목록에 없으면(대표점이 화면 밖·준공 등) 구역 1건을 불러 전체 시트로 바꾼다.
+          // 못 불러오면 경계의 이름·단계만 있는 짧은 시트를 그대로 둔다
+          const id = zone.redevelopment_id;
+          if (!redev && id && repo.redevelopment) {
+            const controller = new AbortController();
+            redevRequest.current = controller;
+            repo
+              .redevelopment(id, controller.signal)
+              .then((r) => {
+                if (controller.signal.aborted) return;
+                setSelected((cur) =>
+                  cur?.kind === "redevZone" && cur.zone.zone_id === zone.zone_id
+                    ? { kind: "redev", redev: r.data, meta: r.meta, at }
+                    : cur,
+                );
+              })
+              .catch(() => {});
+          }
         }
       } else if (e.id.startsWith("redev:")) {
         const redev = redevList.find((x) => `redev:${x.id}` === e.id);
@@ -1035,6 +1137,8 @@ export function MapHome({
                 ? selected.area.id
                 : selected.kind === "redev"
                 ? `redev:${selected.redev.id}`
+                : selected.kind === "redevZone"
+                ? `redevzone:${selected.zone.zone_id}`
                 : selected.kind === "land"
                 ? `land:${selected.lat},${selected.lng}`
                 : `region:${selected.marker.region_code}`
@@ -1105,6 +1209,13 @@ export function MapHome({
           r={selected.redev}
           meta={selected.meta}
           unit={unit}
+          onLand={landAt(selected.at)}
+        />
+      ) : selected.kind === "redevZone" ? (
+        <RedevelopmentZoneContent
+          zone={selected.zone}
+          meta={selected.meta}
+          onLand={landAt(selected.at)}
         />
       ) : selected.kind === "auction" ? (
         <AuctionContent
@@ -1450,6 +1561,8 @@ export function MapHome({
             schools={mapSchools}
             hospitalAreas={areas}
             redevelopments={redevList}
+            redevelopmentZones={redevShapes}
+            redevelopmentZoneSelected={selectedZone}
             selected={
               selected?.kind === "complex"
                 ? selected.id
@@ -1459,7 +1572,9 @@ export function MapHome({
                     ? `school:${selected.school.id}`
                     : selected?.kind === "redev"
                       ? `redev:${selected.redev.id}`
-                      : null
+                      : selected?.kind === "redevZone"
+                        ? `redevzone:${selected.zone.zone_id}`
+                        : null
             }
             unit={unit}
             selectionPoint={

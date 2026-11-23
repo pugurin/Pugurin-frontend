@@ -15,6 +15,7 @@ import type {
   Hospital,
   SchoolZone,
   Redevelopment,
+  RedevelopmentZone,
   TypicalArea,
 } from "./types";
 import { TERMS } from "./terms";
@@ -857,5 +858,55 @@ export const REDEVELOPMENTS: Redevelopment[] = [
     location: "중동 500번지 일원",
     lat: 35.1621,
     lng: 129.1575,
+  },
+];
+// 정비구역 경계 샘플. 우동1구역(BARA_SAMPLE_001) 둘레의 이어진 경계 하나와, 이어지지 않은 경계 하나.
+// 모양은 지어낸 것이다(실제 구역 경계가 아니다)
+export const REDEVELOPMENT_ZONE_META: Meta = {
+  data_as_of: "2026-11-22T21:00:00+09:00",
+  source_attribution: "브이월드 용도지역지구정보",
+};
+const box = (
+  lng: number,
+  lat: number,
+  dLng: number,
+  dLat: number,
+): [number, number][] => [
+  [lng - dLng, lat - dLat],
+  [lng + dLng, lat - dLat],
+  [lng + dLng, lat + dLat],
+  [lng - dLng, lat + dLat],
+  [lng - dLng, lat - dLat],
+];
+export const REDEVELOPMENT_ZONES: RedevelopmentZone[] = [
+  {
+    zone_id: "SAMPLE_ZONE_1",
+    layer: "zone",
+    name: "우동1재개발정비구역",
+    notice: null,
+    designated_on: "2018-05-10",
+    geometry: {
+      type: "MultiPolygon",
+      coordinates: [[box(129.1502, 35.1668, 0.0016, 0.0012)]],
+    },
+    redevelopment_id: "BARA_SAMPLE_001",
+    area_name: "우동1구역 재개발",
+    kind: "redevelopment",
+    stage: "disposal_approved",
+  },
+  {
+    zone_id: "SAMPLE_ZONE_2",
+    layer: "zone",
+    name: null,
+    notice: "부산광역시 고시 제2016-415호",
+    designated_on: "2016-12-21",
+    geometry: {
+      type: "MultiPolygon",
+      coordinates: [[box(129.1575, 35.17, 0.0012, 0.0009)]],
+    },
+    redevelopment_id: null,
+    area_name: null,
+    kind: null,
+    stage: null,
   },
 ];
