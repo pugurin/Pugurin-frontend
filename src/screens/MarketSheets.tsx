@@ -17,6 +17,7 @@ import {
   DEAL,
   PROPERTY,
   areaLabel,
+  complexPriceSummary,
   formatArea,
   formatPrice,
   markerLabel,
@@ -460,6 +461,10 @@ export function ComplexContent({
     (v) => v.exclusive_area_m2 === a?.exclusive_area_m2,
   );
   const selectedStats = stats?.area_types?.length ? areaStats : stats;
+  // 평형별 통계가 있을 때만 그 평형 전용면적으로 거래가를 환산할 수 있다
+  const priceSummary = areaStats
+    ? complexPriceSummary(areaStats, filters.deal_type, a?.exclusive_area_m2)
+    : null;
   const metric =
     filters.deal_type === "sale"
       ? "median_price_per_pyeong"
@@ -597,6 +602,27 @@ export function ComplexContent({
             }
             right={<Help onPress={() => onHelp("평당가")} />}
           >
+            {priceSummary && (
+              <View style={{ gap: 2 }}>
+                <View style={s.row}>
+                  <T size={14} color={C.muted}>
+                    {filters.deal_type === "monthly"
+                      ? "보증금 · 월세 중위값"
+                      : filters.deal_type === "jeonse"
+                        ? "보증금 중위값"
+                        : "거래가 중위값"}
+                  </T>
+                  <Help onPress={() => onHelp("중위값")} />
+                </View>
+                <T bold size={24}>
+                  {priceSummary}
+                </T>
+                <T size={12} color={C.light}>
+                  선택한 평형 · 최근 {TREND_MONTHS / 12}년 · 거래{" "}
+                  {(selectedStats?.transaction_count ?? 0).toLocaleString()}건
+                </T>
+              </View>
+            )}
             {stats ? (
               <Chart
                 trend={selectedStats?.trend ?? []}
