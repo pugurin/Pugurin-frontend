@@ -298,14 +298,15 @@ window.pugurinKakaoMap = function (el, config, send) {
         send({ type: 'marker', id: z.id });
       };
       var entry = { id: z.id, faces: [], lines: [] };
+      // 경계는 늦게 받아 나중에 setMap되므로 zIndex를 -1로 내려 학구도·고른 필지 아래에 깐다
       z.polygons.forEach(function (poly) {
         // 정비예정구역(아직 지정 전)은 점선 테두리로 구분한다
-        var face = new kakao.maps.Polygon({ path: paths(poly), strokeColor: REDEV_ZONE_COLOR, strokeWeight: 2, strokeOpacity: 0.9, strokeStyle: z.dashed ? 'shortdash' : 'solid', fillColor: REDEV_ZONE_COLOR, fillOpacity: 0.07, zIndex: 0 });
+        var face = new kakao.maps.Polygon({ path: paths(poly), strokeColor: REDEV_ZONE_COLOR, strokeWeight: 2, strokeOpacity: 0.9, strokeStyle: z.dashed ? 'shortdash' : 'solid', fillColor: REDEV_ZONE_COLOR, fillOpacity: 0.07, zIndex: -1 });
         kakao.maps.event.addListener(face, 'click', pick);
         entry.faces.push(face);
       });
       z.hatch.forEach(function (seg) {
-        var line = new kakao.maps.Polyline({ path: [latLng(seg[0][1], seg[0][0]), latLng(seg[1][1], seg[1][0])], strokeColor: REDEV_ZONE_COLOR, strokeWeight: 1, strokeOpacity: 0.45, zIndex: 0 });
+        var line = new kakao.maps.Polyline({ path: [latLng(seg[0][1], seg[0][0]), latLng(seg[1][1], seg[1][0])], strokeColor: REDEV_ZONE_COLOR, strokeWeight: 1, strokeOpacity: 0.45, zIndex: -1 });
         kakao.maps.event.addListener(line, 'click', pick);
         entry.lines.push(line);
       });

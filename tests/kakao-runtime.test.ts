@@ -528,13 +528,14 @@ describe("정비구역 경계", () => {
   const faces = () => fake.shapes.filter((s) => s.map && s.options.strokeColor === "#C2410C" && s.options.fillColor);
   const hatch = () => fake.shapes.filter((s) => s.map && s.options.strokeColor === "#C2410C" && !s.options.fillColor);
 
+  // 경계를 늦게 받아도 학구도(zIndex 0)·고른 필지 테두리 아래에 깔리도록 -1로 둔다
   it("재개발 색 옅은 면과 사선 빗금으로 그린다", () => {
     start("test-key", props({ redevelopmentZones: shapes() }));
     expect(faces()).toHaveLength(1);
-    expect(faces()[0].options).toMatchObject({ fillOpacity: 0.07, strokeWeight: 2, zIndex: 0 });
+    expect(faces()[0].options).toMatchObject({ fillOpacity: 0.07, strokeWeight: 2, zIndex: -1 });
     expect(hatch().length).toBe(shapes()[0].hatch.length);
     expect(hatch().length).toBeGreaterThan(10);
-    expect(hatch()[0].options).toMatchObject({ strokeWeight: 1, zIndex: 0 });
+    expect(hatch()[0].options).toMatchObject({ strokeWeight: 1, zIndex: -1 });
   });
 
   it("고른 경계는 굵고 진하게 칠한다", () => {
