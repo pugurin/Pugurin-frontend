@@ -256,3 +256,20 @@ export function busanQueryBBox(bbox: BBox): BBox | undefined {
   ];
   return box[0] < box[2] && box[1] < box[3] ? box : undefined;
 }
+
+// 거래가 속한 단지 평형. 실거래 신고 면적은 평형 목록과 소수점이 조금씩 달라(110.12 vs 110.45)
+// 가장 가까운 평형 하나에 넣는다. 98.48·98.55처럼 붙은 평형도 한 거래가 두 곳에 잡히지 않는다.
+// 1㎡ 넘게 떨어지거나 면적을 모르면 어느 평형에도 넣지 않는다
+export function nearestArea<A extends { exclusive_area_m2: number }>(
+  txM2: number | null | undefined,
+  areas: A[],
+): A | undefined {
+  if (txM2 == null) return undefined;
+  let best: A | undefined;
+  for (const a of areas) {
+    const d = Math.abs(a.exclusive_area_m2 - txM2);
+    if (d <= 1 && (!best || d < Math.abs(best.exclusive_area_m2 - txM2)))
+      best = a;
+  }
+  return best;
+}

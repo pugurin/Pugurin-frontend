@@ -22,6 +22,7 @@ import {
   formatPrice,
   markerLabel,
   priceLabel,
+  nearestArea,
   TREND_MONTHS,
 } from "../state/market";
 import {
@@ -62,6 +63,11 @@ import { latestSale } from "../state/loan";
 const SALE_PERIOD_MONTHS = 60;
 // 단지 상세에서 거래 이력을 처음 펼쳐 두는 건수. 나머지는 더보기로 연다
 export const TX_PREVIEW = 4;
+// 서버가 평형 필터를 받지 않아 고른 평형 거래가 모자라면 다음 쪽을 이어 불러온다. 그 한도(쪽)
+const AREA_AUTOLOAD_PAGES = 5;
+// 단지 거래 이력 한 쪽 크기(서버 최대). 20건씩 받으면 가격순에서 큰 평형이 뒤로 밀려
+// 자동 불러오기 한도 안에 한 건도 안 잡혔다(422건 단지의 41평형)
+const COMPLEX_TX_PAGE_SIZE = 100;
 export function RegionContent({
   marker,
   filters,
@@ -326,8 +332,11 @@ export function ComplexContent({
   const [retry, setRetry] = useState(0);
   const [roadview, setRoadview] = useState(false);
   const [allTx, setAllTx] = useState(false);
-  // 단지·정렬·해제 포함을 바꾸면 다시 4건만 보여준다
-  useEffect(() => setAllTx(false), [id, sort, cancelled, filters]);
+  // 지금 items가 어떤 요청(단지·필터·정렬·해제·쪽)으로 받은 것인지. 조건을 바꾼 직후 옛 거래를 보고
+  // 다음 쪽을 불러와 옛 목록 뒤에 붙이지 않도록 자동 불러오기에서 견준다
+  const [loadedFor, setLoadedFor] = useState<unknown[]>([]);
+  // 단지·정렬·해제 포함·평형을 바꾸면 다시 4건만 보여준다
+  useEffect(() => setAllTx(false), [id, sort, cancelled, filters, area]);
   useEffect(() => {
     const a = new AbortController();
     setLoading(true);
@@ -336,7 +345,13 @@ export function ComplexContent({
       repo.complex(id, a.signal),
       repo.transactions(
         filters,
-        { complexId: id, sort, cancelled, page },
+        {
+          complexId: id,
+          sort,
+          cancelled,
+          page,
+          pageSize: COMPLEX_TX_PAGE_SIZE,
+        },
         a.signal,
       ),
     ])
@@ -345,6 +360,7 @@ export function ComplexContent({
         setComplex(c.data);
         setItems((v) => (page === 1 ? t.data : [...v, ...t.data]));
         setMeta(t.meta);
+        setLoadedFor([id, filters, sort, cancelled, page]);
       })
       .catch((e) => {
         if (!a.signal.aborted) setError(e.message);
@@ -354,6 +370,44 @@ export function ComplexContent({
       });
     return () => a.abort();
   }, [id, repo, filters, sort, cancelled, page, retry]);
+  // 거래 이력은 고른 평형만 보여준다. 단지 거래이력 API에 면적 조건이 없어 받은 거래를 여기서 거르고,
+  // 서버가 정한 정렬 순서는 그대로 둔다
+  const areaM2 =
+    complex?.area_types.find((v) => v.exclusive_area_m2 === area)
+      ?.exclusive_area_m2 ?? complex?.area_types[0]?.exclusive_area_m2;
+  const areaItems =
+    areaM2 == null
+      ? items
+      : items.filter(
+          (t) =>
+            nearestArea(t.exclusive_area_m2, complex?.area_types ?? [])
+              ?.exclusive_area_m2 === areaM2,
+        );
+  const totalPages = meta?.total_pages ?? 1;
+  useEffect(() => {
+    if (
+      !loading &&
+      [id, filters, sort, cancelled, page].every(
+        (v, i) => v === loadedFor[i],
+      ) &&
+      !error &&
+      areaItems.length < TX_PREVIEW &&
+      page < totalPages &&
+      page < AREA_AUTOLOAD_PAGES
+    )
+      setPage((v) => v + 1);
+  }, [
+    loading,
+    error,
+    areaItems.length,
+    page,
+    totalPages,
+    loadedFor,
+    id,
+    filters,
+    sort,
+    cancelled,
+  ]);
   useEffect(() => {
     const a = new AbortController();
     setStats(null);
@@ -542,11 +596,9 @@ export function ComplexContent({
               {formatArea(
                 {
                   ...tx,
-                  supply_area_pyeong: complex.area_types.find(
-                    (a) =>
-                      tx.exclusive_area_m2 != null &&
-                      Math.round(a.exclusive_area_m2) ===
-                        Math.round(tx.exclusive_area_m2),
+                  supply_area_pyeong: nearestArea(
+                    tx.exclusive_area_m2,
+                    complex.area_types,
                   )?.supply_area_pyeong,
                 },
                 unit,
@@ -624,9 +676,6 @@ export function ComplexContent({
               })()}
             </T>
           )}
-          <T size={13} color={C.light}>
-            거래 이력은 모든 면적을 표시해요
-          </T>
           <Section
             title={
               filters.deal_type === "monthly" ? "월세 추이" : "평당가 추이"
@@ -718,23 +767,26 @@ export function ComplexContent({
                     <Icon name={cancelled ? "check" : "plus"} size={18} />
                     <T size={14}>해제 거래 포함</T>
                   </Pressable>
-                  {(allTx ? items : items.slice(0, TX_PREVIEW)).map((t) => (
-                    <TransactionRow
-                      key={t.id}
-                      tx={{
-                        ...t,
-                        supply_area_pyeong: complex.area_types.find(
-                          (a) =>
-                            t.exclusive_area_m2 != null &&
-                            Math.round(a.exclusive_area_m2) ===
-                              Math.round(t.exclusive_area_m2),
-                        )?.supply_area_pyeong,
-                      }}
-                      unit={unit}
-                    />
-                  ))}
+                  {(allTx ? areaItems : areaItems.slice(0, TX_PREVIEW)).map(
+                    (t) => (
+                      <TransactionRow
+                        key={t.id}
+                        tx={{
+                          ...t,
+                          supply_area_pyeong: nearestArea(
+                            t.exclusive_area_m2,
+                            complex.area_types,
+                          )?.supply_area_pyeong,
+                        }}
+                        unit={unit}
+                      />
+                    ),
+                  )}
                   {loading && <StateCard loading />}
-                  {!allTx && items.length > TX_PREVIEW ? (
+                  {!loading && !areaItems.length && page >= totalPages && (
+                    <StateCard empty="이 평형의 거래가 없어요" />
+                  )}
+                  {!allTx && areaItems.length > TX_PREVIEW ? (
                     <Btn secondary onPress={() => setAllTx(true)}>
                       더보기
                     </Btn>
