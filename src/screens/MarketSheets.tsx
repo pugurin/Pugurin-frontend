@@ -36,6 +36,13 @@ import {
   s,
 } from "../components/ui";
 import { auctionSub, dday, ddayKey, formatWon } from "../state/auction";
+import {
+  AVERAGE_MONTHS,
+  areaAverage,
+  averageLabel,
+  monthsAgo,
+  recentComplexTransactions,
+} from "../state/areaAverage";
 import { areaOf } from "./AuctionContent";
 import { StarButton } from "../components/StarButton";
 import { LoadingTip } from "../components/LoadingTip";
@@ -382,6 +389,19 @@ export function ComplexContent({
     retry,
     analysisRetry,
   ]);
+  // 고른 평형의 최근 1년 평균가용 거래. 지도 필터의 거래 유형을 따른다. 실패하면 줄을 숨긴다
+  const [recent, setRecent] = useState<Transaction[] | null>(null);
+  const [since] = useState(() => monthsAgo(AVERAGE_MONTHS));
+  useEffect(() => {
+    setRecent(null);
+    const abort = new AbortController();
+    recentComplexTransactions(repo, filters, id, since, abort.signal)
+      .then((list) => {
+        if (!abort.signal.aborted) setRecent(list);
+      })
+      .catch(() => {});
+    return () => abort.abort();
+  }, [id, repo, filters, since]);
   // 대출 계산기 기본 매매가용 매매 거래. 지도 필터(전세·월세, 해제 포함 등)와 상관없이
   // 이 단지의 최근 매매를 따로 불러온다. 실패하면 사용자가 매매가를 직접 넣는다
   const [sales, setSales] = useState<Transaction[]>([]);
@@ -576,6 +596,16 @@ export function ComplexContent({
                 : "공급면적 정보 없음"}{" "}
               · 전용{" "}
               {areaIn(a.exclusive_area_pyeong, unit, a.exclusive_area_m2)}
+            </T>
+          )}
+          {a && recent && (
+            <T size={15} bold style={{ marginTop: 6 }}>
+              {(() => {
+                const avg = areaAverage(recent, a.exclusive_area_m2, since);
+                return avg
+                  ? `최근 1년 ${averageLabel(filters.deal_type, avg)}`
+                  : "최근 1년 이 평형 거래 없음";
+              })()}
             </T>
           )}
           <T size={13} color={C.light}>
