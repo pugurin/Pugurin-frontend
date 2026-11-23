@@ -99,6 +99,8 @@ export class Repository {
       sort?: Sort;
       cancelled?: boolean;
       page?: number;
+      // 기본 20. 단지 거래 API는 최대 100
+      pageSize?: number;
       area?: number;
     },
     signal?: AbortSignal,
@@ -117,7 +119,7 @@ export class Repository {
     q.set("sort", opts.sort ?? "contract_date_desc");
     q.set("include_cancelled", String(opts.cancelled ?? false));
     q.set("page", String(opts.page ?? 1));
-    q.set("page_size", "20");
+    q.set("page_size", String(opts.pageSize ?? 20));
     return this.client.get<Transaction[]>(
       `${opts.complexId ? `/complexes/${encodeURIComponent(opts.complexId)}/transactions` : "/transactions"}?${q}`,
       signal,

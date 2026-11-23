@@ -82,3 +82,44 @@ describe("단지 시트 면적 칩", () => {
     expect(screen.getByText("공급 66.1㎡ · 전용 52.2㎡")).toBeTruthy();
   });
 });
+
+describe("단지 시트 평형 평균가", () => {
+  it("고른 평형의 최근 1년 평균 매매가와 건수를 칩 아래에 적는다", async () => {
+    const { monthsAgo } = await import("../src/state/areaAverage");
+    const recent = monthsAgo(1);
+    const sale = (price: number, m2: number) => ({
+      id: `t${price}`,
+      deal_type: "sale",
+      price,
+      deposit: null,
+      monthly_rent: null,
+      exclusive_area_m2: m2,
+      contract_date: recent,
+      is_cancelled: false,
+    });
+    const withTx = {
+      ...repo,
+      transactions: async () => ({
+        data: [sale(3e8, 52.2), sale(4e8, 52.4), sale(9e8, 125.3)],
+        meta: { page: 1, total_pages: 1 },
+      }),
+    };
+    render(
+      <ComplexContent
+        id="c"
+        repo={withTx}
+        filters={DEFAULT_FILTERS}
+        stage="half"
+        onStage={() => {}}
+        onHelp={() => {}}
+        notify={() => {}}
+        unit="평"
+      />,
+    );
+    expect(
+      await screen.findByText("최근 1년 평균 매매가 3.5억 · 거래 2건"),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByText("전용 24평"));
+    expect(screen.getByText("최근 1년 이 평형 거래 없음")).toBeTruthy();
+  });
+});
