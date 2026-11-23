@@ -195,6 +195,71 @@ describe("앱 토큰 갱신", () => {
     });
   });
 
+  it("관심 목록이 401을 받아 갱신하면 가장 최근 refresh token으로 회전하고 onTokens로 저장한다", async () => {
+    const { auth, calls, onTokens } = make({
+      "POST /auth/oauth/kakao": [
+        [
+          200,
+          {
+            is_new_user: false,
+            access_token: "a1",
+            refresh_token: "r1",
+            user: USER,
+          },
+        ],
+      ],
+      "POST /auth/refresh": [
+        [200, { access_token: "a2", refresh_token: "r2" }],
+        [200, { access_token: "a3", refresh_token: "r3" }],
+      ],
+    });
+    await auth.signIn("kakao");
+    expect(auth.accessToken()).toBe("a1");
+    expect(await auth.refreshAccess("a1")).toBe("a2");
+    expect(await auth.refreshAccess("a2")).toBe("a3");
+    expect(
+      calls.filter((c) => c.path === "/auth/refresh").map((c) => c.body),
+    ).toEqual([{ refresh_token: "r1" }, { refresh_token: "r2" }]);
+    expect(onTokens).toHaveBeenNthCalledWith(
+      1,
+      { access_token: "a2", refresh_token: "r2" },
+      "r1",
+    );
+    expect(onTokens).toHaveBeenNthCalledWith(
+      2,
+      { access_token: "a3", refresh_token: "r3" },
+      "r2",
+    );
+  });
+
+  it("앱은 갱신이 401이면 같은 refresh token을 다시 보내지 않고(모든 기기 로그아웃 방지) 토큰을 비운다", async () => {
+    const { auth, calls } = make({
+      "POST /auth/oauth/kakao": [
+        [
+          200,
+          {
+            is_new_user: false,
+            access_token: "a1",
+            refresh_token: "r1",
+            user: USER,
+          },
+        ],
+      ],
+      "POST /auth/refresh": [[401, { error: { code: "UNAUTHORIZED" } }]],
+    });
+    await auth.signIn("kakao");
+    await expect(auth.refreshAccess("a1")).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    expect(calls.filter((c) => c.path === "/auth/refresh")).toHaveLength(1);
+    expect(auth.accessToken()).toBeUndefined();
+    // 버린 refresh token으로 다시 갱신하지 않는다
+    await expect(auth.refreshAccess("a1")).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    expect(calls.filter((c) => c.path === "/auth/refresh")).toHaveLength(1);
+  });
+
   it("두 요청이 동시에 401을 받아도 refresh는 한 번만 보낸다", async () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));

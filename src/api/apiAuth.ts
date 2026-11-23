@@ -34,6 +34,8 @@ type NewUser = {
   profile?: { nickname?: string | null };
 };
 
+const unauthorized = (e: unknown) =>
+  e instanceof ApiError && e.code === "UNAUTHORIZED";
 // 서버 사용자 → 앱 사용자. 마케팅 동의는 consents 안에 있다
 const toUser = (u: ApiUser): User => ({
   id: u.id,
@@ -171,9 +173,29 @@ export class ApiAuth implements AuthApi {
     return this.access;
   }
 
-  // 데이터 API가 401을 받았을 때 쿠키로 갱신한다
-  refreshAccess(): Promise<string> {
-    return this.refresh();
+  // 데이터 API(관심 목록)가 401을 받았을 때 갱신한다(used: 401을 받은 access token).
+  // 갱신이 401이어도 바로 세션을 버리지 않는다(docs/AUTH.md 유예 30초):
+  // - 그사이 다른 요청이 새 access token을 받았으면 그 값을 쓴다
+  // - 웹: 다른 탭이 같은 쿠키로 먼저 갱신했으면 브라우저 쿠키가 이미 새 값이라 한 번 더 갱신한다
+  //   (앱은 같은 refresh token을 다시 보내면 유예가 지난 뒤 모든 기기가 로그아웃되므로 하지 않는다)
+  // 그래도 401이면 만료·폐기라 토큰을 비우고 던진다
+  async refreshAccess(used?: string): Promise<string> {
+    try {
+      return await this.refresh();
+    } catch (e) {
+      if (!unauthorized(e)) throw e;
+      if (this.access && this.access !== used) return this.access;
+      if (!this.app) {
+        try {
+          return await this.refresh();
+        } catch (again) {
+          if (!unauthorized(again)) throw again;
+        }
+      }
+      this.access = undefined;
+      this.refreshToken = "";
+      throw e;
+    }
   }
 
   // 로그인이 필요한 요청. access token이 만료됐으면(401) 한 번 갱신하고 다시 보낸다
