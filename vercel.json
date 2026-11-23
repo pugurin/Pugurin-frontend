@@ -8,6 +8,7 @@
       "source": "/api/:path*",
       "destination": "https://34-64-207-41.sslip.io/api/:path*"
     },
+    { "source": "/privacy", "destination": "/privacy.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

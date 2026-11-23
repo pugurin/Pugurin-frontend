@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 
 // 구글 OAuth 동의 화면에 넣을 공개 개인정보처리방침(https://pugurin.vercel.app/privacy.html).
 // 앱 번들과 상관없는 정적 파일이라 public/에 둔다
-const html = readFileSync("public/privacy.html", "utf8");
+// 줄바꿈(포매터가 문장 중간에서 줄을 바꾼다)은 띄어쓰기 하나로 본다
+const html = readFileSync("public/privacy.html", "utf8").replace(/\s+/g, " ");
 
 describe("개인정보처리방침 페이지", () => {
   it("개인정보보호법이 정한 항목을 모두 담는다", () => {
@@ -30,9 +31,42 @@ describe("개인정보처리방침 페이지", () => {
     expect(html).toMatch(/위치[^<]*서버에 (보내지|저장하지) 않/);
   });
 
+  it("소셜 로그인으로 받는 정보를 2절과 5절에서 똑같이 적는다", () => {
+    // 가입 토큰에 제공자 프로필 이름(별명)을 10분 둔다(백엔드 docs/AUTH.md). "식별번호만"이라고 쓰면 앞뒤가 다르다
+    expect(html).not.toContain("회원 식별번호만");
+    expect(html).toMatch(/회원 식별번호와 프로필 이름/);
+  });
+
+  it("관심 목록은 로그인한 회원 계정에만 저장한다고 적는다(백엔드 #67 이후)", () => {
+    expect(html).toMatch(/로그인하지 않으면[^<]*관심[^<]*서버에 저장하지 않/);
+    // 앱 설정(용어 팁 등)은 서버에 올리지 않고 기기에만 둔다
+    expect(html).toMatch(/앱 설정[^<]*기기에만 저장/);
+  });
+
+  it("서비스 서버가 아닌 곳으로 가는 요청도 알린다", () => {
+    // 길찾기 경로 계산
+    expect(html).toContain("ODsay");
+    // 웹 길찾기 좌표는 Vercel 프록시의 요청 주소에 들어간다
+    expect(html).toMatch(/좌표[^<]*Vercel/);
+    // 지도·로드뷰는 브라우저(앱은 WebView)가 카카오에 직접 요청한다
+    expect(html).toMatch(/카카오맵[^<]*직접/);
+    expect(html).toContain("로드뷰");
+  });
+
   it("앱과 같은 출처에서 열리는 독립 페이지다(스크립트 없음)", () => {
     expect(html).toMatch(/^<!doctype html>/i);
     expect(html).toContain('<meta charset="utf-8"');
     expect(html).not.toContain("<script");
+  });
+
+  it("확장자 없는 /privacy 주소도 앱(SPA)이 아니라 이 페이지로 연다", () => {
+    const vercel = JSON.parse(readFileSync("vercel.json", "utf8")) as {
+      rewrites: { source: string; destination: string }[];
+    };
+    const sources = vercel.rewrites.map((r) => r.source);
+    const privacy = sources.indexOf("/privacy");
+    expect(vercel.rewrites[privacy]?.destination).toBe("/privacy.html");
+    // 모든 주소를 index.html로 보내는 규칙보다 앞에 있어야 한다
+    expect(privacy).toBeLessThan(sources.indexOf("/(.*)"));
   });
 });
