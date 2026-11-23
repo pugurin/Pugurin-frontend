@@ -452,7 +452,7 @@ export type NotificationMeta = Meta & { unread_count?: number };
 export type RegionReportBlock = {
   code: string;
   name: string;
-  sigungu_name: string;
+  sigungu_name: string | null;
   lat: number | null;
   lng: number | null;
   empty: boolean;

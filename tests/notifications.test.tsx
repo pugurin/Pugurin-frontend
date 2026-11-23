@@ -39,8 +39,8 @@ describe("알림함 목록", () => {
         onLogin={noop}
       />,
     );
-    await screen.findByText("11월 3주차 관심 지역 리포트");
-    expect(screen.getByText("11월 2주차 관심 지역 리포트")).toBeTruthy();
+    await screen.findByText("관심 지역 주간 리포트 · 11/16~11/22");
+    expect(screen.getByText("관심 지역 주간 리포트 · 11/09~11/15")).toBeTruthy();
     expect(screen.getByText(SAMPLE_REPORTS[0].summary)).toBeTruthy();
     expect(screen.getAllByLabelText("안 읽음")).toHaveLength(1);
   });
@@ -56,7 +56,7 @@ describe("알림함 목록", () => {
         onLogin={noop}
       />,
     );
-    fireEvent.click(await screen.findByText("11월 2주차 관심 지역 리포트"));
+    fireEvent.click(await screen.findByText("관심 지역 주간 리포트 · 11/09~11/15"));
     expect(onOpen).toHaveBeenCalledWith("sample-report-2026-11-09");
   });
 
