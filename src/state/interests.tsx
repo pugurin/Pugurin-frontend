@@ -9,10 +9,13 @@ import { AppState } from "react-native";
 import type { Repository } from "../api/repository";
 import type { InterestKind } from "../api/types";
 
-// 관심 등록(별 버튼) 상태. 앱을 켤 때 GET /interests로 단지·경매 id를 받아 두고,
+// 관심 등록(별 버튼) 상태. 로그인한 사람만 쓴다(계정에 저장). 로그인하지 않았으면 별을 눌러도
+// 서버에 보내지 않고 로그인 안내(needLogin)만 띄운다.
+// 로그인하면 GET /interests로 단지·경매 id를 받아 두고,
 // 별을 누르면 화면을 먼저 바꾼 뒤 서버에 보낸다.
 // 별마다 요청은 한 번에 하나만 보내고, 끝나면 그사이 마지막으로 누른 상태만 이어서 보낸다.
-// 실패하면 서버가 마지막으로 확인해 준 값으로 되돌리고 서버 메시지를 토스트로 띄운다
+// 실패하면 서버가 마지막으로 확인해 준 값으로 되돌리고 서버 메시지를 토스트로 띄운다.
+// 401(세션이 끝남)은 토스트 없이 되돌린다. 세션을 지우고 로그인 안내를 띄우는 건 App이 한다
 export type Interests = {
   has: (kind: InterestKind, id: string) => boolean;
   toggle: (kind: InterestKind, id: string) => void;
@@ -45,9 +48,12 @@ const emptySets = (): Sets => ({ complex: new Set(), auction: new Set() });
 export function useInterests(
   repo: Repository,
   notify: (m: string) => void,
-  // 기기 id가 준비되기 전에는 서버에 묻지 않는다
-  ready = true,
+  // 로그인한 계정 id. null이면 로그인 전이라 서버에 묻지 않는다. 계정이 바뀌면 목록을 다시 받는다
+  account: string | null,
+  // 로그인하지 않고 별을 눌렀을 때. kind로 안내 제목(관심 단지·경매)을 맞춘다
+  needLogin: (kind: InterestKind) => void,
 ): Interests {
+  const ready = account !== null;
   const [version, rerender] = useReducer((x: number) => x + 1, 0);
   // 화면에 보이는 별
   const shown = useRef<Sets>(emptySets());
@@ -59,6 +65,8 @@ export function useInterests(
   const generation = useRef(0);
   const notifyRef = useRef(notify);
   notifyRef.current = notify;
+  const needLoginRef = useRef(needLogin);
+  needLoginRef.current = needLogin;
 
   const show = (kind: InterestKind, id: string, on: boolean) => {
     if (shown.current[kind].has(id) === on) return;
@@ -116,7 +124,7 @@ export function useInterests(
     };
     // load는 repo·ready만 쓴다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repo, ready]);
+  }, [repo, account]);
 
   // 별 하나의 요청을 차례로 보낸다. 나가 있는 요청이 있으면 끝난 뒤 마지막 상태만 보낸다
   const flush = (e: Entry) => {
@@ -136,6 +144,7 @@ export function useInterests(
         e.busy = false;
         e.desired = e.confirmed;
         show(e.kind, e.id, e.confirmed);
+        if (err?.code === "UNAUTHORIZED") return;
         notifyRef.current(err?.message ?? "관심 등록을 처리하지 못했어요");
       },
     );
@@ -143,6 +152,10 @@ export function useInterests(
 
   return useMemo<Interests>(() => {
     const toggle = (kind: InterestKind, id: string) => {
+      if (!ready) {
+        needLoginRef.current(kind);
+        return;
+      }
       load();
       const key = `${kind}:${id}`;
       const now = shown.current[kind].has(id);
@@ -177,7 +190,7 @@ export function useInterests(
     };
     // 상태는 ref에 있고 version이 바뀔 때만 새 값을 낸다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, repo, ready]);
+  }, [version, repo, account]);
 }
 
 export function InterestsProvider({

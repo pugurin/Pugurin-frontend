@@ -13,7 +13,7 @@ import {
 import { useFonts } from "expo-font";
 import { Repository, type Mode } from "./src/api/repository";
 import { apiBase } from "./src/api/base";
-import { ApiClient } from "./src/api/client";
+import { ApiClient, ApiError, type ClientAuth } from "./src/api/client";
 import type {
   BBox,
   Filters,
@@ -83,6 +83,7 @@ import { loadRefreshToken, saveRefreshToken } from "./src/state/secureToken";
 import {
   AccountScreen,
   LoginScreen,
+  LoginSheet,
   SignupDoneScreen,
   SignupScreen,
 } from "./src/screens/AuthScreens";
@@ -262,12 +263,70 @@ export default function App() {
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
   }, [popup, route]);
-  const repo = useMemo(
-    () => new Repository(mode, new ApiClient(API_BASE, id)),
-    [mode, id],
+  // 데이터 API가 쓸 access token. repo를 다시 만들지 않게 ref로 읽는다
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  // 로그인 안내 시트(시안 A1). 로그인하지 않고 관심 별·관심 목록을 눌렀거나 세션이 끝났을 때 띄운다
+  const [loginAsk, setLoginAsk] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
+  const askLogin = (kind: InterestKind) => {
+    if (!auth) {
+      notify("지금은 로그인을 쓸 수 없어요");
+      return;
+    }
+    setLoginAsk({
+      title: `관심 ${kind === "complex" ? "단지" : "경매"}는 로그인하면 저장돼요`,
+      message:
+        "로그인하면 관심 단지·경매를 계정에 저장하고, 어느 기기에서든 같은 목록을 볼 수 있어요.",
+    });
+  };
+  // 데이터 API의 갱신이 401로 끝났다(만료·폐기). 로그아웃처럼 세션을 지우되 이미 끝난 세션이라 로그아웃 API는 부르지 않는다
+  const expiredRef = useRef(() => {});
+  expiredRef.current = () => {
+    saveSession(null);
+    setRoute((r) =>
+      r?.kind === "interests" || r?.kind === "account" ? null : r,
+    );
+    setLoginAsk({
+      title: "로그인이 끝났어요",
+      message: "다시 로그인하면 관심 목록을 이어서 쓸 수 있어요.",
+    });
+  };
+  const repo = useMemo(() => {
+    // 실제 서버 인증(웹·앱)일 때만 관심 목록 요청에 토큰을 붙인다
+    const clientAuth: ClientAuth | undefined =
+      auth?.source === "api"
+        ? {
+            token: () =>
+              sessionRef.current
+                ? (auth.accessToken?.() ?? sessionRef.current.access_token)
+                : undefined,
+            account: () => sessionRef.current?.user.id,
+            refresh: (used) =>
+              auth.refreshAccess
+                ? auth.refreshAccess(used)
+                : Promise.reject(
+                    new ApiError("다시 로그인해 주세요", "UNAUTHORIZED"),
+                  ),
+            expired: () => expiredRef.current(),
+          }
+        : undefined;
+    return new Repository(
+      mode,
+      new ApiClient(API_BASE, id, fetch, clientAuth),
+      // 샘플 로그인은 가짜 토큰이라 데이터가 실제여도 관심 목록을 앱 안에 둔다(미리보기)
+      auth?.source === "sample" ? "sample" : mode,
+    );
+  }, [mode, id, auth]);
+  // 관심 등록(별 버튼)은 로그인한 계정에 저장한다. 계정이 바뀌면 그 계정의 id를 다시 받는다
+  const interests = useInterests(
+    repo,
+    (m) => notify(m),
+    id && session ? session.user.id : null,
+    (kind) => askLogin(kind),
   );
-  // 관심 등록(별 버튼). 기기 id가 생긴 뒤 서버에서 담아 둔 id를 받는다
-  const interests = useInterests(repo, (m) => notify(m), !!id);
   useEffect(() => {
     deviceId()
       .then(setId)
@@ -855,7 +914,9 @@ export default function App() {
                     }
                     onAccount={() => setRoute({ kind: "account" })}
                     onInterests={(kind) =>
-                      setRoute({ kind: "interests", tab: kind })
+                      session
+                        ? setRoute({ kind: "interests", tab: kind })
+                        : askLogin(kind)
                     }
                     interestCount={interests.count}
                     mode={mode}
@@ -994,6 +1055,24 @@ export default function App() {
                   <T color={C.bg} style={{ textAlign: "center" }}>
                     {toast}
                   </T>
+                </View>
+              )}
+              {loginAsk && auth && (
+                <View style={{ position: "absolute", inset: 0, zIndex: 60 }}>
+                  <LoginSheet
+                    auth={auth}
+                    title={loginAsk.title}
+                    message={loginAsk.message}
+                    onClose={() => setLoginAsk(null)}
+                    onSession={(next) => {
+                      setLoginAsk(null);
+                      signedIn(next, false);
+                    }}
+                    onSignup={(signup) => {
+                      setLoginAsk(null);
+                      setRoute({ kind: "signup", signup });
+                    }}
+                  />
                 </View>
               )}
               <TermPopup

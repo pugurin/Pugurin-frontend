@@ -71,17 +71,23 @@ const SCHOOL_SEARCH_LIMIT = 10;
 export const SCHOOL_SEARCH_WAIT_MS = 800;
 // 서버가 종류별로 받아 주는 관심 개수 상한. 넘으면 409 CONFLICT
 export const INTEREST_LIMIT = 200;
-// 샘플 모드의 관심 목록. 서버처럼 기기 하나에 한 벌이고, 앱을 다시 켜면 비어 있다
+// 샘플 관심 목록. 앱을 켜는 동안 한 벌이고(계정을 가리지 않는다), 다시 켜면 비어 있다.
+// 샘플 데이터 모드와, 샘플 로그인으로 실제 데이터를 보는 미리보기(interestMode "sample")가 쓴다
 const sampleInterests: Record<InterestKind, Map<string, string>> = {
   complex: new Map(),
   auction: new Map(),
 };
+// 관심 목록 API는 로그인이 필요해 토큰을 붙인다
+const AUTH = { auth: true };
 const newestFirst = (m: Map<string, string>) =>
   [...m].sort((a, b) => b[1].localeCompare(a[1]));
 export class Repository {
   constructor(
     public mode: Mode,
     private client: ApiClient,
+    // 관심 목록을 어디에 둘지. 샘플 로그인(미리보기)이면 데이터가 실제여도 앱 안에 둔다.
+    // 가짜 토큰을 실제 서버에 보내면 401만 나기 때문이다
+    private interestMode: Mode = mode,
   ) {}
   markers(f: Filters, b: BBox, z: number, signal?: AbortSignal) {
     return this.mode === "sample"
@@ -91,7 +97,7 @@ export class Repository {
           signal,
         );
   }
-  complex(id: string, signal?: AbortSignal) {
+  complex(id: string, signal?: AbortSignal): Promise<Envelope<Complex>> {
     return this.mode === "sample"
       ? Promise.resolve({ data: COMPLEXES.find((c) => c.id === id)! })
       : this.client.get<Complex>(
@@ -532,23 +538,25 @@ export class Repository {
   }
   // 내 관심 id 전체. 별을 켜고 끌 때 쓴다
   interestIds(signal?: AbortSignal): Promise<Envelope<InterestIds>> {
-    if (this.mode === "sample")
+    if (this.interestMode === "sample")
       return Promise.resolve({
         data: {
           complexes: newestFirst(sampleInterests.complex).map(([id]) => id),
           auctions: newestFirst(sampleInterests.auction).map(([id]) => id),
         },
       });
-    return this.client.get<InterestIds>("/interests", signal);
+    return this.client.get<InterestIds>("/interests", signal, AUTH);
   }
   // 관심 등록·해제. 같은 요청을 여러 번 보내도 결과가 같다
   async setInterest(kind: InterestKind, id: string, on: boolean) {
-    if (this.mode === "sample") {
+    if (this.interestMode === "sample") {
       const store = sampleInterests[kind];
+      // 실제 데이터면 샘플에 없는 id도 받는다
       const known =
-        kind === "complex"
+        this.mode !== "sample" ||
+        (kind === "complex"
           ? COMPLEXES.some((c) => c.id === id)
-          : AUCTIONS.some((a) => a.id === id);
+          : AUCTIONS.some((a) => a.id === id));
       if (!on) {
         store.delete(id);
         return;
@@ -573,7 +581,15 @@ export class Repository {
   complexInterests(
     signal?: AbortSignal,
   ): Promise<Envelope<ComplexInterest[]>> {
-    if (this.mode === "sample")
+    // 미리보기: 담은 id를 공개 단지 API로 채운다. 최근 매매는 비워 둔다
+    if (this.interestMode === "sample" && this.mode !== "sample")
+      return this.localInterests(sampleInterests.complex, (id, added_at) =>
+        this.complex(id, signal).then(({ data, meta }) => ({
+          item: { complex: data, latest_sale: null, added_at },
+          meta,
+        })),
+      );
+    if (this.interestMode === "sample")
       return Promise.resolve({
         data: newestFirst(sampleInterests.complex).flatMap(([id, added_at]) => {
           const complex = COMPLEXES.find((c) => c.id === id);
@@ -589,13 +605,24 @@ export class Repository {
         }),
         meta: SAMPLE_META,
       });
-    return this.client.get<ComplexInterest[]>("/interests/complexes", signal);
+    return this.client.get<ComplexInterest[]>(
+      "/interests/complexes",
+      signal,
+      AUTH,
+    );
   }
   // 관심 경매 목록 화면. auction은 /auctions 목록 항목과 같은 모양이고 끝난 물건도 남는다
   auctionInterests(
     signal?: AbortSignal,
   ): Promise<Envelope<AuctionInterest[]>> {
-    if (this.mode === "sample")
+    if (this.interestMode === "sample" && this.mode !== "sample")
+      return this.localInterests(sampleInterests.auction, (id, added_at) =>
+        this.auction(id, signal).then(({ data, meta }) => ({
+          item: { auction: data, added_at },
+          meta,
+        })),
+      );
+    if (this.interestMode === "sample")
       return Promise.resolve({
         data: newestFirst(sampleInterests.auction).flatMap(([id, added_at]) => {
           const auction = AUCTIONS.find((a) => a.id === id);
@@ -603,7 +630,27 @@ export class Repository {
         }),
         meta: AUCTION_META,
       });
-    return this.client.get<AuctionInterest[]>("/interests/auctions", signal);
+    return this.client.get<AuctionInterest[]>(
+      "/interests/auctions",
+      signal,
+      AUTH,
+    );
+  }
+  // 앱 안에 담은 관심 id를 최근 순으로 하나씩 받아 목록을 만든다. 못 받은 것은 뺀다
+  private async localInterests<T>(
+    store: Map<string, string>,
+    fetchOne: (
+      id: string,
+      added_at: string,
+    ) => Promise<{ item: T; meta?: Envelope<T>["meta"] }>,
+  ): Promise<Envelope<T[]>> {
+    const got = await Promise.all(
+      newestFirst(store).map(([id, added_at]) =>
+        fetchOne(id, added_at).catch(() => null),
+      ),
+    );
+    const found = got.filter((g) => g !== null);
+    return { data: found.map((g) => g.item), meta: found[0]?.meta };
   }
   // 집 → 직장 대중교통 경로. 백엔드가 ODsay를 대신 호출한다(키는 서버에만 둔다)
   transitRoute(

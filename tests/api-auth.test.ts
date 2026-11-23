@@ -222,6 +222,85 @@ describe("실제 인증 서버(웹)", () => {
     expect(calls.filter((c) => c.url === "/auth/refresh")).toHaveLength(1);
   });
 
+  it("다른 요청(관심 목록)이 쓸 access token을 알려 주고, 갱신하면 새 토큰으로 바꾼다", async () => {
+    const { auth } = make({
+      "POST /auth/oauth/kakao": signedIn,
+      "POST /auth/refresh": () =>
+        json(200, { data: { access_token: "a2" }, meta: {} }),
+    });
+    expect(auth.accessToken()).toBeUndefined();
+    const make2 = make({ "POST /auth/oauth/kakao": signedIn }, kakaoCode);
+    await make2.auth.completeSignIn();
+    expect(make2.auth.accessToken()).toBe("a1");
+    expect(await auth.refreshAccess()).toBe("a2");
+    expect(auth.accessToken()).toBe("a2");
+    await auth.signOut().catch(() => {});
+    expect(auth.accessToken()).toBeUndefined();
+  });
+
+  it("다른 탭이 같은 쿠키로 먼저 갱신해 401(유예)이 와도, 바뀐 쿠키로 한 번 더 갱신해 세션을 잇는다", async () => {
+    let refreshes = 0;
+    const { auth } = make(
+      {
+        "POST /auth/oauth/kakao": signedIn,
+        "POST /auth/refresh": () =>
+          ++refreshes === 1
+            ? json(401, {
+                error: {
+                  code: "UNAUTHORIZED",
+                  message: "이미 다른 요청이 로그인을 갱신했어요",
+                },
+              })
+            : json(200, { data: { access_token: "a2" }, meta: {} }),
+      },
+      kakaoCode,
+    );
+    await auth.completeSignIn();
+    expect(await auth.refreshAccess("a1")).toBe("a2");
+    expect(refreshes).toBe(2);
+    expect(auth.accessToken()).toBe("a2");
+  });
+
+  it("갱신이 401인데 그사이 다른 요청이 새 access token을 받았으면 그 값을 준다", async () => {
+    let refreshes = 0;
+    const { auth } = make(
+      {
+        "POST /auth/oauth/kakao": signedIn,
+        "POST /auth/refresh": () => {
+          refreshes += 1;
+          return json(401, { error: { code: "UNAUTHORIZED", message: "x" } });
+        },
+      },
+      kakaoCode,
+    );
+    await auth.completeSignIn();
+    // 401을 받은 건 옛 토큰 a0이고, 지금은 a1이 있다
+    expect(await auth.refreshAccess("a0")).toBe("a1");
+    expect(refreshes).toBe(1);
+  });
+
+  it("갱신이 다시 해도 401이면(만료·폐기) 토큰을 비우고 다시 로그인하게 한다", async () => {
+    let refreshes = 0;
+    const { auth } = make(
+      {
+        "POST /auth/oauth/kakao": signedIn,
+        "POST /auth/refresh": () => {
+          refreshes += 1;
+          return json(401, {
+            error: { code: "UNAUTHORIZED", message: "다시 로그인해 주세요" },
+          });
+        },
+      },
+      kakaoCode,
+    );
+    await auth.completeSignIn();
+    await expect(auth.refreshAccess("a1")).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    expect(refreshes).toBe(2);
+    expect(auth.accessToken()).toBeUndefined();
+  });
+
   it("갱신이 401이면 다시 로그인하라고 알린다", async () => {
     const { auth } = make({
       "POST /auth/refresh": () =>
