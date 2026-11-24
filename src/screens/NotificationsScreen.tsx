@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, Switch, View } from "react-native";
 import type { Repository } from "../api/repository";
 import type {
   AppNotification,
@@ -9,19 +9,23 @@ import type {
 import { Btn, Header, StateCard, T, s } from "../components/ui";
 import { C } from "../theme/tokens";
 
-// 더보기 → 알림함. 주간 관심 지역 리포트를 최근 것부터 보여 준다
+// 더보기 → 알림함. 주간 관심 단지 리포트를 최근 것부터 보여 준다.
+// 로그인했으면 맨 위에 "주간 리포트 받기" 스위치를 둔다
 export function NotificationsScreen({
   repo,
   loggedIn,
   onBack,
   onOpen,
   onLogin,
+  notify,
 }: {
   repo: Repository;
   loggedIn: boolean;
   onBack: () => void;
   onOpen: (id: string) => void;
   onLogin: () => void;
+  // 앱 공용 토스트
+  notify: (message: string) => void;
 }) {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(loggedIn);
@@ -45,6 +49,37 @@ export function NotificationsScreen({
       });
     return () => a.abort();
   }, [repo, loggedIn, retry]);
+  // 주간 리포트 받기. 받아 오기 전·못 받았으면 null이라 스위치를 그리지 않는다
+  const [weekly, setWeekly] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!loggedIn) {
+      setWeekly(null);
+      return;
+    }
+    const a = new AbortController();
+    repo
+      .reportSetting(a.signal)
+      .then((r) => {
+        if (!a.signal.aborted) setWeekly(r.weekly_report);
+      })
+      // 설정을 못 받으면 스위치만 숨기고 목록은 그대로 보여 준다
+      .catch(() => {});
+    return () => a.abort();
+  }, [repo, loggedIn]);
+  const changeWeekly = (on: boolean) => {
+    const before = weekly;
+    setWeekly(on);
+    setSaving(true);
+    repo
+      .setReportSetting(on)
+      .then((r) => setWeekly(r.weekly_report))
+      .catch(() => {
+        setWeekly(before);
+        notify("설정을 바꾸지 못했어요");
+      })
+      .finally(() => setSaving(false));
+  };
   return (
     <View style={s.screen}>
       <Header title="알림" onBack={onBack} />
@@ -54,7 +89,7 @@ export function NotificationsScreen({
             로그인하면 주간 리포트를 받아요
           </T>
           <T size={14} color={C.muted} style={{ textAlign: "center" }}>
-            관심 지역의 한 주 소식을 매주 월요일에 모아 드려요
+            관심 단지의 한 주 소식을 매주 월요일에 모아 드려요
           </T>
           <Btn onPress={onLogin}>로그인</Btn>
         </View>
@@ -62,6 +97,31 @@ export function NotificationsScreen({
         <ScrollView
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
         >
+          {weekly !== null && (
+            <View
+              style={{
+                paddingVertical: 12,
+                gap: 4,
+                borderBottomWidth: 1,
+                borderColor: C.rule,
+              }}
+            >
+              <View style={[s.between, { minHeight: 48 }]}>
+                <T>주간 리포트 받기</T>
+                <Switch
+                  value={weekly}
+                  disabled={saving}
+                  onValueChange={changeWeekly}
+                  accessibilityLabel="주간 리포트 받기"
+                  trackColor={{ true: C.primary, false: C.rule }}
+                  thumbColor={C.surface}
+                />
+              </View>
+              <T size={14} color={C.muted}>
+                매주 월요일에 관심 단지의 한 주 소식을 알림함으로 보내 드려요
+              </T>
+            </View>
+          )}
           {loading || error ? (
             <StateCard
               loading={loading}
@@ -114,16 +174,22 @@ export function NotificationsScreen({
   );
 }
 
-// 리포트 한 건. 열면 읽음 처리한다. 숫자는 서버가 준 lines를 그대로 보여 준다
+// 리포트 한 건(명세 §3). 열면 읽음 처리한다. 문장은 서버가 준 lines를 그대로 보여 준다
 export function ReportScreen({
   repo,
   id,
   onBack,
+  onComplex,
+  onCompare,
   onRead,
 }: {
   repo: Repository;
   id: string;
   onBack: () => void;
+  // 단지 이름을 누르면 지도에서 그 단지 시트를 연다
+  onComplex: (id: string) => void;
+  // 비교 화면이 생기기 전까지는 관심 목록(단지 탭)으로 간다
+  onCompare: () => void;
   // 읽음 처리가 끝났을 때(배지를 다시 받는다)
   onRead: () => void;
 }) {
@@ -157,13 +223,14 @@ export function ReportScreen({
     // onRead는 호출 시점의 최신 값이면 충분하다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo, id, retry]);
+  const p = report?.payload;
   return (
     <View style={s.screen}>
       <Header title="주간 리포트" onBack={onBack} />
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
       >
-        {loading || error || !report ? (
+        {loading || error || !report || !p ? (
           <StateCard
             loading={loading}
             error={error}
@@ -171,27 +238,34 @@ export function ReportScreen({
           />
         ) : (
           <>
-            <View style={{ paddingVertical: 16, gap: 4 }}>
-              <T size={22} bold>
+            <View style={{ paddingVertical: 16, gap: 6 }}>
+              <T size={14} color={C.muted}>
                 {report.title}
               </T>
-              <T size={14} color={C.muted}>
-                {`${report.payload.period.start.replaceAll("-", ".")} ~ ${report.payload.period.end.replaceAll("-", ".")}`}
+              <T size={22} bold>
+                {p.headline}
               </T>
             </View>
-            {/* 단지 리포트 화면(§3)은 Task 6에서 다시 그린다. 지금은 단지 이름과 lines만 보인다 */}
-            {report.payload.complexes.map((b) => (
-              <ComplexBlock key={b.id} b={b} />
+            {p.complexes.map((b) => (
+              <ComplexBlock key={b.id} b={b} onComplex={onComplex} />
             ))}
-            <View style={{ paddingTop: 16, gap: 6 }}>
-              {report.payload.sources.length > 0 && (
+            {p.quiet.length > 0 && (
+              <T size={15} color={C.muted} style={{ paddingVertical: 14 }}>
+                {`${p.quiet.map((q) => q.name).join(" · ")}: 이번 주 새 소식이 없어요`}
+              </T>
+            )}
+            <Btn secondary onPress={onCompare} style={{ marginTop: 8 }}>
+              관심 단지 비교하러 가기
+            </Btn>
+            <View style={{ paddingTop: 20, gap: 6 }}>
+              {p.sources.length > 0 && (
                 <T size={13} color={C.muted}>
-                  {`출처: ${report.payload.sources.join(" · ")}`}
+                  {`출처: ${p.sources.join(" · ")}`}
                 </T>
               )}
-              {report.payload.lag_notice !== "" && (
+              {p.lag_notice !== "" && (
                 <T size={13} color={C.light}>
-                  {report.payload.lag_notice}
+                  {p.lag_notice}
                 </T>
               )}
             </View>
@@ -202,7 +276,35 @@ export function ReportScreen({
   );
 }
 
-function ComplexBlock({ b }: { b: InterestReportComplex }) {
+// lines 하나하나가 머리 줄(•)인지 딸린 줄(–)인지. 문장은 고치지 않고 들여쓰기만 정한다.
+// 서버 순서: 새 실거래 N건 → 평형 줄들 → 외 N개 평형 → 경매(2건 이상이면 머리 줄 + 건마다 한 줄) → 정비사업.
+// 구조화 필드로 센 줄 수가 lines와 맞지 않으면(서버 문장 규칙이 바뀐 경우) 모두 머리 줄로 보인다
+export function lineDepths(b: InterestReportComplex): (0 | 1)[] {
+  const d: (0 | 1)[] = [];
+  if (b.sales.count > 0) {
+    d.push(0);
+    const sub = b.sales.areas.length + (b.sales.more_areas > 0 ? 1 : 0);
+    for (let i = 0; i < sub; i++) d.push(1);
+  }
+  if (b.auctions.length === 1) d.push(0);
+  if (b.auctions.length > 1) {
+    d.push(0);
+    b.auctions.forEach(() => d.push(1));
+  }
+  b.redevelopments.forEach(() => d.push(0));
+  return d.length === b.lines.length ? d : b.lines.map(() => 0);
+}
+
+function ComplexBlock({
+  b,
+  onComplex,
+}: {
+  b: InterestReportComplex;
+  onComplex: (id: string) => void;
+}) {
+  // 시군구·동은 아는 것만 붙인다. 둘 다 모르면 이름만
+  const where = [b.sigungu_name, b.dong_name].filter(Boolean).join(" ");
+  const depths = lineDepths(b);
   return (
     <View
       style={{
@@ -212,13 +314,33 @@ function ComplexBlock({ b }: { b: InterestReportComplex }) {
         borderColor: C.rule,
       }}
     >
-      <T bold size={18}>
-        {b.name}
-      </T>
-      {b.lines.map((l, i) => (
-        <T key={i} size={15}>
-          {l}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityHint="지도에서 단지 정보를 열어요"
+        onPress={() => onComplex(b.id)}
+        style={[s.row, { gap: 6, flexWrap: "wrap", minHeight: 32 }]}
+      >
+        <T bold size={18} color={C.primary}>
+          {b.name}
         </T>
+        {where !== "" && (
+          <T size={14} color={C.muted}>
+            {`(${where})`}
+          </T>
+        )}
+      </Pressable>
+      {b.lines.map((l, i) => (
+        <View
+          key={i}
+          style={[s.row, { gap: 6, paddingLeft: depths[i] ? 18 : 2 }]}
+        >
+          <T size={15} color={C.muted}>
+            {depths[i] ? "–" : "•"}
+          </T>
+          <T size={15} style={{ flex: 1 }}>
+            {l}
+          </T>
+        </View>
       ))}
     </View>
   );

@@ -1029,7 +1029,8 @@ export const SAMPLE_REPORTS: InterestReport[] = [
           },
           auctions: [
             {
-              id: "court:2026타경20871",
+              // 리포트에만 쓰는 샘플 경매 id(엘시티더샵 물건). 경매 목록 샘플과는 잇지 않는다
+              id: "court:2026타경40517",
               area_label: "61평형",
               min_price: 1_540_000_000,
               date: "2026-12-03",

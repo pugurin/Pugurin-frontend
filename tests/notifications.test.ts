@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiClient } from "../src/api/client";
+import { SAMPLE_REPORTS } from "../src/api/fixtures";
 import { Repository } from "../src/api/repository";
 
 type Call = {
@@ -57,6 +58,7 @@ describe("알림 API", () => {
     const { calls, repo } = fakeServer(() => json({ data: { id: "n/1" } }));
     await repo.notification("n/1");
     expect(calls[0].url).toBe("http://x/api/v1/notifications/n%2F1");
+    expect(calls[0].auth).toBe("Bearer tok");
   });
 
   it("markNotificationsRead는 ids 또는 all을 POST 본문으로 보낸다", async () => {
@@ -153,6 +155,8 @@ describe("샘플 단지 리포트", () => {
     expect(list.data).toHaveLength(2);
     for (const n of list.data)
       expect(n.title).toMatch(/^관심 단지 주간 리포트 · \d+\/\d+~\d+\/\d+$/);
+    // 처음 상태는 픽스처의 read_at으로 본다: 한 통만 안 읽음
+    expect(SAMPLE_REPORTS.filter((n) => n.read_at === null)).toHaveLength(1);
   });
 
   it("한 통은 소식 있는 단지 2곳 + 조용한 단지 2곳, 경매·정비사업 줄이 있는 통이 있다", async () => {

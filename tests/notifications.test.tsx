@@ -99,62 +99,158 @@ describe("알림함 목록", () => {
 });
 
 describe("리포트 상세", () => {
-  it("열면 읽음 처리하고 동네마다 머리와 줄을 그대로 보인다", async () => {
+  const renderReport = (
+    over: Partial<React.ComponentProps<typeof ReportScreen>> = {},
+  ) =>
+    render(
+      <ReportScreen
+        repo={sampleRepo()}
+        id="sample-report-2026-11-16"
+        onBack={noop}
+        onComplex={noop}
+        onCompare={noop}
+        onRead={noop}
+        {...over}
+      />,
+    );
+
+  it("열면 읽음 처리하고 headline·단지(시군구 동)·lines·조용한 단지·출처를 보인다", async () => {
     const repo = sampleRepo();
     const mark = vi.spyOn(repo, "markNotificationsRead");
     const onRead = vi.fn();
-    render(
-      <ReportScreen
-        repo={repo}
-        id="sample-report-2026-11-16"
-        onBack={noop}
-        onRegion={noop}
-        onRead={onRead}
-      />,
-    );
-    await screen.findByText(/📍 우동/);
+    renderReport({ repo, onRead });
+    const p = SAMPLE_REPORTS[0].payload;
+    await screen.findByText(p.headline);
     expect(mark).toHaveBeenCalledWith(["sample-report-2026-11-16"]);
     await waitFor(() => expect(onRead).toHaveBeenCalled());
-    const r = SAMPLE_REPORTS[0].payload.regions;
-    for (const b of r) {
-      expect(screen.getByText(`📍 ${b.name}`)).toBeTruthy();
+    for (const b of p.complexes) {
+      expect(screen.getByText(b.name)).toBeTruthy();
+      expect(
+        screen.getAllByText(`(${b.sigungu_name} ${b.dong_name})`).length,
+      ).toBeGreaterThan(0);
       for (const l of b.lines) expect(screen.getByText(l)).toBeTruthy();
     }
-    // 소식 없는 동네는 한 줄만
-    expect(screen.getByText("이번 주 새 소식이 없어요")).toBeTruthy();
-    expect(screen.getByText(/국토교통부 실거래가 공개시스템/)).toBeTruthy();
+    // 단지는 payload 순서, 한 단지의 lines도 payload 순서 그대로
+    const order = [
+      p.headline,
+      ...p.complexes.flatMap((b) => [b.name, ...b.lines]),
+      `${p.quiet.map((q) => q.name).join(" · ")}: 이번 주 새 소식이 없어요`,
+      "관심 단지 비교하러 가기",
+      "최근 30일 거래는 아직 신고되지 않았을 수 있어요",
+    ];
+    const text = document.body.textContent ?? "";
+    const at = order.map((t) => text.indexOf(t));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
     expect(
-      screen.getByText("최근 30일 거래는 아직 신고되지 않았을 수 있어요"),
+      screen.getByText("경동제이드 · 마린시티자이: 이번 주 새 소식이 없어요"),
     ).toBeTruthy();
+    // 샘플의 두 단지가 모두 해운대구 우동이다
+    expect(screen.getAllByText("(해운대구 우동)")).toHaveLength(2);
+    expect(screen.getByText(/국토교통부 실거래가 공개시스템/)).toBeTruthy();
+    expect(screen.getByText(/대법원 법원경매정보·온비드/)).toBeTruthy();
+    expect(screen.getByText(/부산광역시 정비사업 정보/)).toBeTruthy();
   });
 
-  it("지도에서 동네 보기는 좌표를 넘긴다", async () => {
-    const onRegion = vi.fn();
-    render(
-      <ReportScreen
-        repo={sampleRepo()}
-        id="sample-report-2026-11-16"
-        onBack={noop}
-        onRegion={onRegion}
-        onRead={noop}
-      />,
-    );
-    const b = SAMPLE_REPORTS[0].payload.regions[0];
-    fireEvent.click(await screen.findByLabelText(`지도에서 ${b.name} 보기`));
-    expect(onRegion).toHaveBeenCalledWith({ lat: b.lat, lng: b.lng });
+  it("경매가 여럿이면 머리 줄 뒤에 건마다 한 줄, 외 N개 평형도 그대로 보인다", async () => {
+    renderReport({ id: "sample-report-2026-11-09" });
+    const b = SAMPLE_REPORTS[1].payload.complexes[0];
+    await screen.findByText(b.name);
+    for (const l of b.lines) expect(screen.getByText(l)).toBeTruthy();
+    expect(screen.getByText("새 경매 2건")).toBeTruthy();
+    expect(screen.getByText("외 1개 평형")).toBeTruthy();
+  });
+
+  it("시군구·동을 모르면 이름만 보인다", async () => {
+    const repo = sampleRepo();
+    const r = structuredClone(SAMPLE_REPORTS[0]);
+    r.payload.complexes[0].sigungu_name = null;
+    r.payload.complexes[0].dong_name = null;
+    r.payload.complexes[1].sigungu_name = null;
+    vi.spyOn(repo, "notification").mockResolvedValue({ data: r } as never);
+    renderReport({ repo });
+    await screen.findByText(r.payload.complexes[0].name);
+    expect(screen.queryByText(/\(해운대구/)).toBeNull();
+    expect(screen.queryByText("()")).toBeNull();
+    expect(screen.getByText("(우동)")).toBeTruthy();
+  });
+
+  it("단지 이름을 누르면 그 단지 id로 onComplex", async () => {
+    const onComplex = vi.fn();
+    renderReport({ onComplex });
+    const b = SAMPLE_REPORTS[0].payload.complexes[1];
+    fireEvent.click(await screen.findByText(b.name));
+    expect(onComplex).toHaveBeenCalledWith(b.id);
+  });
+
+  it("관심 단지 비교하러 가기를 누르면 onCompare", async () => {
+    const onCompare = vi.fn();
+    renderReport({ onCompare });
+    fireEvent.click(await screen.findByText("관심 단지 비교하러 가기"));
+    expect(onCompare).toHaveBeenCalled();
   });
 
   it("알림이 없으면 오류와 다시 시도를 보인다", async () => {
+    renderReport({ id: "nope" });
+    await screen.findByText("알림을 찾을 수 없어요");
+  });
+});
+
+describe("주간 리포트 받기 스위치", () => {
+  const renderList = (repo: Repository, loggedIn = true, notify = noop) =>
     render(
-      <ReportScreen
-        repo={sampleRepo()}
-        id="nope"
+      <NotificationsScreen
+        repo={repo}
+        loggedIn={loggedIn}
         onBack={noop}
-        onRegion={noop}
-        onRead={noop}
+        onOpen={noop}
+        onLogin={noop}
+        notify={notify}
       />,
     );
-    await screen.findByText("알림을 찾을 수 없어요");
+  const sw = () => screen.findByRole("switch", { name: "주간 리포트 받기" });
+
+  it("서버 값을 보이고 끄면 setReportSetting(false)", async () => {
+    const repo = sampleRepo();
+    vi.spyOn(repo, "reportSetting").mockResolvedValue({ weekly_report: true });
+    const set = vi
+      .spyOn(repo, "setReportSetting")
+      .mockResolvedValue({ weekly_report: false });
+    renderList(repo);
+    await waitFor(async () =>
+      expect((await sw()) as HTMLInputElement).toHaveProperty("checked", true),
+    );
+    fireEvent.click(await sw());
+    expect(set).toHaveBeenCalledWith(false);
+    await waitFor(async () =>
+      expect((await sw()) as HTMLInputElement).toHaveProperty("checked", false),
+    );
+  });
+
+  it("바꾸지 못하면 되돌리고 토스트를 띄운다", async () => {
+    const repo = sampleRepo();
+    vi.spyOn(repo, "reportSetting").mockResolvedValue({ weekly_report: true });
+    vi.spyOn(repo, "setReportSetting").mockRejectedValue(new Error("x"));
+    const notify = vi.fn();
+    renderList(repo, true, notify);
+    await waitFor(async () =>
+      expect((await sw()) as HTMLInputElement).toHaveProperty("checked", true),
+    );
+    fireEvent.click(await sw());
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("설정을 바꾸지 못했어요"),
+    );
+    expect((await sw()) as HTMLInputElement).toHaveProperty("checked", true);
+  });
+
+  it("로그인 안 했으면 스위치가 없고 설정을 묻지 않는다", () => {
+    const repo = sampleRepo();
+    const get = vi.spyOn(repo, "reportSetting");
+    renderList(repo, false);
+    expect(
+      screen.queryByRole("switch", { name: "주간 리포트 받기" }),
+    ).toBeNull();
+    expect(get).not.toHaveBeenCalled();
   });
 });
 

@@ -797,6 +797,7 @@ export default function App() {
           unread.refresh();
         }}
         onOpen={(nid) => setRoute({ kind: "notification", id: nid })}
+        notify={notify}
         // main의 로그인 흐름처럼 알림함 화면 위에 로그인 시트를 띄운다
         onLogin={() => {
           if (!auth) {
@@ -817,6 +818,8 @@ export default function App() {
         repo={repo}
         id={route.id}
         onBack={() => setRoute({ kind: "notifications" })}
+        onComplex={openComplex}
+        onCompare={() => setRoute({ kind: "interests", tab: "complex" })}
         onRead={unread.refresh}
       />
     );
