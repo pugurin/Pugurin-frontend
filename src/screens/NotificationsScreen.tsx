@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, View } from "react-native";
+import { ApiError } from "../api/client";
 import type { Repository } from "../api/repository";
 import type {
   AppNotification,
@@ -9,11 +10,35 @@ import type {
 import { Btn, Header, StateCard, T, s } from "../components/ui";
 import { C } from "../theme/tokens";
 
+// 서버에 그 경로·알림이 없다(404). 다시 시도해도 같으니 버튼을 두지 않는다
+const notFound = (e: unknown) =>
+  e instanceof ApiError && e.code === "RESOURCE_NOT_FOUND";
+
+// 미리보기에서 리포트가 샘플임을 알리는 작은 표시
+function SampleTag() {
+  return (
+    <View
+      style={{
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 4,
+        backgroundColor: C.rule,
+        alignSelf: "flex-start",
+      }}
+    >
+      <T size={12} bold color={C.muted}>
+        샘플
+      </T>
+    </View>
+  );
+}
+
 // 더보기 → 알림함. 주간 관심 단지 리포트를 최근 것부터 보여 준다.
 // 로그인했으면 맨 위에 "주간 리포트 받기" 스위치를 둔다
 export function NotificationsScreen({
   repo,
   loggedIn,
+  readIds,
   onBack,
   onOpen,
   onLogin,
@@ -21,6 +46,8 @@ export function NotificationsScreen({
 }: {
   repo: Repository;
   loggedIn: boolean;
+  // 이번에 열어 본 알림 id. 읽음 POST가 끝나기 전에 목록을 다시 받아도 읽은 것으로 보인다
+  readIds?: ReadonlySet<string>;
   onBack: () => void;
   onOpen: (id: string) => void;
   onLogin: () => void;
@@ -30,19 +57,24 @@ export function NotificationsScreen({
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(loggedIn);
   const [error, setError] = useState<string | null>(null);
+  // 백엔드에 알림 API가 아직 없다(목록 404). 준비 중 안내만 두고 다시 시도는 두지 않는다
+  const [notReady, setNotReady] = useState(false);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     if (!loggedIn) return;
     const a = new AbortController();
     setLoading(true);
     setError(null);
+    setNotReady(false);
     repo
       .notifications(1, a.signal)
       .then((r) => {
         if (!a.signal.aborted) setItems(r.data);
       })
       .catch((e: Error) => {
-        if (!a.signal.aborted) setError(e.message);
+        if (a.signal.aborted) return;
+        if (notFound(e)) setNotReady(true);
+        else setError(e.message);
       })
       .finally(() => {
         if (!a.signal.aborted) setLoading(false);
@@ -127,7 +159,7 @@ export function NotificationsScreen({
               </T>
             </View>
           )}
-          {weekly === null && weeklyFailed && (
+          {weekly === null && weeklyFailed && !notReady && (
             <View
               style={[
                 s.between,
@@ -164,45 +196,57 @@ export function NotificationsScreen({
               error={error}
               onRetry={() => setRetry((x) => x + 1)}
             />
+          ) : notReady ? (
+            <StateCard empty="알림함을 준비 중이에요" />
           ) : items.length === 0 ? (
             <StateCard empty="아직 받은 리포트가 없어요" />
           ) : (
-            items.map((n) => (
-              <Pressable
-                key={n.id}
-                accessibilityRole="button"
-                onPress={() => onOpen(n.id)}
-                style={[
-                  s.row,
-                  {
-                    gap: 10,
-                    paddingVertical: 14,
-                    borderBottomWidth: 1,
-                    borderColor: C.rule,
-                  },
-                ]}
-              >
-                <View style={{ flex: 1, gap: 4 }}>
-                  <T bold={!n.read_at} size={17}>
-                    {n.title}
-                  </T>
-                  <T size={14} color={C.muted}>
-                    {n.summary}
-                  </T>
-                </View>
-                {!n.read_at && (
-                  <View
-                    accessibilityLabel="안 읽음"
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: 5,
-                      backgroundColor: C.primary,
-                    }}
-                  />
-                )}
-              </Pressable>
-            ))
+            items.map((n) => {
+              const unread = !n.read_at && !readIds?.has(n.id);
+              return (
+                <Pressable
+                  key={n.id}
+                  accessibilityRole="button"
+                  // 안 읽음 점은 그림이라 낭독기가 읽지 못한다. 행 이름에 붙인다
+                  accessibilityLabel={[
+                    ...(repo.reportPreview ? ["샘플"] : []),
+                    n.title,
+                    n.summary,
+                    ...(unread ? ["안 읽음"] : []),
+                  ].join(", ")}
+                  onPress={() => onOpen(n.id)}
+                  style={[
+                    s.row,
+                    {
+                      gap: 10,
+                      paddingVertical: 14,
+                      borderBottomWidth: 1,
+                      borderColor: C.rule,
+                    },
+                  ]}
+                >
+                  <View style={{ flex: 1, gap: 4 }}>
+                    {repo.reportPreview && <SampleTag />}
+                    <T bold={unread} size={17}>
+                      {n.title}
+                    </T>
+                    <T size={14} color={C.muted}>
+                      {n.summary}
+                    </T>
+                  </View>
+                  {unread && (
+                    <View
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 5,
+                        backgroundColor: C.primary,
+                      }}
+                    />
+                  )}
+                </Pressable>
+              );
+            })
           )}
         </ScrollView>
       )}
@@ -232,6 +276,8 @@ export function ReportScreen({
   const [report, setReport] = useState<InterestReport>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 없는 알림(404)이면 다시 시도해도 같다
+  const [missing, setMissing] = useState(false);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     const a = new AbortController();
@@ -250,7 +296,9 @@ export function ReportScreen({
             .catch(() => {});
       })
       .catch((e: Error) => {
-        if (!a.signal.aborted) setError(e.message);
+        if (a.signal.aborted) return;
+        setError(e.message);
+        setMissing(notFound(e));
       })
       .finally(() => {
         if (!a.signal.aborted) setLoading(false);
@@ -270,11 +318,12 @@ export function ReportScreen({
           <StateCard
             loading={loading}
             error={error}
-            onRetry={() => setRetry((x) => x + 1)}
+            onRetry={missing ? undefined : () => setRetry((x) => x + 1)}
           />
         ) : (
           <>
             <View style={{ paddingVertical: 16, gap: 6 }}>
+              {repo.reportPreview && <SampleTag />}
               <T size={14} color={C.muted}>
                 {report.title}
               </T>
@@ -283,7 +332,12 @@ export function ReportScreen({
               </T>
             </View>
             {p.complexes.map((b) => (
-              <ComplexBlock key={b.id} b={b} onComplex={onComplex} />
+              <ComplexBlock
+                key={b.id}
+                b={b}
+                // 미리보기의 샘플 단지 id는 실제 서버에 없어 열 수 없다
+                onComplex={repo.reportPreview ? undefined : onComplex}
+              />
             ))}
             {p.quiet.length > 0 && (
               <T size={15} color={C.muted} style={{ paddingVertical: 14 }}>
@@ -339,11 +393,24 @@ function ComplexBlock({
   onComplex,
 }: {
   b: InterestReportComplex;
-  onComplex: (id: string) => void;
+  // 없으면 단지 이름을 누를 수 없다
+  onComplex?: (id: string) => void;
 }) {
   // 시군구·동은 아는 것만 붙인다. 둘 다 모르면 이름만
   const where = [b.sigungu_name, b.dong_name].filter(Boolean).join(" ");
   const depths = lineDepths(b);
+  const name = (
+    <>
+      <T bold size={18} color={onComplex ? C.primary : C.ink}>
+        {b.name}
+      </T>
+      {where !== "" && (
+        <T size={14} color={C.muted}>
+          {`(${where})`}
+        </T>
+      )}
+    </>
+  );
   return (
     <View
       style={{
@@ -353,21 +420,20 @@ function ComplexBlock({
         borderColor: C.rule,
       }}
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityHint="지도에서 단지 정보를 열어요"
-        onPress={() => onComplex(b.id)}
-        style={[s.row, { gap: 6, flexWrap: "wrap", minHeight: 32 }]}
-      >
-        <T bold size={18} color={C.primary}>
-          {b.name}
-        </T>
-        {where !== "" && (
-          <T size={14} color={C.muted}>
-            {`(${where})`}
-          </T>
-        )}
-      </Pressable>
+      {onComplex ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityHint="지도에서 단지 정보를 열어요"
+          onPress={() => onComplex(b.id)}
+          style={[s.row, { gap: 6, flexWrap: "wrap", minHeight: 32 }]}
+        >
+          {name}
+        </Pressable>
+      ) : (
+        <View style={[s.row, { gap: 6, flexWrap: "wrap", minHeight: 32 }]}>
+          {name}
+        </View>
+      )}
       {b.lines.map((l, i) => (
         <View
           key={i}

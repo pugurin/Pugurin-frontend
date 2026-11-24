@@ -340,6 +340,10 @@ export default function App() {
     id && session ? session.user.id : null,
     (kind) => askLogin(kind),
   );
+  // 이번에 열어 본 리포트 id. 읽음 POST가 끝나기 전에 알림함으로 돌아와도 읽은 것으로 보인다
+  const [openedReports, setOpenedReports] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const unread = useUnreadCountState(
     repo,
     id && session ? session.user.id : null,
@@ -514,14 +518,15 @@ export default function App() {
     };
   }, []);
   // 로그인·가입을 마쳤을 때. 글꼴·기기 id 준비 전(아래 early return 전)에도 부를 수 있게 여기서 정의한다.
-  // 로그인하면 들어온 화면(탭)으로 돌아간다. 처음 가입했으면 가입 완료 화면을 먼저 보여 준다
+  // 로그인하면 들어온 화면(탭)으로 돌아간다. 처음 가입했으면 가입 완료 화면을 먼저 보여 준다.
+  // 알림함 위 로그인 시트로 로그인했으면 알림함에 그대로 남는다
   const signedIn = (next: Session, joined: boolean) => {
     saveSession(next);
     if (joined) {
       setRoute({ kind: "joined", user: next.user });
       return;
     }
-    setRoute(null);
+    setRoute((r) => (r?.kind === "notifications" ? r : null));
     notify(`${next.user.nickname}님, 다시 만나 반가워요`);
   };
   // 웹 소셜 로그인에서 돌아왔으면 로그인을 마친다. 처음 온 사람은 가입 화면으로
@@ -792,11 +797,15 @@ export default function App() {
       <NotificationsScreen
         repo={repo}
         loggedIn={session !== null}
+        readIds={openedReports}
         onBack={() => {
           setRoute(null);
           unread.refresh();
         }}
-        onOpen={(nid) => setRoute({ kind: "notification", id: nid })}
+        onOpen={(nid) => {
+          setOpenedReports((s) => new Set(s).add(nid));
+          setRoute({ kind: "notification", id: nid });
+        }}
         notify={notify}
         // main의 로그인 흐름처럼 알림함 화면 위에 로그인 시트를 띄운다
         onLogin={() => {

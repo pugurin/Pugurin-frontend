@@ -106,6 +106,11 @@ export class Repository {
     // 가짜 토큰을 실제 서버에 보내면 401만 나기 때문이다
     private interestMode: Mode = mode,
   ) {}
+  // 미리보기(데이터는 실제 서버, 로그인·알림은 앱 안 샘플)라 리포트가 샘플인지.
+  // 이때 리포트 속 단지 id는 실제 서버에 없어 단지를 열 수 없다. 전체 샘플 모드는 단지도 샘플 데이터에 있다
+  get reportPreview() {
+    return this.interestMode === "sample" && this.mode !== "sample";
+  }
   markers(f: Filters, b: BBox, z: number, signal?: AbortSignal) {
     return this.mode === "sample"
       ? Promise.resolve(sampleMarkers(f, b, z))
@@ -690,35 +695,37 @@ export class Repository {
         return { data: { routes: [], unavailable_reason: reason } };
       });
   }
-  // 알림 목록(최근 것부터). meta.unread_count가 안 읽은 알림 수다
+  // 알림 목록(최근 것부터). meta.unread_count가 안 읽은 알림 수다.
+  // 배지처럼 개수만 필요하면 pageSize를 1로 준다
   notifications(
     page: number,
     signal?: AbortSignal,
+    pageSize = NOTIFICATION_PAGE_SIZE,
   ): Promise<Envelope<AppNotification[]>> {
     // 알림은 계정에 묶여 있어 관심 목록과 같이 interestMode를 따른다.
     // 샘플 로그인(미리보기)의 가짜 토큰은 서버에서 401만 나기 때문이다
     if (this.interestMode === "sample") {
       const all = SAMPLE_REPORTS.map(sampleNotification);
-      const start = (page - 1) * NOTIFICATION_PAGE_SIZE;
+      const start = (page - 1) * pageSize;
       const meta: NotificationMeta = {
         ...SAMPLE_META,
         page,
-        page_size: NOTIFICATION_PAGE_SIZE,
+        page_size: pageSize,
         total: all.length,
-        total_pages: Math.max(1, Math.ceil(all.length / NOTIFICATION_PAGE_SIZE)),
+        total_pages: Math.max(1, Math.ceil(all.length / pageSize)),
         unread_count: all.filter((n) => !n.read_at).length,
       };
       return Promise.resolve({
         // 목록에는 payload를 싣지 않는다
         data: all
-          .slice(start, start + NOTIFICATION_PAGE_SIZE)
+          .slice(start, start + pageSize)
           .map(({ payload: _payload, ...n }) => n),
         meta,
       });
     }
     const q = new URLSearchParams({
       page: String(page),
-      page_size: String(NOTIFICATION_PAGE_SIZE),
+      page_size: String(pageSize),
     });
     return this.client.get<AppNotification[]>(
       `/notifications?${q}`,
@@ -734,7 +741,10 @@ export class Repository {
     if (this.interestMode === "sample") {
       const found = SAMPLE_REPORTS.find((n) => n.id === id);
       return found
-        ? Promise.resolve({ data: sampleNotification(found), meta: SAMPLE_META })
+        ? Promise.resolve({
+            data: sampleNotification(found),
+            meta: SAMPLE_META,
+          })
         : Promise.reject(
             new ApiError("알림을 찾을 수 없어요", "RESOURCE_NOT_FOUND"),
           );
