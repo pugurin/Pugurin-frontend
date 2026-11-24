@@ -102,9 +102,14 @@ type Route =
   // error: 웹 리다이렉트 로그인이 돌아와서 실패했을 때 안내
   | { kind: "login"; error?: string }
   // 가입 완료(자동으로 만든 닉네임 안내)
-  | { kind: "joined"; user: User }
+  // fromInbox: 알림함 위 로그인 시트에서 가입했으면 닫을 때 알림함으로 돌아간다
+  | { kind: "joined"; user: User; fromInbox?: boolean }
   // 처음 로그인한 사람의 가입 마무리
-  | { kind: "signup"; signup: Extract<SignInResult, { kind: "signup" }> }
+  | {
+      kind: "signup";
+      signup: Extract<SignInResult, { kind: "signup" }>;
+      fromInbox?: boolean;
+    }
   | { kind: "account" }
   | { kind: "matching" }
   | { kind: "filter" }
@@ -523,7 +528,12 @@ export default function App() {
   const signedIn = (next: Session, joined: boolean) => {
     saveSession(next);
     if (joined) {
-      setRoute({ kind: "joined", user: next.user });
+      // 알림함에서 시작한 가입이면 가입 완료 뒤에도 알림함으로 돌아간다
+      setRoute((r) => ({
+        kind: "joined",
+        user: next.user,
+        fromInbox: r?.kind === "signup" && r.fromInbox,
+      }));
       return;
     }
     setRoute((r) => (r?.kind === "notifications" ? r : null));
@@ -674,7 +684,12 @@ export default function App() {
     );
   if (route?.kind === "joined")
     overlay = (
-      <SignupDoneScreen user={route.user} onDone={() => setRoute(null)} />
+      <SignupDoneScreen
+        user={route.user}
+        onDone={() =>
+          setRoute(route.fromInbox ? { kind: "notifications" } : null)
+        }
+      />
     );
   if (route?.kind === "signup" && auth)
     overlay = (
@@ -1134,7 +1149,12 @@ export default function App() {
                     }}
                     onSignup={(signup) => {
                       setLoginAsk(null);
-                      setRoute({ kind: "signup", signup });
+                      // 알림함 위 로그인 시트에서 넘어왔으면 표시해 둔다
+                      setRoute((r) => ({
+                        kind: "signup",
+                        signup,
+                        fromInbox: r?.kind === "notifications",
+                      }));
                     }}
                   />
                 </View>

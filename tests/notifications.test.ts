@@ -141,6 +141,10 @@ describe("미리보기(데이터 api + 인증 sample)", () => {
     expect(new Repository("api", c, "sample").reportPreview).toBe(true);
     // 전체 샘플이면 단지도 샘플 데이터에 있다
     expect(new Repository("sample", c).reportPreview).toBe(false);
+    // 샘플 표시는 전체 샘플 모드도 단다
+    expect(new Repository("api", c, "sample").reportSample).toBe(true);
+    expect(new Repository("sample", c).reportSample).toBe(true);
+    expect(new Repository("api", c).reportSample).toBe(false);
     expect(new Repository("api", c).reportPreview).toBe(false);
   });
 });

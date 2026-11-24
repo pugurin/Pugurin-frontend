@@ -14,7 +14,7 @@ import { C } from "../theme/tokens";
 const notFound = (e: unknown) =>
   e instanceof ApiError && e.code === "RESOURCE_NOT_FOUND";
 
-// 미리보기에서 리포트가 샘플임을 알리는 작은 표시
+// 리포트가 샘플(미리보기·전체 샘플 모드)임을 알리는 작은 표시
 function SampleTag() {
   return (
     <View
@@ -209,7 +209,7 @@ export function NotificationsScreen({
                   accessibilityRole="button"
                   // 안 읽음 점은 그림이라 낭독기가 읽지 못한다. 행 이름에 붙인다
                   accessibilityLabel={[
-                    ...(repo.reportPreview ? ["샘플"] : []),
+                    ...(repo.reportSample ? ["샘플"] : []),
                     n.title,
                     n.summary,
                     ...(unread ? ["안 읽음"] : []),
@@ -226,7 +226,7 @@ export function NotificationsScreen({
                   ]}
                 >
                   <View style={{ flex: 1, gap: 4 }}>
-                    {repo.reportPreview && <SampleTag />}
+                    {repo.reportSample && <SampleTag />}
                     <T bold={unread} size={17}>
                       {n.title}
                     </T>
@@ -323,7 +323,7 @@ export function ReportScreen({
         ) : (
           <>
             <View style={{ paddingVertical: 16, gap: 6 }}>
-              {repo.reportPreview && <SampleTag />}
+              {repo.reportSample && <SampleTag />}
               <T size={14} color={C.muted}>
                 {report.title}
               </T>

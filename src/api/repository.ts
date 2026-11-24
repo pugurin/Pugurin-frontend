@@ -108,6 +108,10 @@ export class Repository {
   ) {}
   // 미리보기(데이터는 실제 서버, 로그인·알림은 앱 안 샘플)라 리포트가 샘플인지.
   // 이때 리포트 속 단지 id는 실제 서버에 없어 단지를 열 수 없다. 전체 샘플 모드는 단지도 샘플 데이터에 있다
+  // 리포트가 샘플 데이터인지(미리보기든 전체 샘플 모드든). 샘플 표시를 다는 기준이다
+  get reportSample() {
+    return this.interestMode === "sample";
+  }
   get reportPreview() {
     return this.interestMode === "sample" && this.mode !== "sample";
   }

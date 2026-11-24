@@ -51,19 +51,22 @@ describe("알림함 목록", () => {
     expect(screen.getByText(SAMPLE_REPORTS[0].summary)).toBeTruthy();
     expect(
       screen.getByRole("button", {
-        name: `관심 단지 주간 리포트 · 11/16~11/22, ${SAMPLE_REPORTS[0].summary}, 안 읽음`,
+        name: `샘플, 관심 단지 주간 리포트 · 11/16~11/22, ${SAMPLE_REPORTS[0].summary}, 안 읽음`,
       }),
     ).toBeTruthy();
     expect(
       screen.getByRole("button", {
-        name: `관심 단지 주간 리포트 · 11/9~11/15, ${SAMPLE_REPORTS[1].summary}`,
+        name: `샘플, 관심 단지 주간 리포트 · 11/9~11/15, ${SAMPLE_REPORTS[1].summary}`,
       }),
     ).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /, 안 읽음$/ })).toHaveLength(
       1,
     );
-    // 전체 샘플 모드에는 샘플 표시를 따로 달지 않는다
-    expect(screen.queryByText("샘플")).toBeNull();
+    // 전체 샘플 모드도 샘플 표시를 단다
+    expect(screen.getAllByText("샘플")).toHaveLength(2);
+    expect(
+      screen.getAllByRole("button", { name: /^샘플, 관심 단지 주간 리포트/ }),
+    ).toHaveLength(2);
   });
 
   it("미리보기면 행마다 샘플 표시를 단다", async () => {
@@ -285,6 +288,15 @@ describe("리포트 상세", () => {
     renderReport({ id: "nope" });
     await screen.findByText("알림을 찾을 수 없어요");
     expect(screen.queryByText("다시 시도")).toBeNull();
+  });
+
+  it("전체 샘플 모드면 샘플 표시를 달고 단지 이름은 누를 수 있다", async () => {
+    const onComplex = vi.fn();
+    renderReport({ onComplex });
+    const b = SAMPLE_REPORTS[0].payload.complexes[1];
+    expect(await screen.findByText("샘플")).toBeTruthy();
+    fireEvent.click(await screen.findByText(b.name));
+    expect(onComplex).toHaveBeenCalledWith(b.id);
   });
 
   it("다른 오류면 다시 시도를 둔다", async () => {

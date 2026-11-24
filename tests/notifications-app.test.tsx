@@ -79,4 +79,45 @@ describe("알림함 로그인(App)", () => {
       expect(screen.queryByText("로그인하면 주간 리포트를 받아요")).toBeNull(),
     );
   });
+
+  it("알림함에서 로그인하다 가입하면 가입 완료 화면을 닫을 때 알림함으로 돌아온다", async () => {
+    process.env.EXPO_PUBLIC_AUTH_MODE = "sample";
+    // 가입한 계정이 없어 로그인하면 가입으로 넘어간다
+    storage.values = {};
+    render(<App />);
+    fireEvent.click(await screen.findByText("더보기"));
+    fireEvent.click(await screen.findByText("알림"));
+    fireEvent.click(await screen.findByText("로그인"));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "카카오로 시작하기" }),
+    );
+    fireEvent.click(await screen.findByRole("checkbox", { name: "모두 동의" }));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 시작하기" }));
+    await screen.findByText("가입했어요", {}, { timeout: 3000 });
+    fireEvent.click(screen.getByRole("button", { name: "돌아가기" }));
+    expect(
+      await screen.findByText(
+        "관심 단지 주간 리포트 · 11/16~11/22",
+        {},
+        { timeout: 3000 },
+      ),
+    ).toBeTruthy();
+  });
+
+  it("더보기에서 로그인하다 가입하면 가입 완료 화면을 닫을 때 알림함이 아니라 더보기로 돌아온다", async () => {
+    process.env.EXPO_PUBLIC_AUTH_MODE = "sample";
+    storage.values = {};
+    render(<App />);
+    fireEvent.click(await screen.findByText("더보기"));
+    fireEvent.click(await screen.findByRole("button", { name: "로그인 · 회원가입" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "카카오로 시작하기" }),
+    );
+    fireEvent.click(await screen.findByRole("checkbox", { name: "모두 동의" }));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 시작하기" }));
+    await screen.findByText("가입했어요", {}, { timeout: 3000 });
+    fireEvent.click(screen.getByRole("button", { name: "돌아가기" }));
+    await waitFor(() => expect(screen.queryByText("가입했어요")).toBeNull());
+    expect(screen.queryByText("관심 단지 주간 리포트 · 11/16~11/22")).toBeNull();
+  });
 });
