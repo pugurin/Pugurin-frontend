@@ -7,7 +7,6 @@ import type {
   ComplexInterest,
   InterestKind,
   Meta,
-  RegionInterest,
 } from "../api/types";
 import { StarButton } from "../components/StarButton";
 import { Chip, Header, StateCard, T, s } from "../components/ui";
@@ -17,7 +16,7 @@ import { PROPERTY, formatArea, priceLabel } from "../state/market";
 import { C } from "../theme/tokens";
 import { AuctionRow } from "./AuctionsScreen";
 
-// 더보기 → 관심 단지·경매·지역 목록. 최근에 담은 것부터 보이고, ★를 끄면 그 줄을 바로 뺀다
+// 더보기 → 관심 단지·관심 경매 목록. 최근에 담은 것부터 보이고, ★를 끄면 그 줄을 바로 뺀다
 export function InterestsScreen({
   repo,
   initialTab,
@@ -25,7 +24,6 @@ export function InterestsScreen({
   onBack,
   onComplex,
   onAuction,
-  onRegion,
 }: {
   repo: Repository;
   initialTab: InterestKind;
@@ -33,14 +31,11 @@ export function InterestsScreen({
   onBack: () => void;
   onComplex: (id: string) => void;
   onAuction: (a: Auction) => void;
-  // 지역 줄을 누르면 그 동네 좌표로 지도를 옮긴다. 좌표가 없는 줄은 누를 수 없다
-  onRegion?: (p: { lat: number; lng: number }) => void;
 }) {
   const { has, learn, count } = useContext(InterestsContext);
   const [tab, setTab] = useState(initialTab);
   const [complexes, setComplexes] = useState<ComplexInterest[]>([]);
   const [auctions, setAuctions] = useState<AuctionInterest[]>([]);
-  const [regions, setRegions] = useState<RegionInterest[]>([]);
   const [meta, setMeta] = useState<Meta>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,19 +63,6 @@ export function InterestsScreen({
         })
         .catch(fail)
         .finally(done);
-    else if (tab === "region")
-      repo
-        .regionInterests(a.signal)
-        .then((r) => {
-          if (a.signal.aborted) return;
-          learn(
-            "region",
-            r.data.map((x) => x.code),
-          );
-          setRegions(r.data);
-        })
-        .catch(fail)
-        .finally(done);
     else
       repo
         .auctionInterests(a.signal)
@@ -100,13 +82,10 @@ export function InterestsScreen({
   // 별을 끈 줄은 바로 뺀다
   const shownComplexes = complexes.filter((c) => has("complex", c.complex.id));
   const shownAuctions = auctions.filter((x) => has("auction", x.auction.id));
-  const shownRegions = regions.filter((r) => has("region", r.code));
   const empty =
     tab === "complex"
       ? shownComplexes.length === 0
-      : tab === "region"
-        ? shownRegions.length === 0
-        : shownAuctions.length === 0;
+      : shownAuctions.length === 0;
   const sourceLine =
     tab === "auction" ? auctionSourceLine(meta, repo.mode) : "";
   return (
@@ -118,9 +97,6 @@ export function InterestsScreen({
         </Chip>
         <Chip selected={tab === "auction"} onPress={() => setTab("auction")}>
           {`관심 경매 ${count.auction}`}
-        </Chip>
-        <Chip selected={tab === "region"} onPress={() => setTab("region")}>
-          {`관심 지역 ${count.region}`}
         </Chip>
       </View>
       <ScrollView
@@ -137,9 +113,7 @@ export function InterestsScreen({
             empty={
               tab === "complex"
                 ? "단지 시트에서 ☆를 눌러 담아 보세요"
-                : tab === "region"
-                  ? "동네 시트에서 ☆를 눌러 담아 보세요"
-                  : "경매 시트에서 ☆를 눌러 담아 보세요"
+                : "경매 시트에서 ☆를 눌러 담아 보세요"
             }
           />
         ) : tab === "complex" ? (
@@ -149,18 +123,6 @@ export function InterestsScreen({
               c={c}
               unit={unit}
               onPress={() => onComplex(c.complex.id)}
-            />
-          ))
-        ) : tab === "region" ? (
-          shownRegions.map((r) => (
-            <RegionRow
-              key={r.code}
-              r={r}
-              onPress={
-                r.lat != null && r.lng != null && onRegion
-                  ? () => onRegion({ lat: r.lat!, lng: r.lng! })
-                  : undefined
-              }
             />
           ))
         ) : (
@@ -238,44 +200,6 @@ function ComplexRow({
         )}
       </Pressable>
       <StarButton kind="complex" id={complex.id} name={complex.name} />
-    </View>
-  );
-}
-
-function RegionRow({
-  r,
-  onPress,
-}: {
-  r: RegionInterest;
-  onPress?: () => void;
-}) {
-  const body = (
-    <>
-      <T bold size={17}>
-        {r.name}
-      </T>
-      <T size={14} color={C.muted}>
-        {r.sigungu_name}
-      </T>
-    </>
-  );
-  return (
-    <View
-      style={[s.row, { gap: 10, borderBottomWidth: 1, borderColor: C.rule }]}
-    >
-      {onPress ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${r.name} 지도에서 보기`}
-          onPress={onPress}
-          style={{ flex: 1, paddingVertical: 14, gap: 4 }}
-        >
-          {body}
-        </Pressable>
-      ) : (
-        <View style={{ flex: 1, paddingVertical: 14, gap: 4 }}>{body}</View>
-      )}
-      <StarButton kind="region" id={r.code} name={r.name} />
     </View>
   );
 }

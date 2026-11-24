@@ -124,14 +124,6 @@ export function RegionContent({
           {marker.name}
         </T>
         {onUnit && <UnitToggle unit={unit} onUnit={onUnit} />}
-        {/* 동(법정동 10자리)만 관심 지역으로 담는다. 구(5자리)는 별을 두지 않는다 */}
-        {marker.region_code.length === 10 && (
-          <StarButton
-            kind="region"
-            id={marker.region_code}
-            name={marker.name}
-          />
-        )}
       </View>
       <T size={14} color={C.muted}>
         {PROPERTY[filters.property_type]} · {DEAL[filters.deal_type]} · 최근{" "}

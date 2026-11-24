@@ -433,12 +433,7 @@ export type AuctionQuery = {
   excludeShare?: boolean;
 };
 // 관심 등록(기기별, X-Device-Id). 목록은 최근에 등록한 것부터 온다
-export type InterestIds = {
-  complexes: string[];
-  auctions: string[];
-  // 관심 지역 법정동 코드(10자리). 옛 서버는 주지 않을 수 있다
-  regions?: string[];
-};
+export type InterestIds = { complexes: string[]; auctions: string[] };
 export type ComplexInterest = {
   complex: Complex;
   // 해제 거래를 뺀 가장 최근 매매. 매매가 없으면 null
@@ -446,20 +441,11 @@ export type ComplexInterest = {
   added_at: string;
 };
 export type AuctionInterest = { auction: Auction; added_at: string };
-export type InterestKind = "complex" | "auction" | "region";
-// 관심 지역 한 곳(GET /interests/regions). 좌표가 없는 지역은 lat·lng가 null이다
-export type RegionInterest = {
-  code: string;
-  name: string;
-  sigungu_name: string;
-  lat: number | null;
-  lng: number | null;
-  added_at: string;
-};
-// 알림(GET /notifications). 지금은 주간 관심 지역 리포트 하나뿐이다
+export type InterestKind = "complex" | "auction";
+// 알림(GET /notifications). 지금은 관심 단지 주간 리포트 하나뿐이다
 export type AppNotification = {
   id: string;
-  kind: "region_report";
+  kind: "interest_report";
   // 리포트가 다루는 주의 월요일(YYYY-MM-DD)
   period_start: string;
   title: string;
@@ -468,36 +454,63 @@ export type AppNotification = {
   created_at: string;
 };
 export type NotificationMeta = Meta & { unread_count?: number };
-// 리포트 속 동네 하나. 소식이 없는 동네(empty)는 수치가 null이다
-export type RegionReportBlock = {
-  code: string;
+// 리포트 속 평형 하나(건수 많은 순 → 같으면 area_bucket 큰 순, 최대 3개)
+export type InterestReportArea = {
+  area_bucket: number;
+  area_label: string;
+  count: number;
+  latest: { price: number; contract_date: string };
+  // 직전 같은 평형 거래와의 차이(원). 직전 거래가 없으면 null
+  prev_diff: number | null;
+};
+// 리포트 속 소식 있는 단지 하나. 필드 이름은 백엔드 payload 그대로다
+export type InterestReportComplex = {
+  id: string;
   name: string;
   sigungu_name: string | null;
+  // 모르면 null
+  dong_name: string | null;
   lat: number | null;
   lng: number | null;
-  empty: boolean;
-  // 화면에 그대로 보여 줄 한 줄 요약들
+  // 화면에 그대로 보여 줄 문장들(새 실거래 → 평형 줄 → 외 N개 평형 → 경매 → 정비사업 순)
   lines: string[];
   sales: {
     count: number;
-    // 평당 중위가(원). 거래가 없으면 null
-    median_per_pyeong: number | null;
-    // 지난주 대비 변화(%). 양쪽 3건 미만이면 null
-    change_pct: number | null;
+    areas: InterestReportArea[];
+    // 3개를 넘은 평형 수(없으면 0)
+    more_areas: number;
   };
-  top_sale: {
-    complex_name: string | null;
+  auctions: {
+    id: string;
     area_label: string | null;
-    price: number;
-    contract_date: string;
-  } | null;
-  auctions: { count: number; min_price: number | null };
-  redevelopments: { area_name: string; stage: RedevelopmentStage }[];
+    min_price: number | null;
+    date: string | null;
+    source: AuctionSource;
+  }[];
+  redevelopments: {
+    id: string;
+    area_name: string;
+    kind: RedevelopmentKind;
+    // 이전 단계를 모르면 null
+    previous_stage: RedevelopmentStage | null;
+    stage: RedevelopmentStage;
+  }[];
 };
-export type RegionReportPayload = {
+export type InterestReportPayload = {
   period: { start: string; end: string };
-  regions: RegionReportBlock[];
+  headline: string;
+  // 관심 단지 수와 그중 소식 있는 단지 수
+  total: number;
+  with_news: number;
+  // 소식 있는 단지만, 이름순
+  complexes: InterestReportComplex[];
+  // 소식 없는 단지, 이름순
+  quiet: { id: string; name: string }[];
   sources: string[];
   lag_notice: string;
 };
-export type RegionReport = AppNotification & { payload: RegionReportPayload };
+export type InterestReport = AppNotification & {
+  payload: InterestReportPayload;
+};
+// 주간 리포트 받기 설정(GET·PUT /notifications/settings). 기본 true
+export type ReportSetting = { weekly_report: boolean };

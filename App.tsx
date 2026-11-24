@@ -776,15 +776,6 @@ export default function App() {
     setTab("map");
     setRoute(null);
   };
-  // 관심 지역 줄을 누르면 그 동네 좌표로 지도를 옮긴다
-  const showRegion = (p: { lat: number; lng: number }) => {
-    setFocus({
-      result: { type: "region", lat: p.lat, lng: p.lng },
-      nonce: Date.now(),
-    });
-    setTab("map");
-    setRoute(null);
-  };
   if (route?.kind === "interests")
     overlay = (
       <InterestsScreen
@@ -794,7 +785,6 @@ export default function App() {
         onBack={() => setRoute(null)}
         onComplex={openComplex}
         onAuction={showAuction}
-        onRegion={showRegion}
       />
     );
   if (route?.kind === "notifications")
@@ -827,7 +817,6 @@ export default function App() {
         repo={repo}
         id={route.id}
         onBack={() => setRoute({ kind: "notifications" })}
-        onRegion={showRegion}
         onRead={unread.refresh}
       />
     );

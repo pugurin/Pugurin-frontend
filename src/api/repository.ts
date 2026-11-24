@@ -13,9 +13,9 @@ import type {
   AuctionDetail,
   AuctionInterest,
   AppNotification,
+  InterestReport,
   NotificationMeta,
-  RegionInterest,
-  RegionReport,
+  ReportSetting,
   ComplexInterest,
   InterestIds,
   InterestKind,
@@ -51,7 +51,6 @@ import {
   SAMPLE_META,
   SCHOOLS,
   SCHOOL_META,
-  SAMPLE_REGIONS,
   SAMPLE_REPORTS,
   SAMPLE_STATS,
   TERMS,
@@ -77,8 +76,6 @@ const SCHOOL_SEARCH_LIMIT = 10;
 export const SCHOOL_SEARCH_WAIT_MS = 800;
 // 서버가 종류별로 받아 주는 관심 개수 상한. 넘으면 409 CONFLICT
 export const INTEREST_LIMIT = 200;
-// 관심 지역은 종류별 200개와 따로 10개까지다
-export const INTEREST_REGION_LIMIT = 10;
 // 알림 목록 한 번에 받는 개수
 export const NOTIFICATION_PAGE_SIZE = 20;
 // 샘플 관심 목록. 앱을 켜는 동안 한 벌이고(계정을 가리지 않는다), 다시 켜면 비어 있다.
@@ -86,16 +83,17 @@ export const NOTIFICATION_PAGE_SIZE = 20;
 const sampleInterests: Record<InterestKind, Map<string, string>> = {
   complex: new Map(),
   auction: new Map(),
-  region: new Map(),
 };
 // 샘플 모드에서 읽음 처리한 알림 id(앱을 켜는 동안만 유지). 처음엔 두 번째 리포트만 읽은 상태다
 const sampleRead = new Map<string, string>(
   SAMPLE_REPORTS.filter((n) => n.read_at).map((n) => [n.id, n.read_at!]),
 );
-const sampleNotification = (n: RegionReport): RegionReport => ({
+const sampleNotification = (n: InterestReport): InterestReport => ({
   ...n,
   read_at: sampleRead.get(n.id) ?? null,
 });
+// 샘플 모드의 주간 리포트 받기 설정(앱을 켜는 동안만 유지). 서버처럼 기본은 받는다
+const sampleReportSetting: ReportSetting = { weekly_report: true };
 // 관심 목록·알림 API는 로그인이 필요해 토큰을 붙인다
 const AUTH = { auth: true };
 const newestFirst = (m: Map<string, string>) =>
@@ -562,7 +560,6 @@ export class Repository {
         data: {
           complexes: newestFirst(sampleInterests.complex).map(([id]) => id),
           auctions: newestFirst(sampleInterests.auction).map(([id]) => id),
-          regions: newestFirst(sampleInterests.region).map(([id]) => id),
         },
       });
     return this.client.get<InterestIds>("/interests", signal, AUTH);
@@ -576,28 +573,17 @@ export class Repository {
         this.mode !== "sample" ||
         (kind === "complex"
           ? COMPLEXES.some((c) => c.id === id)
-          : kind === "region"
-            ? SAMPLE_REGIONS.some((r) => r.code === id)
-            : AUCTIONS.some((a) => a.id === id));
+          : AUCTIONS.some((a) => a.id === id));
       if (!on) {
         store.delete(id);
         return;
       }
       if (!known)
         throw new ApiError(
-          kind === "complex"
-            ? "단지를 찾을 수 없어요"
-            : kind === "region"
-              ? "지역을 찾을 수 없어요"
-              : "경매 물건을 찾을 수 없어요",
+          kind === "complex" ? "단지를 찾을 수 없어요" : "경매 물건을 찾을 수 없어요",
           "RESOURCE_NOT_FOUND",
         );
-      if (kind === "region" && !store.has(id) && store.size >= INTEREST_REGION_LIMIT)
-        throw new ApiError(
-          `관심 지역은 ${INTEREST_REGION_LIMIT}개까지 등록할 수 있어요`,
-          "CONFLICT",
-        );
-      if (kind !== "region" && !store.has(id) && store.size >= INTEREST_LIMIT)
+      if (!store.has(id) && store.size >= INTEREST_LIMIT)
         throw new ApiError(
           `관심 ${kind === "complex" ? "단지" : "경매"}는 ${INTEREST_LIMIT}개까지 담을 수 있어요`,
           "CONFLICT",
@@ -605,8 +591,7 @@ export class Repository {
       if (!store.has(id)) store.set(id, new Date().toISOString());
       return;
     }
-    const group = { complex: "complexes", auction: "auctions", region: "regions" }[kind];
-    const path = `/interests/${group}/${encodeURIComponent(id)}`;
+    const path = `/interests/${kind === "complex" ? "complexes" : "auctions"}/${encodeURIComponent(id)}`;
     await this.client.send(on ? "PUT" : "DELETE", path);
   }
   // 관심 단지 목록 화면. complex는 단지 상세와 같은 모양이다
@@ -705,22 +690,6 @@ export class Repository {
         return { data: { routes: [], unavailable_reason: reason } };
       });
   }
-  // 관심 지역 목록. 최근에 등록한 것부터 온다
-  regionInterests(signal?: AbortSignal): Promise<Envelope<RegionInterest[]>> {
-    if (this.interestMode === "sample")
-      return Promise.resolve({
-        data: newestFirst(sampleInterests.region).flatMap(([code, added_at]) => {
-          const r = SAMPLE_REGIONS.find((x) => x.code === code);
-          return r ? [{ ...r, added_at }] : [];
-        }),
-        meta: SAMPLE_META,
-      });
-    return this.client.get<RegionInterest[]>(
-      "/interests/regions",
-      signal,
-      AUTH,
-    );
-  }
   // 알림 목록(최근 것부터). meta.unread_count가 안 읽은 알림 수다
   notifications(
     page: number,
@@ -758,7 +727,10 @@ export class Repository {
     );
   }
   // 알림 한 건(리포트 payload 포함)
-  notification(id: string, signal?: AbortSignal): Promise<Envelope<RegionReport>> {
+  notification(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<Envelope<InterestReport>> {
     if (this.interestMode === "sample") {
       const found = SAMPLE_REPORTS.find((n) => n.id === id);
       return found
@@ -767,7 +739,7 @@ export class Repository {
             new ApiError("알림을 찾을 수 없어요", "RESOURCE_NOT_FOUND"),
           );
     }
-    return this.client.get<RegionReport>(
+    return this.client.get<InterestReport>(
       `/notifications/${encodeURIComponent(id)}`,
       signal,
       AUTH,
@@ -786,6 +758,30 @@ export class Repository {
       "/notifications/read",
       target === "all" ? { all: true } : { ids: target },
     );
+  }
+  // 주간 리포트 받기 설정. 샘플(미리보기 포함)은 앱 안에만 둔다
+  async reportSetting(signal?: AbortSignal): Promise<ReportSetting> {
+    if (this.interestMode === "sample") return { ...sampleReportSetting };
+    const r = await this.client.get<ReportSetting>(
+      "/notifications/settings",
+      signal,
+      AUTH,
+    );
+    return r.data;
+  }
+  // 주간 리포트 받기를 켜고 끈다. 서버가 저장한 값을 돌려준다
+  async setReportSetting(on: boolean): Promise<ReportSetting> {
+    if (this.interestMode === "sample") {
+      sampleReportSetting.weekly_report = on;
+      return { ...sampleReportSetting };
+    }
+    const r = await this.client.send<ReportSetting>(
+      "PUT",
+      "/notifications/settings",
+      { weekly_report: on },
+    );
+    // 204로 답하면 보낸 값이 저장된 것으로 본다
+    return r?.data ?? { weekly_report: on };
   }
   // 검색 결과·필지 마커처럼 PNU를 이미 알 때. 응답 형태는 parcelLookup과 같다
   parcel(pnu: string, signal?: AbortSignal) {

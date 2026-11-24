@@ -41,9 +41,9 @@ export function MoreScreen({
   // 없으면 로그인을 아직 열지 않은 빌드라 "준비 중" 카드를 보여 준다
   onLogin?: () => void;
   onAccount?: () => void;
-  // 관심 단지·관심 경매·관심 지역 목록. 로그인한 계정에 저장된다(로그인 전이면 App이 로그인 안내를 띄운다)
-  onInterests?: (kind: "complex" | "auction" | "region") => void;
-  interestCount?: { complex: number; auction: number; region: number };
+  // 관심 단지·관심 경매 목록. 로그인한 계정에 저장된다(로그인 전이면 App이 로그인 안내를 띄운다)
+  onInterests?: (kind: "complex" | "auction") => void;
+  interestCount?: { complex: number; auction: number };
   date?: string;
   mode: Mode;
   onMode: (m: Mode) => void;
@@ -193,11 +193,6 @@ export function MoreScreen({
                 interestCount?.auction
                   ? `${interestCount.auction}개`
                   : undefined,
-              )}
-              {row(
-                "관심 지역",
-                () => onInterests("region"),
-                interestCount?.region ? `${interestCount.region}개` : undefined,
               )}
             </View>
             <T size={14} color={C.muted}>

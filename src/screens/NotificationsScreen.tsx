@@ -3,8 +3,8 @@ import { Pressable, ScrollView, View } from "react-native";
 import type { Repository } from "../api/repository";
 import type {
   AppNotification,
-  RegionReport,
-  RegionReportBlock,
+  InterestReport,
+  InterestReportComplex,
 } from "../api/types";
 import { Btn, Header, StateCard, T, s } from "../components/ui";
 import { C } from "../theme/tokens";
@@ -119,17 +119,15 @@ export function ReportScreen({
   repo,
   id,
   onBack,
-  onRegion,
   onRead,
 }: {
   repo: Repository;
   id: string;
   onBack: () => void;
-  onRegion: (p: { lat: number; lng: number }) => void;
   // 읽음 처리가 끝났을 때(배지를 다시 받는다)
   onRead: () => void;
 }) {
-  const [report, setReport] = useState<RegionReport>();
+  const [report, setReport] = useState<InterestReport>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
@@ -181,8 +179,9 @@ export function ReportScreen({
                 {`${report.payload.period.start.replaceAll("-", ".")} ~ ${report.payload.period.end.replaceAll("-", ".")}`}
               </T>
             </View>
-            {report.payload.regions.map((b) => (
-              <RegionBlock key={b.code} b={b} onRegion={onRegion} />
+            {/* 단지 리포트 화면(§3)은 Task 6에서 다시 그린다. 지금은 단지 이름과 lines만 보인다 */}
+            {report.payload.complexes.map((b) => (
+              <ComplexBlock key={b.id} b={b} />
             ))}
             <View style={{ paddingTop: 16, gap: 6 }}>
               {report.payload.sources.length > 0 && (
@@ -203,13 +202,7 @@ export function ReportScreen({
   );
 }
 
-function RegionBlock({
-  b,
-  onRegion,
-}: {
-  b: RegionReportBlock;
-  onRegion: (p: { lat: number; lng: number }) => void;
-}) {
+function ComplexBlock({ b }: { b: InterestReportComplex }) {
   return (
     <View
       style={{
@@ -219,24 +212,14 @@ function RegionBlock({
         borderColor: C.rule,
       }}
     >
-      <T bold size={18}>{`📍 ${b.name}`}</T>
+      <T bold size={18}>
+        {b.name}
+      </T>
       {b.lines.map((l, i) => (
-        <T key={i} size={15} color={b.empty ? C.muted : undefined}>
+        <T key={i} size={15}>
           {l}
         </T>
       ))}
-      {b.lat != null && b.lng != null && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`지도에서 ${b.name} 보기`}
-          onPress={() => onRegion({ lat: b.lat!, lng: b.lng! })}
-          style={{ paddingVertical: 6 }}
-        >
-          <T size={14} bold color={C.primary}>
-            {`지도에서 ${b.name} 보기`}
-          </T>
-        </Pressable>
-      )}
     </View>
   );
 }

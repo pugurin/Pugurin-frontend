@@ -13,11 +13,7 @@ import { Repository } from "../src/api/repository";
 import { AUCTIONS, AUCTION_META, COMPLEXES } from "../src/api/fixtures";
 import { StarButton } from "../src/components/StarButton";
 import { InterestsScreen } from "../src/screens/InterestsScreen";
-import {
-  InterestsContext,
-  InterestsProvider,
-  useInterests,
-} from "../src/state/interests";
+import { InterestsProvider, useInterests } from "../src/state/interests";
 
 afterEach(() => {
   cleanup();
@@ -369,6 +365,30 @@ describe("관심 목록 화면", () => {
     });
     expect(screen.queryByText("끝난 경매")).toBeNull();
   });
+
+  // 주간 리포트가 관심 단지 기준으로 바뀌어 관심 지역은 없앴다
+  it("관심 단지·관심 경매 탭만 있고 지역 탭은 없다", async () => {
+    const { repo } = fakeServer((c) =>
+      c.url.endsWith("/interests")
+        ? json({ data: { complexes: [], auctions: [] } })
+        : json({ data: [], meta: {} }),
+    );
+    render(
+      <Harness repo={repo} notify={() => {}}>
+        <InterestsScreen
+          repo={repo}
+          initialTab="complex"
+          unit="평"
+          onBack={() => {}}
+          onComplex={() => {}}
+          onAuction={() => {}}
+        />
+      </Harness>,
+    );
+    expect(await screen.findByText(/관심 단지 0/)).toBeTruthy();
+    expect(screen.getByText(/관심 경매 0/)).toBeTruthy();
+    expect(screen.queryByText(/지역/)).toBeNull();
+  });
 });
 
 // 응답을 테스트가 직접 풀어 주는 fetcher
@@ -506,115 +526,3 @@ describe("별 연타", () => {
     expect(gets).toBe(2);
   });
 });
-
-describe("관심 지역 별", () => {
-  it("GET /interests의 regions로 켜지고 count.region을 센다", async () => {
-    let seen = -1;
-    function Probe() {
-      const v = React.useContext(InterestsContext);
-      seen = v.count.region;
-      return <StarButton kind="region" id="2644010100" name="대연동" />;
-    }
-    const { calls, repo } = fakeServer((c) =>
-      c.method === "GET"
-        ? json({
-            data: { complexes: [], auctions: [], regions: ["2644010100", "2644010200"] },
-          })
-        : new Response(null, { status: 204 }),
-    );
-    render(
-      <Harness repo={repo} notify={() => {}}>
-        <Probe />
-      </Harness>,
-    );
-    const star = await screen.findByRole("button", {
-      name: "대연동 관심 지역 해제",
-    });
-    expect(seen).toBe(2);
-    fireEvent.click(star);
-    await waitFor(() => expect(calls.at(-1)?.method).toBe("DELETE"));
-    expect(calls.at(-1)?.url).toBe(
-      "http://x/api/v1/interests/regions/2644010100",
-    );
-    expect(seen).toBe(1);
-  });
-
-  it("옛 서버처럼 regions가 없어도 빈 목록으로 본다", async () => {
-    const { repo } = fakeServer(() =>
-      json({ data: { complexes: [], auctions: [] } }),
-    );
-    render(
-      <Harness repo={repo} notify={() => {}}>
-        <StarButton kind="region" id="2644010100" />
-      </Harness>,
-    );
-    await act(async () => {});
-    expect(screen.getByRole("button", { name: "관심 지역 등록" })).toBeTruthy();
-  });
-});
-
-describe("관심 지역 탭", () => {
-  const region = (lat: number | null, lng: number | null) => ({
-    code: "2644010100",
-    name: "대연동",
-    sigungu_name: "남구",
-    lat,
-    lng,
-    added_at: "2026-11-16T00:00:00Z",
-  });
-  const setup = (lat: number | null, lng: number | null) => {
-    const onRegion = vi.fn();
-    const { repo } = fakeServer((c) =>
-      c.url.endsWith("/interests")
-        ? json({
-            data: { complexes: [], auctions: [], regions: ["2644010100"] },
-          })
-        : c.url.endsWith("/interests/regions")
-          ? json({ data: [region(lat, lng)], meta: {} })
-          : new Response(null, { status: 204 }),
-    );
-    render(
-      <Harness repo={repo} notify={() => {}}>
-        <InterestsScreen
-          repo={repo}
-          initialTab="region"
-          unit="평"
-          onBack={() => {}}
-          onComplex={() => {}}
-          onAuction={() => {}}
-          onRegion={onRegion}
-        />
-      </Harness>,
-    );
-    return onRegion;
-  };
-
-  it("지역 탭에 담은 동네가 뜨고, 줄을 누르면 좌표로 onRegion을 부른다", async () => {
-    const onRegion = setup(35.1356, 129.0859);
-    expect(await screen.findByText("대연동")).toBeTruthy();
-    expect(screen.getByText(/남구/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /관심 지역 1/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "대연동 지도에서 보기" }));
-    expect(onRegion).toHaveBeenCalledWith({ lat: 35.1356, lng: 129.0859 });
-  });
-
-  it("좌표가 없으면 줄을 눌러도 이동하지 않는다", async () => {
-    const onRegion = setup(null, null);
-    await screen.findByText("대연동");
-    expect(screen.queryByRole("button", { name: "대연동 지도에서 보기" })).toBeNull();
-    expect(onRegion).not.toHaveBeenCalled();
-  });
-
-  it("로그인하지 않았으면 지역 별을 눌러 로그인 안내를 띄운다", () => {
-    const needLogin = vi.fn();
-    const { repo } = fakeServer();
-    render(
-      <Harness repo={repo} notify={() => {}} account={null} needLogin={needLogin}>
-        <StarButton kind="region" id="2644010100" name="대연동" />
-      </Harness>,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "대연동 관심 지역 등록" }));
-    expect(needLogin).toHaveBeenCalledTimes(1);
-  });
-});
-
