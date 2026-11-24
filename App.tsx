@@ -50,6 +50,11 @@ import {
 import { TransactionsScreen } from "./src/screens/TransactionsScreen";
 import { AuctionsScreen } from "./src/screens/AuctionsScreen";
 import { InterestsScreen } from "./src/screens/InterestsScreen";
+import {
+  NotificationsScreen,
+  ReportScreen,
+} from "./src/screens/NotificationsScreen";
+import { useUnreadCountState } from "./src/state/notifications";
 import { InterestsProvider, useInterests } from "./src/state/interests";
 import type { InterestKind } from "./src/api/types";
 import { Brand } from "./src/components/Brand";
@@ -114,6 +119,8 @@ type Route =
   | { kind: "terms"; name: TermKind }
   | { kind: "date" }
   | { kind: "interests"; tab: InterestKind }
+  | { kind: "notifications" }
+  | { kind: "notification"; id: string }
   | { kind: "transactions"; bbox: BBox; region?: string; name?: string }
   // 경매 목록. 단지 묶음 마커에서 열면 그 단지로 거른다
   | { kind: "auctions"; bbox: BBox; complexId?: string; name?: string }
@@ -287,7 +294,13 @@ export default function App() {
   expiredRef.current = () => {
     saveSession(null);
     setRoute((r) =>
-      r?.kind === "interests" || r?.kind === "account" ? null : r,
+      // 알림함·리포트도 계정에 묶여 있어 같이 닫는다
+      r?.kind === "interests" ||
+      r?.kind === "account" ||
+      r?.kind === "notifications" ||
+      r?.kind === "notification"
+        ? null
+        : r,
     );
     setLoginAsk({
       title: "로그인이 끝났어요",
@@ -326,6 +339,10 @@ export default function App() {
     (m) => notify(m),
     id && session ? session.user.id : null,
     (kind) => askLogin(kind),
+  );
+  const unread = useUnreadCountState(
+    repo,
+    id && session ? session.user.id : null,
   );
   useEffect(() => {
     deviceId()
@@ -770,6 +787,42 @@ export default function App() {
         onAuction={showAuction}
       />
     );
+  if (route?.kind === "notifications")
+    overlay = (
+      <NotificationsScreen
+        repo={repo}
+        loggedIn={session !== null}
+        onBack={() => {
+          setRoute(null);
+          unread.refresh();
+        }}
+        onOpen={(nid) => setRoute({ kind: "notification", id: nid })}
+        notify={notify}
+        // main의 로그인 흐름처럼 알림함 화면 위에 로그인 시트를 띄운다
+        onLogin={() => {
+          if (!auth) {
+            notify("지금은 로그인을 쓸 수 없어요");
+            return;
+          }
+          setLoginAsk({
+            title: "알림은 로그인하면 볼 수 있어요",
+            message:
+              "로그인하면 관심 단지 주간 리포트를 알림함에서 받아 볼 수 있어요.",
+          });
+        }}
+      />
+    );
+  if (route?.kind === "notification")
+    overlay = (
+      <ReportScreen
+        repo={repo}
+        id={route.id}
+        onBack={() => setRoute({ kind: "notifications" })}
+        onComplex={openComplex}
+        onCompare={() => setRoute({ kind: "interests", tab: "complex" })}
+        onRead={unread.refresh}
+      />
+    );
   if (route?.kind === "auctions")
     overlay = (
       <AuctionsScreen
@@ -919,6 +972,8 @@ export default function App() {
                         : askLogin(kind)
                     }
                     interestCount={interests.count}
+                    onNotifications={() => setRoute({ kind: "notifications" })}
+                    unreadCount={unread.count}
                     mode={mode}
                     date={
                       dataMeta?.data_as_of ??

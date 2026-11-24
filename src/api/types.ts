@@ -442,3 +442,75 @@ export type ComplexInterest = {
 };
 export type AuctionInterest = { auction: Auction; added_at: string };
 export type InterestKind = "complex" | "auction";
+// 알림(GET /notifications). 지금은 관심 단지 주간 리포트 하나뿐이다
+export type AppNotification = {
+  id: string;
+  kind: "interest_report";
+  // 리포트가 다루는 주의 월요일(YYYY-MM-DD)
+  period_start: string;
+  title: string;
+  summary: string;
+  read_at: string | null;
+  created_at: string;
+};
+export type NotificationMeta = Meta & { unread_count?: number };
+// 리포트 속 평형 하나(건수 많은 순 → 같으면 area_bucket 큰 순, 최대 3개)
+export type InterestReportArea = {
+  area_bucket: number;
+  area_label: string;
+  count: number;
+  latest: { price: number; contract_date: string };
+  // 직전 같은 평형 거래와의 차이(원). 직전 거래가 없으면 null
+  prev_diff: number | null;
+};
+// 리포트 속 소식 있는 단지 하나. 필드 이름은 백엔드 payload 그대로다
+export type InterestReportComplex = {
+  id: string;
+  name: string;
+  sigungu_name: string | null;
+  // 모르면 null
+  dong_name: string | null;
+  lat: number | null;
+  lng: number | null;
+  // 화면에 그대로 보여 줄 문장들(새 실거래 → 평형 줄 → 외 N개 평형 → 경매 → 정비사업 순)
+  lines: string[];
+  sales: {
+    count: number;
+    areas: InterestReportArea[];
+    // 3개를 넘은 평형 수(없으면 0)
+    more_areas: number;
+  };
+  auctions: {
+    id: string;
+    area_label: string | null;
+    min_price: number | null;
+    date: string | null;
+    source: AuctionSource;
+  }[];
+  redevelopments: {
+    id: string;
+    area_name: string;
+    kind: RedevelopmentKind;
+    // 이전 단계를 모르면 null
+    previous_stage: RedevelopmentStage | null;
+    stage: RedevelopmentStage;
+  }[];
+};
+export type InterestReportPayload = {
+  period: { start: string; end: string };
+  headline: string;
+  // 관심 단지 수와 그중 소식 있는 단지 수
+  total: number;
+  with_news: number;
+  // 소식 있는 단지만, 이름순
+  complexes: InterestReportComplex[];
+  // 소식 없는 단지, 이름순
+  quiet: { id: string; name: string }[];
+  sources: string[];
+  lag_notice: string;
+};
+export type InterestReport = AppNotification & {
+  payload: InterestReportPayload;
+};
+// 주간 리포트 받기 설정(GET·PUT /notifications/settings). 기본 true
+export type ReportSetting = { weekly_report: boolean };

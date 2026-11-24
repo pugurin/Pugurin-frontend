@@ -17,6 +17,8 @@ import type {
   Redevelopment,
   RedevelopmentZone,
   TypicalArea,
+  InterestReport,
+  InterestReportComplex,
 } from "./types";
 import { TERMS } from "./terms";
 export { TERMS };
@@ -860,6 +862,199 @@ export const REDEVELOPMENTS: Redevelopment[] = [
     lng: 129.1575,
   },
 ];
+
+// 샘플 모드의 주간 관심 단지 리포트(서버 형식 그대로: 기간은 월~일, 생성은 다음 월요일 08:00 KST,
+// 소식 있는 단지·조용한 단지는 각각 이름순). lines는 백엔드가 만드는 문장과 같은 규칙으로 적었다
+const SAMPLE_SOURCES = [
+  "국토교통부 실거래가 공개시스템",
+  "대법원 법원경매정보·온비드",
+  "부산광역시 정비사업 정보",
+];
+const SAMPLE_LAG_NOTICE = "최근 30일 거래는 아직 신고되지 않았을 수 있어요";
+// 샘플 단지(COMPLEXES)의 이름·좌표를 써서 리포트 속 단지를 만든다. 단지 이름을 누르면 그 단지 시트가 열린다
+const reportComplex = (
+  i: number,
+  dong: string,
+  news: Omit<InterestReportComplex, "id" | "name" | "sigungu_name" | "dong_name" | "lat" | "lng">,
+): InterestReportComplex => ({
+  id: COMPLEXES[i].id,
+  name: COMPLEXES[i].name,
+  sigungu_name: "해운대구",
+  dong_name: dong,
+  lat: COMPLEXES[i].lat,
+  lng: COMPLEXES[i].lng,
+  ...news,
+});
+const quietComplex = (i: number) => ({
+  id: COMPLEXES[i].id,
+  name: COMPLEXES[i].name,
+});
+export const SAMPLE_REPORTS: InterestReport[] = [
+  {
+    id: "sample-report-2026-11-16",
+    kind: "interest_report",
+    period_start: "2026-11-16",
+    title: "관심 단지 주간 리포트 · 11/16~11/22",
+    summary: "우동현대 재개발 단계 변경 외 1개 단지",
+    read_at: null,
+    created_at: "2026-11-23T08:00:00+09:00",
+    payload: {
+      period: { start: "2026-11-16", end: "2026-11-22" },
+      headline: "관심 단지 4곳 중 2곳에 새 소식이 있어요",
+      total: 4,
+      with_news: 2,
+      complexes: [
+        // 정비사업 단계만 바뀐 단지
+        reportComplex(3, "우동", {
+          lines: [
+            "우동1구역 재개발: '사업시행계획인가' → '관리처분계획인가'로 단계가 바뀌었어요",
+          ],
+          sales: { count: 0, areas: [], more_areas: 0 },
+          auctions: [],
+          redevelopments: [
+            {
+              id: "BARA_SAMPLE_001",
+              area_name: "우동1구역 재개발",
+              kind: "redevelopment",
+              previous_stage: "project_approved",
+              stage: "disposal_approved",
+            },
+          ],
+        }),
+        // 실거래 3개 평형 + 경매 1건
+        reportComplex(0, "우동", {
+          lines: [
+            "새 실거래 5건",
+            "45평형 2건: 최근 12.4억 (11/05) · 직전 같은 평형보다 -1.2억",
+            "34평형 2건: 최근 9.4억 (11/02) · 직전 같은 평형보다 +2,000만",
+            "25평형 1건: 6.8억 (10/28)",
+            "새 경매 1건: 34평형 · 최저가 6.4억 · 매각기일 12/10",
+          ],
+          sales: {
+            count: 5,
+            areas: [
+              {
+                area_bucket: 135,
+                area_label: "45평형",
+                count: 2,
+                latest: { price: 1_240_000_000, contract_date: "2026-11-05" },
+                prev_diff: -120_000_000,
+              },
+              {
+                area_bucket: 85,
+                area_label: "34평형",
+                count: 2,
+                latest: { price: 940_000_000, contract_date: "2026-11-02" },
+                prev_diff: 20_000_000,
+              },
+              {
+                area_bucket: 60,
+                area_label: "25평형",
+                count: 1,
+                latest: { price: 680_000_000, contract_date: "2026-10-28" },
+                prev_diff: null,
+              },
+            ],
+            more_areas: 0,
+          },
+          auctions: [
+            {
+              id: "court:2026타경10234",
+              area_label: "34평형",
+              min_price: 640_000_000,
+              date: "2026-12-10",
+              source: "court",
+            },
+          ],
+          redevelopments: [],
+        }),
+      ],
+      quiet: [quietComplex(2), quietComplex(4)],
+      sources: SAMPLE_SOURCES,
+      lag_notice: SAMPLE_LAG_NOTICE,
+    },
+  },
+  {
+    id: "sample-report-2026-11-09",
+    kind: "interest_report",
+    period_start: "2026-11-09",
+    title: "관심 단지 주간 리포트 · 11/9~11/15",
+    summary: "엘시티더샵 새 실거래 6건",
+    read_at: "2026-11-17T09:12:00+09:00",
+    created_at: "2026-11-16T08:00:00+09:00",
+    payload: {
+      period: { start: "2026-11-09", end: "2026-11-15" },
+      headline: "관심 단지 3곳 중 1곳에 새 소식이 있어요",
+      total: 3,
+      with_news: 1,
+      complexes: [
+        // 평형이 3개를 넘고(외 1개 평형), 경매·공매가 2건이라 머리 줄 뒤에 건마다 한 줄
+        reportComplex(6, "중동", {
+          lines: [
+            "새 실거래 6건",
+            "61평형 2건: 최근 21.5억 (11/12) · 직전 같은 평형과 같아요",
+            "52평형 2건: 최근 16.8억 (11/10)",
+            "73평형 1건: 28억 (11/14) · 직전 같은 평형보다 +1.5억",
+            "외 1개 평형",
+            "새 경매 2건",
+            "61평형 · 최저가 15.4억 · 매각기일 12/03",
+            "52평형 · 최저가 11.2억 · 입찰 마감 11/28",
+          ],
+          sales: {
+            count: 6,
+            areas: [
+              {
+                area_bucket: 165,
+                area_label: "61평형",
+                count: 2,
+                latest: { price: 2_150_000_000, contract_date: "2026-11-12" },
+                prev_diff: 0,
+              },
+              {
+                area_bucket: 135,
+                area_label: "52평형",
+                count: 2,
+                latest: { price: 1_680_000_000, contract_date: "2026-11-10" },
+                prev_diff: null,
+              },
+              {
+                area_bucket: 186,
+                area_label: "73평형",
+                count: 1,
+                latest: { price: 2_800_000_000, contract_date: "2026-11-14" },
+                prev_diff: 150_000_000,
+              },
+            ],
+            more_areas: 1,
+          },
+          auctions: [
+            {
+              // 리포트에만 쓰는 샘플 경매 id(엘시티더샵 물건). 경매 목록 샘플과는 잇지 않는다
+              id: "court:2026타경40517",
+              area_label: "61평형",
+              min_price: 1_540_000_000,
+              date: "2026-12-03",
+              source: "court",
+            },
+            {
+              // 리포트에만 쓰는 샘플 공매 id. 경매 목록 샘플(public:2026-0415-001)과 겹치지 않게 한다
+              id: "public:2026-1107-003",
+              area_label: "52평형",
+              min_price: 1_120_000_000,
+              date: "2026-11-28",
+              source: "public",
+            },
+          ],
+          redevelopments: [],
+        }),
+      ],
+      quiet: [quietComplex(2), quietComplex(0)],
+      sources: SAMPLE_SOURCES,
+      lag_notice: SAMPLE_LAG_NOTICE,
+    },
+  },
+];
+
 // 정비구역 경계 샘플. 우동1구역(BARA_SAMPLE_001) 둘레의 이어진 경계 하나와, 이어지지 않은 경계 하나.
 // 모양은 지어낸 것이다(실제 구역 경계가 아니다)
 export const REDEVELOPMENT_ZONE_META: Meta = {

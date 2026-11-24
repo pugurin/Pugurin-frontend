@@ -365,6 +365,30 @@ describe("관심 목록 화면", () => {
     });
     expect(screen.queryByText("끝난 경매")).toBeNull();
   });
+
+  // 주간 리포트가 관심 단지 기준으로 바뀌어 관심 지역은 없앴다
+  it("관심 단지·관심 경매 탭만 있고 지역 탭은 없다", async () => {
+    const { repo } = fakeServer((c) =>
+      c.url.endsWith("/interests")
+        ? json({ data: { complexes: [], auctions: [] } })
+        : json({ data: [], meta: {} }),
+    );
+    render(
+      <Harness repo={repo} notify={() => {}}>
+        <InterestsScreen
+          repo={repo}
+          initialTab="complex"
+          unit="평"
+          onBack={() => {}}
+          onComplex={() => {}}
+          onAuction={() => {}}
+        />
+      </Harness>,
+    );
+    expect(await screen.findByText(/관심 단지 0/)).toBeTruthy();
+    expect(screen.getByText(/관심 경매 0/)).toBeTruthy();
+    expect(screen.queryByText(/지역/)).toBeNull();
+  });
 });
 
 // 응답을 테스트가 직접 풀어 주는 fetcher

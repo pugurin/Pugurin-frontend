@@ -12,6 +12,10 @@ import type {
   Auction,
   AuctionDetail,
   AuctionInterest,
+  AppNotification,
+  InterestReport,
+  NotificationMeta,
+  ReportSetting,
   ComplexInterest,
   InterestIds,
   InterestKind,
@@ -47,6 +51,7 @@ import {
   SAMPLE_META,
   SCHOOLS,
   SCHOOL_META,
+  SAMPLE_REPORTS,
   SAMPLE_STATS,
   TERMS,
   TRANSACTIONS,
@@ -71,13 +76,25 @@ const SCHOOL_SEARCH_LIMIT = 10;
 export const SCHOOL_SEARCH_WAIT_MS = 800;
 // 서버가 종류별로 받아 주는 관심 개수 상한. 넘으면 409 CONFLICT
 export const INTEREST_LIMIT = 200;
+// 알림 목록 한 번에 받는 개수
+export const NOTIFICATION_PAGE_SIZE = 20;
 // 샘플 관심 목록. 앱을 켜는 동안 한 벌이고(계정을 가리지 않는다), 다시 켜면 비어 있다.
 // 샘플 데이터 모드와, 샘플 로그인으로 실제 데이터를 보는 미리보기(interestMode "sample")가 쓴다
 const sampleInterests: Record<InterestKind, Map<string, string>> = {
   complex: new Map(),
   auction: new Map(),
 };
-// 관심 목록 API는 로그인이 필요해 토큰을 붙인다
+// 샘플 모드에서 읽음 처리한 알림 id(앱을 켜는 동안만 유지). 처음엔 두 번째 리포트만 읽은 상태다
+const sampleRead = new Map<string, string>(
+  SAMPLE_REPORTS.filter((n) => n.read_at).map((n) => [n.id, n.read_at!]),
+);
+const sampleNotification = (n: InterestReport): InterestReport => ({
+  ...n,
+  read_at: sampleRead.get(n.id) ?? null,
+});
+// 샘플 모드의 주간 리포트 받기 설정(앱을 켜는 동안만 유지). 서버처럼 기본은 받는다
+const sampleReportSetting: ReportSetting = { weekly_report: true };
+// 관심 목록·알림 API는 로그인이 필요해 토큰을 붙인다
 const AUTH = { auth: true };
 const newestFirst = (m: Map<string, string>) =>
   [...m].sort((a, b) => b[1].localeCompare(a[1]));
@@ -672,6 +689,99 @@ export class Repository {
         if (!reason) throw e;
         return { data: { routes: [], unavailable_reason: reason } };
       });
+  }
+  // 알림 목록(최근 것부터). meta.unread_count가 안 읽은 알림 수다
+  notifications(
+    page: number,
+    signal?: AbortSignal,
+  ): Promise<Envelope<AppNotification[]>> {
+    // 알림은 계정에 묶여 있어 관심 목록과 같이 interestMode를 따른다.
+    // 샘플 로그인(미리보기)의 가짜 토큰은 서버에서 401만 나기 때문이다
+    if (this.interestMode === "sample") {
+      const all = SAMPLE_REPORTS.map(sampleNotification);
+      const start = (page - 1) * NOTIFICATION_PAGE_SIZE;
+      const meta: NotificationMeta = {
+        ...SAMPLE_META,
+        page,
+        page_size: NOTIFICATION_PAGE_SIZE,
+        total: all.length,
+        total_pages: Math.max(1, Math.ceil(all.length / NOTIFICATION_PAGE_SIZE)),
+        unread_count: all.filter((n) => !n.read_at).length,
+      };
+      return Promise.resolve({
+        // 목록에는 payload를 싣지 않는다
+        data: all
+          .slice(start, start + NOTIFICATION_PAGE_SIZE)
+          .map(({ payload: _payload, ...n }) => n),
+        meta,
+      });
+    }
+    const q = new URLSearchParams({
+      page: String(page),
+      page_size: String(NOTIFICATION_PAGE_SIZE),
+    });
+    return this.client.get<AppNotification[]>(
+      `/notifications?${q}`,
+      signal,
+      AUTH,
+    );
+  }
+  // 알림 한 건(리포트 payload 포함)
+  notification(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<Envelope<InterestReport>> {
+    if (this.interestMode === "sample") {
+      const found = SAMPLE_REPORTS.find((n) => n.id === id);
+      return found
+        ? Promise.resolve({ data: sampleNotification(found), meta: SAMPLE_META })
+        : Promise.reject(
+            new ApiError("알림을 찾을 수 없어요", "RESOURCE_NOT_FOUND"),
+          );
+    }
+    return this.client.get<InterestReport>(
+      `/notifications/${encodeURIComponent(id)}`,
+      signal,
+      AUTH,
+    );
+  }
+  // 알림 읽음 처리. ids로 고른 것만, "all"이면 전부
+  async markNotificationsRead(target: string[] | "all") {
+    if (this.interestMode === "sample") {
+      const now = new Date().toISOString();
+      const ids = target === "all" ? SAMPLE_REPORTS.map((n) => n.id) : target;
+      for (const id of ids) if (!sampleRead.has(id)) sampleRead.set(id, now);
+      return;
+    }
+    await this.client.send(
+      "POST",
+      "/notifications/read",
+      target === "all" ? { all: true } : { ids: target },
+    );
+  }
+  // 주간 리포트 받기 설정. 샘플(미리보기 포함)은 앱 안에만 둔다
+  async reportSetting(signal?: AbortSignal): Promise<ReportSetting> {
+    if (this.interestMode === "sample") return { ...sampleReportSetting };
+    const r = await this.client.get<ReportSetting>(
+      "/notifications/settings",
+      signal,
+      AUTH,
+    );
+    return r.data;
+  }
+  // 주간 리포트 받기를 켜고 끈다. 서버가 저장한 값을 돌려준다
+  async setReportSetting(on: boolean): Promise<ReportSetting> {
+    if (this.interestMode === "sample") {
+      sampleReportSetting.weekly_report = on;
+      return { ...sampleReportSetting };
+    }
+    const r = await this.client.send<ReportSetting>(
+      "PUT",
+      "/notifications/settings",
+      { weekly_report: on },
+    );
+    // 204로 답하면 보낸 값이 저장된 것으로 본다
+    return r?.data ?? { weekly_report: on };
   }
   // 검색 결과·필지 마커처럼 PNU를 이미 알 때. 응답 형태는 parcelLookup과 같다
   parcel(pnu: string, signal?: AbortSignal) {
