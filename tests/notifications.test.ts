@@ -1,6 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ApiClient } from "../src/api/client";
-import { SAMPLE_REPORTS } from "../src/api/fixtures";
 import { Repository } from "../src/api/repository";
 
 type Call = {
@@ -149,14 +148,21 @@ describe("샘플 단지 리포트", () => {
   };
 
   it("두 통이고 처음엔 하나만 안 읽음", async () => {
-    const fresh = new Repository("sample", new ApiClient("http://x", "d"));
+    // 샘플 읽음 상태는 모듈 안에 있어 앞선 테스트가 바꿨을 수 있다. 모듈을 새로 불러 진짜 처음 상태를 본다
+    vi.resetModules();
+    const { Repository: FreshRepository } =
+      await import("../src/api/repository");
+    const { ApiClient: FreshClient } = await import("../src/api/client");
+    const fresh = new FreshRepository(
+      "sample",
+      new FreshClient("http://x", "d"),
+    );
     const list = await fresh.notifications(1);
-    // 앞선 테스트가 읽음 처리했을 수 있어 목록 길이와 제목 형식만 본다
     expect(list.data).toHaveLength(2);
     for (const n of list.data)
       expect(n.title).toMatch(/^관심 단지 주간 리포트 · \d+\/\d+~\d+\/\d+$/);
-    // 처음 상태는 픽스처의 read_at으로 본다: 한 통만 안 읽음
-    expect(SAMPLE_REPORTS.filter((n) => n.read_at === null)).toHaveLength(1);
+    expect(list.meta!.unread_count).toBe(1);
+    expect(list.data.filter((n) => n.read_at === null)).toHaveLength(1);
   });
 
   it("한 통은 소식 있는 단지 2곳 + 조용한 단지 2곳, 경매·정비사업 줄이 있는 통이 있다", async () => {

@@ -17,7 +17,7 @@ import {
   NotificationsScreen,
   ReportScreen,
 } from "../src/screens/NotificationsScreen";
-import { useUnreadCount } from "../src/state/notifications";
+import { useUnreadCountState } from "../src/state/notifications";
 
 afterEach(() => {
   cleanup();
@@ -37,6 +37,7 @@ describe("알림함 목록", () => {
         onBack={noop}
         onOpen={noop}
         onLogin={noop}
+        notify={noop}
       />,
     );
     await screen.findByText("관심 단지 주간 리포트 · 11/16~11/22");
@@ -54,6 +55,7 @@ describe("알림함 목록", () => {
         onBack={noop}
         onOpen={onOpen}
         onLogin={noop}
+        notify={noop}
       />,
     );
     fireEvent.click(await screen.findByText("관심 단지 주간 리포트 · 11/9~11/15"));
@@ -73,6 +75,7 @@ describe("알림함 목록", () => {
         onBack={noop}
         onOpen={noop}
         onLogin={noop}
+        notify={noop}
       />,
     );
     await screen.findByText("아직 받은 리포트가 없어요");
@@ -89,6 +92,7 @@ describe("알림함 목록", () => {
         onBack={noop}
         onOpen={noop}
         onLogin={onLogin}
+        notify={noop}
       />,
     );
     expect(screen.getByText("로그인하면 주간 리포트를 받아요")).toBeTruthy();
@@ -243,6 +247,27 @@ describe("주간 리포트 받기 스위치", () => {
     expect((await sw()) as HTMLInputElement).toHaveProperty("checked", true);
   });
 
+  it("설정을 못 받으면 스위치 대신 안내를 보이고, 다시 시도하면 스위치가 나온다", async () => {
+    const repo = sampleRepo();
+    const get = vi
+      .spyOn(repo, "reportSetting")
+      .mockRejectedValueOnce(new Error("x"))
+      .mockResolvedValue({ weekly_report: true });
+    renderList(repo);
+    await screen.findByText("리포트 받기 설정을 불러오지 못했어요");
+    expect(
+      screen.queryByRole("switch", { name: "주간 리포트 받기" }),
+    ).toBeNull();
+    // 목록은 그대로 보인다
+    await screen.findByText("관심 단지 주간 리포트 · 11/16~11/22");
+    fireEvent.click(screen.getByLabelText("리포트 받기 설정 다시 불러오기"));
+    expect((await sw()) as HTMLInputElement).toHaveProperty("checked", true);
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(
+      screen.queryByText("리포트 받기 설정을 불러오지 못했어요"),
+    ).toBeNull();
+  });
+
   it("로그인 안 했으면 스위치가 없고 설정을 묻지 않는다", () => {
     const repo = sampleRepo();
     const get = vi.spyOn(repo, "reportSetting");
@@ -261,7 +286,7 @@ describe("안 읽은 개수", () => {
   }: {
     repo: Repository;
     account: string | null;
-  }) => <span data-testid="n">{useUnreadCount(repo, account)}</span>;
+  }) => <span data-testid="n">{useUnreadCountState(repo, account).count}</span>;
   const repoWith = (n: number) => {
     const repo = sampleRepo();
     const spy = vi

@@ -1037,7 +1037,8 @@ export const SAMPLE_REPORTS: InterestReport[] = [
               source: "court",
             },
             {
-              id: "public:2026-0415-001",
+              // 리포트에만 쓰는 샘플 공매 id. 경매 목록 샘플(public:2026-0415-001)과 겹치지 않게 한다
+              id: "public:2026-1107-003",
               area_label: "52평형",
               min_price: 1_120_000_000,
               date: "2026-11-28",

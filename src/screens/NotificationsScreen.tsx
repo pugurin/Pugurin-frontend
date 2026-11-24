@@ -51,8 +51,11 @@ export function NotificationsScreen({
   }, [repo, loggedIn, retry]);
   // 주간 리포트 받기. 받아 오기 전·못 받았으면 null이라 스위치를 그리지 않는다
   const [weekly, setWeekly] = useState<boolean | null>(null);
+  const [weeklyFailed, setWeeklyFailed] = useState(false);
+  const [weeklyRetry, setWeeklyRetry] = useState(0);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
+    setWeeklyFailed(false);
     if (!loggedIn) {
       setWeekly(null);
       return;
@@ -63,10 +66,12 @@ export function NotificationsScreen({
       .then((r) => {
         if (!a.signal.aborted) setWeekly(r.weekly_report);
       })
-      // 설정을 못 받으면 스위치만 숨기고 목록은 그대로 보여 준다
-      .catch(() => {});
+      // 설정을 못 받으면 스위치 대신 짧은 안내와 다시 시도를 두고, 목록은 그대로 보여 준다
+      .catch(() => {
+        if (!a.signal.aborted) setWeeklyFailed(true);
+      });
     return () => a.abort();
-  }, [repo, loggedIn]);
+  }, [repo, loggedIn, weeklyRetry]);
   const changeWeekly = (on: boolean) => {
     const before = weekly;
     setWeekly(on);
@@ -120,6 +125,37 @@ export function NotificationsScreen({
               <T size={14} color={C.muted}>
                 매주 월요일에 관심 단지의 한 주 소식을 알림함으로 보내 드려요
               </T>
+            </View>
+          )}
+          {weekly === null && weeklyFailed && (
+            <View
+              style={[
+                s.between,
+                {
+                  minHeight: 48,
+                  paddingVertical: 8,
+                  borderBottomWidth: 1,
+                  borderColor: C.rule,
+                },
+              ]}
+            >
+              <T size={14} color={C.muted} style={{ flex: 1 }}>
+                리포트 받기 설정을 불러오지 못했어요
+              </T>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="리포트 받기 설정 다시 불러오기"
+                onPress={() => setWeeklyRetry((x) => x + 1)}
+                style={{
+                  minHeight: 44,
+                  justifyContent: "center",
+                  paddingHorizontal: 8,
+                }}
+              >
+                <T size={14} bold color={C.primary}>
+                  다시 시도
+                </T>
+              </Pressable>
             </View>
           )}
           {loading || error ? (
@@ -289,7 +325,10 @@ export function lineDepths(b: InterestReportComplex): (0 | 1)[] {
   if (b.auctions.length === 1) d.push(0);
   if (b.auctions.length > 1) {
     d.push(0);
-    b.auctions.forEach(() => d.push(1));
+    // 내용(평형·최저가·날짜)을 하나도 모르는 건은 서버가 건별 줄을 만들지 않고 머리 줄 건수로만 센다
+    b.auctions
+      .filter((a) => a.area_label || a.min_price != null || a.date)
+      .forEach(() => d.push(1));
   }
   b.redevelopments.forEach(() => d.push(0));
   return d.length === b.lines.length ? d : b.lines.map(() => 0);

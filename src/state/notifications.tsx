@@ -40,7 +40,3 @@ export function useUnreadCountState(repo: Repository, account: string | null) {
   }, [refresh]);
   return { count, refresh };
 }
-
-export function useUnreadCount(repo: Repository, account: string | null) {
-  return useUnreadCountState(repo, account).count;
-}
