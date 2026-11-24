@@ -875,7 +875,10 @@ const SAMPLE_LAG_NOTICE = "최근 30일 거래는 아직 신고되지 않았을 
 const reportComplex = (
   i: number,
   dong: string,
-  news: Omit<InterestReportComplex, "id" | "name" | "sigungu_name" | "dong_name" | "lat" | "lng">,
+  news: Omit<
+    InterestReportComplex,
+    "id" | "name" | "sigungu_name" | "dong_name" | "lat" | "lng"
+  >,
 ): InterestReportComplex => ({
   id: COMPLEXES[i].id,
   name: COMPLEXES[i].name,
@@ -979,15 +982,34 @@ export const SAMPLE_REPORTS: InterestReport[] = [
     kind: "interest_report",
     period_start: "2026-11-09",
     title: "관심 단지 주간 리포트 · 11/9~11/15",
-    summary: "엘시티더샵 새 실거래 6건",
+    summary: "경동제이드 새 실거래 1건 외 1개 단지",
     read_at: "2026-11-17T09:12:00+09:00",
     created_at: "2026-11-16T08:00:00+09:00",
     payload: {
       period: { start: "2026-11-09", end: "2026-11-15" },
-      headline: "관심 단지 3곳 중 1곳에 새 소식이 있어요",
+      headline: "관심 단지 3곳 중 2곳에 새 소식이 있어요",
       total: 3,
-      with_news: 1,
+      with_news: 2,
       complexes: [
+        // 공급평형을 모르는 평형(경동제이드 전용 84.97㎡)이라 서버가 평형 이름을 전용평으로 쓴다
+        reportComplex(2, "우동", {
+          lines: ["새 실거래 1건", "전용 25.7평 1건: 7.9억 (11/11)"],
+          sales: {
+            count: 1,
+            areas: [
+              {
+                area_bucket: 85,
+                area_label: "전용 25.7평",
+                count: 1,
+                latest: { price: 790_000_000, contract_date: "2026-11-11" },
+                prev_diff: null,
+              },
+            ],
+            more_areas: 0,
+          },
+          auctions: [],
+          redevelopments: [],
+        }),
         // 평형이 3개를 넘고(외 1개 평형), 경매·공매가 2건이라 머리 줄 뒤에 건마다 한 줄
         reportComplex(6, "중동", {
           lines: [
@@ -1048,7 +1070,7 @@ export const SAMPLE_REPORTS: InterestReport[] = [
           redevelopments: [],
         }),
       ],
-      quiet: [quietComplex(2), quietComplex(0)],
+      quiet: [quietComplex(0)],
       sources: SAMPLE_SOURCES,
       lag_notice: SAMPLE_LAG_NOTICE,
     },

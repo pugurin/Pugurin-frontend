@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiClient } from "../src/api/client";
 import { Repository } from "../src/api/repository";
+import { lineDepths } from "../src/screens/NotificationsScreen";
 
 type Call = {
   url: string;
@@ -53,6 +54,16 @@ describe("알림 API", () => {
     expect(r.meta?.unread_count).toBe(2);
   });
 
+  it("notifications에 page_size를 줄 수 있다(배지는 1개만 받는다)", async () => {
+    const { calls, repo } = fakeServer(() =>
+      json({ data: [], meta: { unread_count: 0 } }),
+    );
+    await repo.notifications(1, undefined, 1);
+    expect(calls[0].url).toBe(
+      "http://x/api/v1/notifications?page=1&page_size=1",
+    );
+  });
+
   it("notification은 id로 상세를 받는다", async () => {
     const { calls, repo } = fakeServer(() => json({ data: { id: "n/1" } }));
     await repo.notification("n/1");
@@ -99,6 +110,42 @@ describe("알림 API", () => {
         { weekly_report: false },
       ],
     ]);
+  });
+});
+
+describe("미리보기(데이터 api + 인증 sample)", () => {
+  it("알림·설정 메서드는 서버에 묻지 않는다", async () => {
+    // 샘플 읽음 상태는 모듈 안에 있다. 다른 테스트에 번지지 않게 모듈을 새로 불러 쓴다
+    vi.resetModules();
+    const { Repository: FreshRepository } =
+      await import("../src/api/repository");
+    const { ApiClient: FreshClient } = await import("../src/api/client");
+    const fetcher = vi.fn(async () => new Response("{}")) as never;
+    const repo = new FreshRepository(
+      "api",
+      new FreshClient("http://x/api/v1", "d", fetcher),
+      "sample",
+    );
+    const list = await repo.notifications(1);
+    await repo.notifications(1, undefined, 1);
+    await repo.notification(list.data[0].id);
+    await repo.markNotificationsRead([list.data[0].id]);
+    await repo.markNotificationsRead("all");
+    await repo.reportSetting();
+    await repo.setReportSetting(true);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("리포트가 샘플인데 단지는 실제 서버로 가는지 알려 준다", () => {
+    const c = new ApiClient("http://x", "d");
+    expect(new Repository("api", c, "sample").reportPreview).toBe(true);
+    // 전체 샘플이면 단지도 샘플 데이터에 있다
+    expect(new Repository("sample", c).reportPreview).toBe(false);
+    // 샘플 표시는 전체 샘플 모드도 단다
+    expect(new Repository("api", c, "sample").reportSample).toBe(true);
+    expect(new Repository("sample", c).reportSample).toBe(true);
+    expect(new Repository("api", c).reportSample).toBe(false);
+    expect(new Repository("api", c).reportPreview).toBe(false);
   });
 });
 
@@ -188,6 +235,18 @@ describe("샘플 단지 리포트", () => {
     expect(many).toBeTruthy();
     const i = many!.lines.indexOf(`새 경매 ${many!.auctions.length}건`);
     expect(i).toBeGreaterThanOrEqual(0);
+  });
+
+  it("공급평형을 모르는 단지는 평형 줄이 전용평이다(서버 규칙)", async () => {
+    const reports = await all();
+    const c = reports
+      .flatMap((r) => r.payload.complexes)
+      .find((x) => x.sales.areas.some((a) => a.area_label.startsWith("전용")));
+    expect(c).toBeTruthy();
+    expect(c!.sales.areas[0].area_label).toBe("전용 25.7평");
+    expect(c!.lines.some((l) => l.startsWith("전용 25.7평 1건: "))).toBe(true);
+    // 들여쓰기 규칙도 그대로 맞는다(머리 줄 + 평형 줄)
+    expect(lineDepths(c!)).toEqual([0, 1]);
   });
 
   it("payload 필드 이름이 서버 형식 그대로다", async () => {

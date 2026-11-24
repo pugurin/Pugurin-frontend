@@ -3,7 +3,7 @@ import { AppState } from "react-native";
 import type { Repository } from "../api/repository";
 
 // 안 읽은 알림 수. 로그인하지 않았으면 0이고 서버에 묻지 않는다.
-// 계정이 바뀌거나 앱이 다시 활성화될 때 notifications(1)의 meta.unread_count를 다시 받는다.
+// 계정이 바뀌거나 앱이 다시 활성화될 때 notifications(1)의 meta.unread_count를 다시 받는다(개수만 쓰니 1개짜리 페이지로).
 // 리포트를 읽은 뒤에는 refresh로 배지를 바로 줄인다
 export function useUnreadCountState(repo: Repository, account: string | null) {
   const [count, setCount] = useState(0);
@@ -18,7 +18,7 @@ export function useUnreadCountState(repo: Repository, account: string | null) {
     const a = new AbortController();
     ctl.current = a;
     repo
-      .notifications(1, a.signal)
+      .notifications(1, a.signal, 1)
       .then((r) => {
         if (!a.signal.aborted)
           setCount((r.meta as { unread_count?: number }).unread_count ?? 0);
