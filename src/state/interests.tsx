@@ -14,7 +14,8 @@ import type { InterestKind } from "../api/types";
 // 로그인하면 GET /interests로 단지·경매·지역 id를 받아 두고,
 // 별을 누르면 화면을 먼저 바꾼 뒤 서버에 보낸다.
 // 별마다 요청은 한 번에 하나만 보내고, 끝나면 그사이 마지막으로 누른 상태만 이어서 보낸다.
-// 실패하면 서버가 마지막으로 확인해 준 값으로 되돌리고 서버 메시지를 토스트로 띄운다
+// 실패하면 서버가 마지막으로 확인해 준 값으로 되돌리고 서버 메시지를 토스트로 띄운다.
+// 401(세션이 끝남)은 토스트 없이 되돌린다. 세션을 지우고 로그인 안내를 띄우는 건 App이 한다
 export type Interests = {
   has: (kind: InterestKind, id: string) => boolean;
   toggle: (kind: InterestKind, id: string) => void;
@@ -53,8 +54,8 @@ export function useInterests(
   notify: (m: string) => void,
   // 로그인한 계정 id. null이면 로그인 전이라 서버에 묻지 않는다. 계정이 바뀌면 목록을 다시 받는다
   account: string | null,
-  // 로그인하지 않고 별을 눌렀을 때
-  needLogin: () => void,
+  // 로그인하지 않고 별을 눌렀을 때. kind로 안내 제목(관심 단지·경매)을 맞춘다
+  needLogin: (kind: InterestKind) => void,
 ): Interests {
   const ready = account !== null;
   const [version, rerender] = useReducer((x: number) => x + 1, 0);
@@ -149,6 +150,7 @@ export function useInterests(
         e.busy = false;
         e.desired = e.confirmed;
         show(e.kind, e.id, e.confirmed);
+        if (err?.code === "UNAUTHORIZED") return;
         notifyRef.current(err?.message ?? "관심 등록을 처리하지 못했어요");
       },
     );
@@ -157,7 +159,7 @@ export function useInterests(
   return useMemo<Interests>(() => {
     const toggle = (kind: InterestKind, id: string) => {
       if (!ready) {
-        needLoginRef.current();
+        needLoginRef.current(kind);
         return;
       }
       load();

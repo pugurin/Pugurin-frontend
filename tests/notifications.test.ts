@@ -23,7 +23,9 @@ function fakeServer(respond: (c: Call) => Response) {
   }) as typeof fetch;
   const client = new ApiClient("http://x/api/v1", "dev-1", fetcher, {
     token: () => "tok",
-    refresh: async () => undefined,
+    account: () => "user-1",
+    refresh: async () => "tok2",
+    expired: () => {},
   });
   return { calls, repo: new Repository("api", client) };
 }

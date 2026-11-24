@@ -118,12 +118,90 @@ function Harness({
   repo: Repository;
   notify: (m: string) => void;
   account?: string | null;
-  needLogin?: () => void;
+  needLogin?: (kind: "complex" | "auction") => void;
   children: React.ReactNode;
 }) {
   const value = useInterests(repo, notify, account, needLogin);
   return <InterestsProvider value={value}>{children}</InterestsProvider>;
 }
+
+describe("관심 목록 토큰", () => {
+  it("관심 목록 요청에만 로그인 토큰을 붙이고 지도·단지 같은 공개 요청에는 붙이지 않는다", async () => {
+    const seen: Record<string, string | null> = {};
+    const fetcher = (async (url: string, init?: RequestInit) => {
+      seen[`${init?.method ?? "GET"} ${url.replace("http://x/api/v1", "")}`] =
+        new Headers(init?.headers).get("Authorization");
+      return url.includes("/interests/complexes/")
+        ? new Response(null, { status: 204 })
+        : json({
+            data: url.endsWith("/interests")
+              ? { complexes: [], auctions: [] }
+              : [],
+          });
+    }) as typeof fetch;
+    const repo = new Repository(
+      "api",
+      new ApiClient("http://x/api/v1", "dev-1", fetcher, {
+        token: () => "acc",
+        account: () => "u1",
+        refresh: async () => "acc2",
+        expired: () => {},
+      }),
+    );
+    await repo.interestIds();
+    await repo.complexInterests();
+    await repo.auctionInterests();
+    await repo.setInterest("complex", "c1", true);
+    await repo.complex("c1").catch(() => {});
+    await repo.glossary();
+    expect(seen).toEqual({
+      "GET /interests": "Bearer acc",
+      "GET /interests/complexes": "Bearer acc",
+      "GET /interests/auctions": "Bearer acc",
+      "PUT /interests/complexes/c1": "Bearer acc",
+      "GET /complexes/c1": null,
+      "GET /glossary": null,
+    });
+  });
+});
+
+describe("샘플 로그인 + 실제 데이터(미리보기)", () => {
+  it("관심 목록은 서버에 보내지 않고 앱 안에 두며, 실제 단지·경매는 공개 API로 채운다", async () => {
+    const urls: string[] = [];
+    const real = { ...COMPLEXES[0], id: "real-complex-1" };
+    const realAuction = { ...AUCTIONS[0], id: "real-auction-1" };
+    const fetcher = (async (url: string) => {
+      urls.push(url.replace("http://x/api/v1", ""));
+      if (url.endsWith("/complexes/real-complex-1"))
+        return json({ data: real });
+      if (url.endsWith("/auctions/real-auction-1"))
+        return json({
+          data: { ...realAuction, schedule: [], results: [] },
+          meta: AUCTION_META,
+        });
+      return json({ error: { code: "UNAUTHORIZED", message: "x" } }, 401);
+    }) as typeof fetch;
+    const repo = new Repository(
+      "api",
+      new ApiClient("http://x/api/v1", "dev-1", fetcher),
+      "sample",
+    );
+    await repo.setInterest("complex", "real-complex-1", true);
+    await repo.setInterest("auction", "real-auction-1", true);
+    expect((await repo.interestIds()).data).toEqual({
+      complexes: ["real-complex-1"],
+      auctions: ["real-auction-1"],
+    });
+    const complexes = await repo.complexInterests();
+    expect(complexes.data.map((c) => c.complex.id)).toEqual(["real-complex-1"]);
+    const auctions = await repo.auctionInterests();
+    expect(auctions.data.map((a) => a.auction.id)).toEqual(["real-auction-1"]);
+    // /interests로는 한 번도 보내지 않는다
+    expect(urls.some((u) => u.startsWith("/interests"))).toBe(false);
+    await repo.setInterest("complex", "real-complex-1", false);
+    await repo.setInterest("auction", "real-auction-1", false);
+  });
+});
 
 describe("로그인", () => {
   it("로그인하지 않았으면 서버에 묻지 않고, 별을 누르면 로그인 안내만 띄운다", async () => {
@@ -140,6 +218,8 @@ describe("로그인", () => {
       </Harness>,
     );
     fireEvent.click(screen.getByRole("button", { name: "관심 단지 등록" }));
+    // 어떤 별(단지·경매)인지 알려 안내 제목을 맞춘다
+    expect(needLogin).toHaveBeenCalledWith("complex");
     expect(needLogin).toHaveBeenCalledTimes(1);
     // 별은 켜지지 않는다
     expect(screen.getByRole("button", { name: "관심 단지 등록" })).toBeTruthy();
@@ -218,6 +298,35 @@ describe("별 버튼", () => {
       expect(notify).toHaveBeenCalledWith("관심 경매는 200개까지예요"),
     );
     expect(screen.getByRole("button", { name: "관심 경매 등록" })).toBeTruthy();
+  });
+});
+
+describe("세션 만료", () => {
+  it("401(세션이 끝남)이면 별을 되돌리되 서버 메시지 토스트는 띄우지 않는다(로그인 안내가 대신 뜬다)", async () => {
+    const notify = vi.fn();
+    const { repo } = fakeServer((c) =>
+      c.method === "GET"
+        ? json({ data: { complexes: [], auctions: [] } })
+        : json(
+            { error: { code: "UNAUTHORIZED", message: "인증이 필요합니다" } },
+            401,
+          ),
+    );
+    render(
+      <Harness repo={repo} notify={notify}>
+        <StarButton kind="complex" id="c1" />
+      </Harness>,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "관심 단지 등록" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "관심 단지 등록" }),
+      ).toBeTruthy(),
+    );
+    await act(async () => {});
+    expect(notify).not.toHaveBeenCalled();
   });
 });
 

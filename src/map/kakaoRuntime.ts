@@ -4,6 +4,7 @@ import { USER_LOCATION_COLOR } from "./userLocation";
 import { HOSPITAL_COLOR } from "../state/hospital";
 import { SCHOOL_LEVEL } from "../state/school";
 import { SELECTION_COLOR } from "./selection";
+import { REDEVELOPMENT_COLOR } from "../state/redevelopment";
 
 export const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? "";
 export const HAS_KAKAO = KAKAO_KEY.length > 0;
@@ -25,6 +26,7 @@ var SELECTION_COLOR = ${JSON.stringify(SELECTION_COLOR)};
 var USER_COLOR = ${JSON.stringify(USER_LOCATION_COLOR)};
 var HOSPITAL_COLOR = ${JSON.stringify(HOSPITAL_COLOR)};
 var ZONE_COLOR = ${JSON.stringify(SCHOOL_LEVEL.elementary.color)};
+var REDEV_ZONE_COLOR = ${JSON.stringify(REDEVELOPMENT_COLOR)};
 var waiting = null;
 
 // SDK는 한 번만 넣고, 동시에 부른 쪽은 같은 결과를 기다린다
@@ -103,7 +105,7 @@ window.pugurinKakaoMap = function (el, config, send) {
   var SCHOOL_BADGE_X = 14.5;
   // 꼬리 높이. 꼬리는 상자 밖(bottom:-7px)에 그려져 offsetHeight에 들어가지 않는다
   var TAIL = 7;
-  var map = null, destroyed = false, overlays = [], shapes = [], pending = null, markerClick = 0;
+  var map = null, destroyed = false, overlays = [], shapes = [], zones = [], pending = null, markerClick = 0;
   var state = { items: [], base: 'normal', cadastral: false, roadview: false, selection: null, user: null };
   var overlaysOn = {};
   addStyle();
@@ -283,6 +285,58 @@ window.pugurinKakaoMap = function (el, config, send) {
     shapes.forEach(function (s) { s.setMap(map); });
   }
 
+  // 정비구역 경계. 재개발 색 테두리·옅은 채움에 45° 빗금(미리 잘라 둔 사선)을 얹어 학구도(빗금 없음)와 구분한다.
+  // 면·빗금 어디를 눌러도 그 구역 id로 알린다(지도 클릭으로는 넘기지 않는다).
+  // 빗금 도형이 많아 경계가 바뀔 때만 다시 만들고, 고르기는 applyZoneSelection이 옵션만 바꾼다.
+  // 지도를 옮길 때마다 목록이 새로 오므로 key(경계ID·줌·빗금 수)가 같은 경계는 그대로 두고 바뀐 것만 더하고 뺀다
+  function renderZones() {
+    var next = map ? (state.redevZones || []) : [];
+    var wanted = {};
+    next.forEach(function (z) { if (z.key) wanted[z.key] = true; });
+    var drawn = {};
+    zones = zones.filter(function (z) {
+      if (z.key && wanted[z.key] && !drawn[z.key]) { drawn[z.key] = true; return true; }
+      z.faces.concat(z.lines).forEach(function (s) { s.setMap(null); });
+      return false;
+    });
+    next.forEach(function (z) {
+      if (z.key && drawn[z.key]) return;
+      // 누른 좌표도 같이 보낸다(시트의 "이 위치의 땅 보기"가 그 자리 필지를 연다)
+      var pick = function (e) {
+        markerClick = Date.now();
+        var m = { type: 'marker', id: z.id };
+        if (e && e.latLng) { m.lat = e.latLng.getLat(); m.lng = e.latLng.getLng(); }
+        send(m);
+      };
+      var entry = { id: z.id, key: z.key, faces: [], lines: [] };
+      // 경계는 늦게 받아 나중에 setMap되므로 zIndex를 -1로 내려 학구도·고른 필지 아래에 깐다
+      z.polygons.forEach(function (poly) {
+        // 정비예정구역(아직 지정 전)은 점선 테두리로 구분한다
+        var face = new kakao.maps.Polygon({ path: paths(poly), strokeColor: REDEV_ZONE_COLOR, strokeWeight: 2, strokeOpacity: 0.9, strokeStyle: z.dashed ? 'shortdash' : 'solid', fillColor: REDEV_ZONE_COLOR, fillOpacity: 0.07, zIndex: -1 });
+        kakao.maps.event.addListener(face, 'click', pick);
+        entry.faces.push(face);
+      });
+      z.hatch.forEach(function (seg) {
+        var line = new kakao.maps.Polyline({ path: [latLng(seg[0][1], seg[0][0]), latLng(seg[1][1], seg[1][0])], strokeColor: REDEV_ZONE_COLOR, strokeWeight: 1, strokeOpacity: 0.45, zIndex: -1 });
+        kakao.maps.event.addListener(line, 'click', pick);
+        entry.lines.push(line);
+      });
+      entry.faces.concat(entry.lines).forEach(function (s) { s.setMap(map); });
+      zones.push(entry);
+    });
+    applyZoneSelection();
+  }
+
+  function applyZoneSelection() {
+    zones.forEach(function (z) {
+      var on = (state.redevZoneSelected || []).indexOf(z.id) >= 0;
+      if (z.on === on) return;
+      z.on = on;
+      z.faces.forEach(function (f) { f.setOptions({ strokeWeight: on ? 3.5 : 2, fillOpacity: on ? 0.16 : 0.07 }); });
+      z.lines.forEach(function (l) { l.setOptions({ strokeOpacity: on ? 0.75 : 0.45 }); });
+    });
+  }
+
   function applyLayers() {
     var type = state.base === 'satellite' ? kakao.maps.MapTypeId.HYBRID : kakao.maps.MapTypeId.ROADMAP;
     if (map.getMapTypeId() !== type) map.setMapTypeId(type);
@@ -320,6 +374,8 @@ window.pugurinKakaoMap = function (el, config, send) {
       applyLayers();
       if ('items' in m) renderMarkers();
       if ('selection' in m || 'user' in m || 'areas' in m || 'zone' in m) renderShapes();
+      if ('redevZones' in m) renderZones();
+      else if ('redevZoneSelected' in m) applyZoneSelection();
     } else if (m.type === 'move' || m.type === 'zoom') {
       if (!map) { pending = m; return; }
       if (m.type === 'move') move(m);
@@ -329,6 +385,7 @@ window.pugurinKakaoMap = function (el, config, send) {
     } else if (m.type === 'destroy') {
       destroyed = true;
       overlays.concat(shapes).forEach(function (o) { o.setMap(null); });
+      zones.forEach(function (z) { z.faces.concat(z.lines).forEach(function (o) { o.setMap(null); }); });
     }
   }
 
@@ -350,6 +407,7 @@ window.pugurinKakaoMap = function (el, config, send) {
     applyLayers();
     renderMarkers();
     renderShapes();
+    renderZones();
     send({ type: 'ready' });
     camera();
     if (pending) { var p = pending; pending = null; receive(p); }

@@ -15,6 +15,7 @@ import type {
   Hospital,
   SchoolZone,
   Redevelopment,
+  RedevelopmentZone,
   TypicalArea,
   RegionReport,
   RegionReportBlock,
@@ -142,6 +143,7 @@ export function sampleTransactions(
     sort?: Sort;
     cancelled?: boolean;
     page?: number;
+    pageSize?: number;
     area?: number;
   } = {},
 ): Envelope<Transaction[]> {
@@ -168,14 +170,15 @@ export function sampleTransactions(
         : b.contract_date.localeCompare(a.contract_date),
   );
   const page = options.page ?? 1;
+  const size = options.pageSize ?? 20;
   return {
-    data: items.slice((page - 1) * 20, page * 20),
+    data: items.slice((page - 1) * size, page * size),
     meta: {
       ...SAMPLE_META,
       page,
-      page_size: 20,
+      page_size: size,
       total: items.length,
-      total_pages: Math.ceil(items.length / 20),
+      total_pages: Math.ceil(items.length / size),
     },
   };
 }
@@ -986,5 +989,55 @@ export const SAMPLE_REPORTS: RegionReport[] = [
       sources: SAMPLE_SOURCES,
       lag_notice: SAMPLE_LAG_NOTICE,
     },
+  },
+];
+// 정비구역 경계 샘플. 우동1구역(BARA_SAMPLE_001) 둘레의 이어진 경계 하나와, 이어지지 않은 경계 하나.
+// 모양은 지어낸 것이다(실제 구역 경계가 아니다)
+export const REDEVELOPMENT_ZONE_META: Meta = {
+  data_as_of: "2026-11-22T21:00:00+09:00",
+  source_attribution: "브이월드 용도지역지구정보",
+};
+const box = (
+  lng: number,
+  lat: number,
+  dLng: number,
+  dLat: number,
+): [number, number][] => [
+  [lng - dLng, lat - dLat],
+  [lng + dLng, lat - dLat],
+  [lng + dLng, lat + dLat],
+  [lng - dLng, lat + dLat],
+  [lng - dLng, lat - dLat],
+];
+export const REDEVELOPMENT_ZONES: RedevelopmentZone[] = [
+  {
+    zone_id: "SAMPLE_ZONE_1",
+    layer: "zone",
+    name: "우동1재개발정비구역",
+    notice: null,
+    designated_on: "2018-05-10",
+    geometry: {
+      type: "MultiPolygon",
+      coordinates: [[box(129.1502, 35.1668, 0.0016, 0.0012)]],
+    },
+    redevelopment_id: "BARA_SAMPLE_001",
+    area_name: "우동1구역 재개발",
+    kind: "redevelopment",
+    stage: "disposal_approved",
+  },
+  {
+    zone_id: "SAMPLE_ZONE_2",
+    layer: "zone",
+    name: null,
+    notice: "부산광역시 고시 제2016-415호",
+    designated_on: "2016-12-21",
+    geometry: {
+      type: "MultiPolygon",
+      coordinates: [[box(129.1575, 35.17, 0.0012, 0.0009)]],
+    },
+    redevelopment_id: null,
+    area_name: null,
+    kind: null,
+    stage: null,
   },
 ];

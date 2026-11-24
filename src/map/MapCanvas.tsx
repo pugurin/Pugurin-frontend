@@ -6,6 +6,8 @@ import {
   handleRuntimeMessage,
   layerState,
   markerState,
+  redevZoneSelectedState,
+  redevZoneState,
   shapeState,
   type RuntimeMessage,
 } from "./bridge";
@@ -39,6 +41,9 @@ export default function MapCanvas(p: MapProps) {
     () => post(shapeState(p)),
     [p.selectionPoint, p.parcelGeometry, p.userLocation, p.hospitalAreas, p.schoolZone],
   );
+  // 정비구역은 경계가 바뀔 때만 다시 그리고, 고르기는 옵션만 바꾼다
+  useEffect(() => post(redevZoneState(p)), [p.redevelopmentZones]);
+  useEffect(() => post(redevZoneSelectedState(p)), [p.redevelopmentZoneSelected]);
   useEffect(() => {
     if (p.command) post(p.command);
   }, [p.command]);

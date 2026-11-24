@@ -8,6 +8,7 @@ import type {
   Analysis,
   Redevelopment,
   RedevelopmentStage,
+  RedevelopmentZone,
   Auction,
   AuctionDetail,
   AuctionInterest,
@@ -40,6 +41,8 @@ import {
   SCHOOL_ZONE_META,
   REDEVELOPMENTS,
   REDEVELOPMENT_META,
+  REDEVELOPMENT_ZONES,
+  REDEVELOPMENT_ZONE_META,
   AUCTIONS,
   AUCTION_META,
   COMPLEXES,
@@ -58,6 +61,12 @@ import {
   sampleTransactions,
 } from "./fixtures";
 import { queryForFilters, TREND_MONTHS } from "../state/market";
+import {
+  sampleTransit,
+  transitQuery,
+  type LatLng,
+  type TransitResult,
+} from "./transit";
 import { LOCAL_SCHOOL_ZONES, LOCAL_ZONE_META } from "./schoolZonesLocal";
 export type Mode = "api" | "sample";
 // 학교 이름 검색에 쓰는 부산 범위(min_lng, min_lat, max_lng, max_lat)
@@ -72,7 +81,8 @@ export const INTEREST_LIMIT = 200;
 export const INTEREST_REGION_LIMIT = 10;
 // 알림 목록 한 번에 받는 개수
 export const NOTIFICATION_PAGE_SIZE = 20;
-// 샘플 모드의 관심 목록. 앱을 켜는 동안 한 벌이고(계정을 가리지 않는다), 다시 켜면 비어 있다
+// 샘플 관심 목록. 앱을 켜는 동안 한 벌이고(계정을 가리지 않는다), 다시 켜면 비어 있다.
+// 샘플 데이터 모드와, 샘플 로그인으로 실제 데이터를 보는 미리보기(interestMode "sample")가 쓴다
 const sampleInterests: Record<InterestKind, Map<string, string>> = {
   complex: new Map(),
   auction: new Map(),
@@ -86,12 +96,17 @@ const sampleNotification = (n: RegionReport): RegionReport => ({
   ...n,
   read_at: sampleRead.get(n.id) ?? null,
 });
+// 관심 목록·알림 API는 로그인이 필요해 토큰을 붙인다
+const AUTH = { auth: true };
 const newestFirst = (m: Map<string, string>) =>
   [...m].sort((a, b) => b[1].localeCompare(a[1]));
 export class Repository {
   constructor(
     public mode: Mode,
     private client: ApiClient,
+    // 관심 목록을 어디에 둘지. 샘플 로그인(미리보기)이면 데이터가 실제여도 앱 안에 둔다.
+    // 가짜 토큰을 실제 서버에 보내면 401만 나기 때문이다
+    private interestMode: Mode = mode,
   ) {}
   markers(f: Filters, b: BBox, z: number, signal?: AbortSignal) {
     return this.mode === "sample"
@@ -101,7 +116,7 @@ export class Repository {
           signal,
         );
   }
-  complex(id: string, signal?: AbortSignal) {
+  complex(id: string, signal?: AbortSignal): Promise<Envelope<Complex>> {
     return this.mode === "sample"
       ? Promise.resolve({ data: COMPLEXES.find((c) => c.id === id)! })
       : this.client.get<Complex>(
@@ -118,6 +133,8 @@ export class Repository {
       sort?: Sort;
       cancelled?: boolean;
       page?: number;
+      // 기본 20. 단지 거래 API는 최대 100
+      pageSize?: number;
       area?: number;
     },
     signal?: AbortSignal,
@@ -136,7 +153,7 @@ export class Repository {
     q.set("sort", opts.sort ?? "contract_date_desc");
     q.set("include_cancelled", String(opts.cancelled ?? false));
     q.set("page", String(opts.page ?? 1));
-    q.set("page_size", "20");
+    q.set("page_size", String(opts.pageSize ?? 20));
     return this.client.get<Transaction[]>(
       `${opts.complexId ? `/complexes/${encodeURIComponent(opts.complexId)}/transactions` : "/transactions"}?${q}`,
       signal,
@@ -459,6 +476,47 @@ export class Repository {
       .get<Redevelopment[]>(`/redevelopments?${p}`, signal)
       .then((r) => ({ ...r, data: r.data.map(cleanRedevelopment) }));
   }
+  // 구역 1건. 경계와 이어졌지만 지도 목록에 없는 구역(대표점이 화면 밖·준공 등)을 열 때 쓴다
+  redevelopment(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<Envelope<Redevelopment>> {
+    if (this.mode === "sample") {
+      const found = REDEVELOPMENTS.find((x) => x.id === id);
+      return found
+        ? Promise.resolve({ data: found, meta: REDEVELOPMENT_META })
+        : Promise.reject(
+            new ApiError("구역을 찾을 수 없어요", "RESOURCE_NOT_FOUND"),
+          );
+    }
+    return this.client
+      .get<Redevelopment>(`/redevelopments/${encodeURIComponent(id)}`, signal)
+      .then((r) => ({ ...r, data: cleanRedevelopment(r.data) }));
+  }
+  // 화면 영역 안의 정비구역 경계. zoom을 주면 서버가 화면 1px보다 작은 굴곡을 줄여 보낸다
+  redevelopmentZones(
+    bbox: BBox,
+    zoom: number,
+    signal?: AbortSignal,
+  ): Promise<Envelope<RedevelopmentZone[]>> {
+    if (this.mode === "sample") {
+      const [w, s, e, n] = bbox;
+      const data = REDEVELOPMENT_ZONES.filter((z) =>
+        z.geometry.coordinates
+          .flat(2)
+          .some(([lng, lat]) => lng >= w && lng <= e && lat >= s && lat <= n),
+      );
+      return Promise.resolve({ data, meta: REDEVELOPMENT_ZONE_META });
+    }
+    const p = new URLSearchParams({
+      bbox: bbox.join(","),
+      zoom: String(Math.round(zoom)),
+    });
+    return this.client.get<RedevelopmentZone[]>(
+      `/redevelopment-zones?${p}`,
+      signal,
+    );
+  }
   // 단지 주변 학교. 샘플 모드는 서버처럼 직선거리 3km 안에서 학교급별 가까운 3곳을 고른다
   nearby(complexId: string, signal?: AbortSignal): Promise<Envelope<Nearby>> {
     if (this.mode === "sample") {
@@ -499,7 +557,7 @@ export class Repository {
   }
   // 내 관심 id 전체. 별을 켜고 끌 때 쓴다
   interestIds(signal?: AbortSignal): Promise<Envelope<InterestIds>> {
-    if (this.mode === "sample")
+    if (this.interestMode === "sample")
       return Promise.resolve({
         data: {
           complexes: newestFirst(sampleInterests.complex).map(([id]) => id),
@@ -507,18 +565,20 @@ export class Repository {
           regions: newestFirst(sampleInterests.region).map(([id]) => id),
         },
       });
-    return this.client.get<InterestIds>("/interests", signal);
+    return this.client.get<InterestIds>("/interests", signal, AUTH);
   }
   // 관심 등록·해제. 같은 요청을 여러 번 보내도 결과가 같다
   async setInterest(kind: InterestKind, id: string, on: boolean) {
-    if (this.mode === "sample") {
+    if (this.interestMode === "sample") {
       const store = sampleInterests[kind];
+      // 실제 데이터면 샘플에 없는 id도 받는다
       const known =
-        kind === "complex"
+        this.mode !== "sample" ||
+        (kind === "complex"
           ? COMPLEXES.some((c) => c.id === id)
           : kind === "region"
             ? SAMPLE_REGIONS.some((r) => r.code === id)
-            : AUCTIONS.some((a) => a.id === id);
+            : AUCTIONS.some((a) => a.id === id));
       if (!on) {
         store.delete(id);
         return;
@@ -553,7 +613,15 @@ export class Repository {
   complexInterests(
     signal?: AbortSignal,
   ): Promise<Envelope<ComplexInterest[]>> {
-    if (this.mode === "sample")
+    // 미리보기: 담은 id를 공개 단지 API로 채운다. 최근 매매는 비워 둔다
+    if (this.interestMode === "sample" && this.mode !== "sample")
+      return this.localInterests(sampleInterests.complex, (id, added_at) =>
+        this.complex(id, signal).then(({ data, meta }) => ({
+          item: { complex: data, latest_sale: null, added_at },
+          meta,
+        })),
+      );
+    if (this.interestMode === "sample")
       return Promise.resolve({
         data: newestFirst(sampleInterests.complex).flatMap(([id, added_at]) => {
           const complex = COMPLEXES.find((c) => c.id === id);
@@ -569,13 +637,24 @@ export class Repository {
         }),
         meta: SAMPLE_META,
       });
-    return this.client.get<ComplexInterest[]>("/interests/complexes", signal);
+    return this.client.get<ComplexInterest[]>(
+      "/interests/complexes",
+      signal,
+      AUTH,
+    );
   }
   // 관심 경매 목록 화면. auction은 /auctions 목록 항목과 같은 모양이고 끝난 물건도 남는다
   auctionInterests(
     signal?: AbortSignal,
   ): Promise<Envelope<AuctionInterest[]>> {
-    if (this.mode === "sample")
+    if (this.interestMode === "sample" && this.mode !== "sample")
+      return this.localInterests(sampleInterests.auction, (id, added_at) =>
+        this.auction(id, signal).then(({ data, meta }) => ({
+          item: { auction: data, added_at },
+          meta,
+        })),
+      );
+    if (this.interestMode === "sample")
       return Promise.resolve({
         data: newestFirst(sampleInterests.auction).flatMap(([id, added_at]) => {
           const auction = AUCTIONS.find((a) => a.id === id);
@@ -583,11 +662,52 @@ export class Repository {
         }),
         meta: AUCTION_META,
       });
-    return this.client.get<AuctionInterest[]>("/interests/auctions", signal);
+    return this.client.get<AuctionInterest[]>(
+      "/interests/auctions",
+      signal,
+      AUTH,
+    );
+  }
+  // 앱 안에 담은 관심 id를 최근 순으로 하나씩 받아 목록을 만든다. 못 받은 것은 뺀다
+  private async localInterests<T>(
+    store: Map<string, string>,
+    fetchOne: (
+      id: string,
+      added_at: string,
+    ) => Promise<{ item: T; meta?: Envelope<T>["meta"] }>,
+  ): Promise<Envelope<T[]>> {
+    const got = await Promise.all(
+      newestFirst(store).map(([id, added_at]) =>
+        fetchOne(id, added_at).catch(() => null),
+      ),
+    );
+    const found = got.filter((g) => g !== null);
+    return { data: found.map((g) => g.item), meta: found[0]?.meta };
+  }
+  // 집 → 직장 대중교통 경로. 백엔드가 ODsay를 대신 호출한다(키는 서버에만 둔다)
+  transitRoute(
+    from: LatLng,
+    to: LatLng,
+    signal?: AbortSignal,
+  ): Promise<Envelope<TransitResult>> {
+    if (this.mode === "sample") return Promise.resolve(sampleTransit(from, to));
+    return this.client
+      .get<TransitResult>(`/transit/routes?${transitQuery(from, to)}`, signal)
+      .catch((e) => {
+        // 백엔드에 아직 길찾기가 없으면(404) "준비 중", 공급처 장애(503)는 다시 시도할 수 있게 알린다
+        const reason =
+          e instanceof ApiError && e.code === "RESOURCE_NOT_FOUND"
+            ? "not_ready"
+            : e instanceof ApiError && e.code === "SOURCE_UNAVAILABLE"
+              ? "source_unavailable"
+              : null;
+        if (!reason) throw e;
+        return { data: { routes: [], unavailable_reason: reason } };
+      });
   }
   // 관심 지역 목록. 최근에 등록한 것부터 온다
   regionInterests(signal?: AbortSignal): Promise<Envelope<RegionInterest[]>> {
-    if (this.mode === "sample")
+    if (this.interestMode === "sample")
       return Promise.resolve({
         data: newestFirst(sampleInterests.region).flatMap(([code, added_at]) => {
           const r = SAMPLE_REGIONS.find((x) => x.code === code);
@@ -595,14 +715,20 @@ export class Repository {
         }),
         meta: SAMPLE_META,
       });
-    return this.client.get<RegionInterest[]>("/interests/regions", signal);
+    return this.client.get<RegionInterest[]>(
+      "/interests/regions",
+      signal,
+      AUTH,
+    );
   }
   // 알림 목록(최근 것부터). meta.unread_count가 안 읽은 알림 수다
   notifications(
     page: number,
     signal?: AbortSignal,
   ): Promise<Envelope<AppNotification[]>> {
-    if (this.mode === "sample") {
+    // 알림은 계정에 묶여 있어 관심 목록과 같이 interestMode를 따른다.
+    // 샘플 로그인(미리보기)의 가짜 토큰은 서버에서 401만 나기 때문이다
+    if (this.interestMode === "sample") {
       const all = SAMPLE_REPORTS.map(sampleNotification);
       const start = (page - 1) * NOTIFICATION_PAGE_SIZE;
       const meta: NotificationMeta = {
@@ -625,11 +751,15 @@ export class Repository {
       page: String(page),
       page_size: String(NOTIFICATION_PAGE_SIZE),
     });
-    return this.client.get<AppNotification[]>(`/notifications?${q}`, signal);
+    return this.client.get<AppNotification[]>(
+      `/notifications?${q}`,
+      signal,
+      AUTH,
+    );
   }
   // 알림 한 건(리포트 payload 포함)
   notification(id: string, signal?: AbortSignal): Promise<Envelope<RegionReport>> {
-    if (this.mode === "sample") {
+    if (this.interestMode === "sample") {
       const found = SAMPLE_REPORTS.find((n) => n.id === id);
       return found
         ? Promise.resolve({ data: sampleNotification(found), meta: SAMPLE_META })
@@ -640,11 +770,12 @@ export class Repository {
     return this.client.get<RegionReport>(
       `/notifications/${encodeURIComponent(id)}`,
       signal,
+      AUTH,
     );
   }
   // 알림 읽음 처리. ids로 고른 것만, "all"이면 전부
   async markNotificationsRead(target: string[] | "all") {
-    if (this.mode === "sample") {
+    if (this.interestMode === "sample") {
       const now = new Date().toISOString();
       const ids = target === "all" ? SAMPLE_REPORTS.map((n) => n.id) : target;
       for (const id of ids) if (!sampleRead.has(id)) sampleRead.set(id, now);

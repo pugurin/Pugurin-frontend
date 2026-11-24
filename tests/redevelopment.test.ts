@@ -209,3 +209,24 @@ describe("Repository.redevelopments API", () => {
     expect(r.data[0].union_members).toBeNull();
   });
 });
+
+describe("Repository.redevelopment 구역 1건", () => {
+  it("API는 /redevelopments/{id}로 받고 자리 채움 값을 걸러 준다", async () => {
+    const get = async (path: string) => {
+      expect(path).toBe("/redevelopments/BARA_0000000000056");
+      return { data: make({ tel: "000-0000-0000" }), meta: undefined };
+    };
+    const repo = new Repository("api", { get } as never);
+    const r = await repo.redevelopment("BARA_0000000000056");
+    expect(r.data.tel).toBeNull();
+  });
+
+  it("샘플은 픽스처에서 찾고, 없으면 RESOURCE_NOT_FOUND로 거절한다", async () => {
+    const repo = new Repository("sample", {} as never);
+    const r = await repo.redevelopment("BARA_SAMPLE_001");
+    expect(r.data.area_name).toBe("우동1구역 재개발");
+    await expect(repo.redevelopment("없는구역")).rejects.toMatchObject({
+      code: "RESOURCE_NOT_FOUND",
+    });
+  });
+});

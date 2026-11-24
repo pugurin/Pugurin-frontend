@@ -40,6 +40,22 @@ iOS 시뮬레이터 API 주소는 localhost:8000, Android 에뮬레이터는 10.
 | `EXPO_PUBLIC_AUTH_MODE` | `api`(실제 로그인) | `sample`(가짜 로그인, 미리보기 주소는 콜백 등록이 안 돼 있다) |
 | `EXPO_PUBLIC_GOOGLE_CLIENT_ID`·`EXPO_PUBLIC_KAKAO_REST_KEY`·`EXPO_PUBLIC_NAVER_CLIENT_ID` | 소셜 공개 ID | 없어도 된다 |
 
+### 개인정보처리방침
+
+공개 개인정보처리방침은 `public/privacy.html`(정적 파일, 앱 번들과 별개)이고 배포 웹의 `/privacy.html`로 열린다. `vercel.json`이 확장자 없는 `/privacy`도 이 파일로 보낸다(SPA로 빠지지 않게 모든 주소를 `index.html`로 보내는 규칙보다 앞에 둔다). 구글 OAuth 동의 화면 등에는 `https://pugurin.vercel.app/privacy.html`을 넣는다. 더보기의 "개인정보 처리방침"은 `EXPO_PUBLIC_PRIVACY_URL`이 비어 있으면 웹은 `/privacy.html`, 앱은 위 운영 주소를 연다.
+
+방침은 관심 목록이 로그인한 회원 계정에만 저장되는 상태(백엔드 #67 + 프론트 #165)를 기준으로 쓴다. 그래서 **이 페이지는 백엔드 #67과 프론트 #165가 머지·배포된 뒤에 머지(공개)한다.** 관심 지역·주간 리포트 알림(백엔드 #69, 알림 90일 보관)이 머지되면 2절 "서비스 이용 중 생성"과 3절 보유 기간을 함께 고친다. 서버가 모으는 정보나 외부로 보내는 정보가 바뀌면 이 페이지와 `tests/privacy-page.test.ts`를 같이 고친다.
+
+### 앱 카카오 로그인(iOS·Android)
+
+앱은 리다이렉트 대신 카카오 SDK(`@react-native-seoul/kakao-login`)로 로그인하고, 받은 토큰을 백엔드 `POST /auth/oauth/kakao`에 보낸다. refresh token은 본문으로 받아 보안 저장소에 둔다.
+
+1. 카카오 콘솔에서 **네이티브 앱 키**를 `.env`의 `EXPO_PUBLIC_KAKAO_NATIVE_KEY`에 넣는다. 키가 있을 때만 `app.config.js`가 SDK 플러그인을 넣는다.
+2. 카카오 콘솔 플랫폼에 iOS 번들 ID와 Android 패키지명·키 해시를 등록한다.
+3. `EXPO_PUBLIC_AUTH_MODE=api`로 두고 개발 빌드(`npx expo run:ios` 또는 `npx expo run:android`)로 실행한다. Expo Go에는 네이티브 모듈이 없어 "개발 빌드에서만 쓸 수 있어요"가 뜬다.
+
+앱의 네이버·구글 로그인은 아직 "준비 중"이다.
+
 주소가 바뀌면 소셜 콘솔 3곳(구글·카카오·네이버)의 리디렉션 주소, 백엔드 `PUGURIN_AUTH_REDIRECT_URIS`, 카카오 지도 JavaScript SDK 도메인에 새 주소를 넣는다.
 
 ### 카카오맵 키

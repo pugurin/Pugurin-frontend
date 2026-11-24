@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { Linking, Pressable, ScrollView, Switch, View } from "react-native";
+import {
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  Switch,
+  View,
+} from "react-native";
 import type { Mode } from "../api/repository";
 import { C } from "../theme/tokens";
 import { Btn, Header, Icon, Section, T, s } from "../components/ui";
@@ -34,7 +41,7 @@ export function MoreScreen({
   // 없으면 로그인을 아직 열지 않은 빌드라 "준비 중" 카드를 보여 준다
   onLogin?: () => void;
   onAccount?: () => void;
-  // 관심 단지·관심 경매 목록. 로그인 없이 이 기기에 저장된다
+  // 관심 단지·관심 경매·관심 지역 목록. 로그인한 계정에 저장된다(로그인 전이면 App이 로그인 안내를 띄운다)
   onInterests?: (kind: "complex" | "auction" | "region") => void;
   interestCount?: { complex: number; auction: number; region: number };
   date?: string;
@@ -282,6 +289,15 @@ export function MoreScreen({
     </View>
   );
 }
+// 공개 개인정보처리방침(public/privacy.html). 웹은 같은 주소의 정적 페이지를, 앱은 운영 웹 주소를 연다
+const PRODUCTION_WEB_URL = "https://pugurin.vercel.app";
+export function privacyUrl(
+  configured = process.env.EXPO_PUBLIC_PRIVACY_URL,
+  os = Platform.OS,
+) {
+  if (configured) return configured;
+  return os === "web" ? "/privacy.html" : `${PRODUCTION_WEB_URL}/privacy.html`;
+}
 export function TermsScreen({
   kind,
   onBack,
@@ -294,7 +310,7 @@ export function TermsScreen({
       ? process.env.EXPO_PUBLIC_TERMS_URL
       : kind === "위치기반서비스 이용약관"
         ? process.env.EXPO_PUBLIC_LOCATION_TERMS_URL
-        : process.env.EXPO_PUBLIC_PRIVACY_URL;
+        : privacyUrl();
   const [error, setError] = useState("");
   return (
     <View style={s.screen}>
